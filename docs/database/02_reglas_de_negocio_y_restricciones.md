@@ -1,7 +1,7 @@
 # SISTRA --- Reglas de negocio, integridad y decisiones aprobadas
 
 **Versión:** consolidado de acuerdos\
-**Motor:** PostgreSQL 18.6\
+**Motor:** PostgreSQL 18.1\
 **Backend:** Django\
 **Base de datos:** `sistra_db`\
 **Estado:** acuerdos aprobados; algunos catálogos y valores siguen
@@ -10,7 +10,7 @@ pendientes de confirmación de la profesora.
 ## 1. Alcance y arquitectura
 
 -   SISTRA administra los procesos universitarios de Trabajo Social.
--   Base de datos: PostgreSQL 18.6, base `sistra_db`.
+-   Base de datos: PostgreSQL 18.1, base `sistra_db`.
 -   Backend: Django. Django gestiona vistas, formularios, rutas,
     autenticación y lógica de negocio; el ORM se comunica con
     PostgreSQL.
