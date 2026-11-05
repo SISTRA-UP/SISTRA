@@ -39,7 +39,7 @@ Necesitas tener instalado esto **antes** de empezar:
 | **Git** | Versión estable reciente | Descargar y subir el código | `git --version` |
 | **uv** | Versión estable reciente | Gestionar Python y las dependencias | `uv --version` |
 | **Python** | **3.13 o superior** | Ejecutar el proyecto | `uv python list` |
-| **PostgreSQL** | **18** (el servidor usa la 18.6) | Base de datos | `psql --version` |
+| **PostgreSQL** | **18** (el servidor usa la 18.1) | Base de datos | `psql --version` |
 
 
 ### Instalar uv
