@@ -181,6 +181,17 @@ MEDIA_URL = 'documentos/'
 MEDIA_ROOT = BASE_DIR / 'documentos'
 
 
+# Sesión
+# https://docs.djangoproject.com/en/6.1/topics/http/sessions/
+#
+# La sesión se cierra tras 10 minutos de inactividad.
+# Cada petición del usuario vuelve a contar los 10 minutos desde cero.
+
+SESSION_COOKIE_AGE = 10 * 60  # segundos
+
+SESSION_SAVE_EVERY_REQUEST = True
+
+
 # Seguridad en producción
 # https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
