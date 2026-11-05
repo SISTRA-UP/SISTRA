@@ -1,7 +1,7 @@
 # SISTRA --- Diccionario de datos
 
 **Versión:** borrador consolidado para revisión\
-**Motor:** PostgreSQL 18.6\
+**Motor:** PostgreSQL 18.1\
 **Backend:** Django\
 **Base de datos:** `sistra_db`\
 **Estado:** diseño revisado; pendiente de implementación y validación
