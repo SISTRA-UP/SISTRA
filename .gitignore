@@ -8,8 +8,11 @@ __pycache__/
 
 # Django
 staticfiles/
-media/
 *.log
+
+# Archivos subidos por los usuarios: se versiona la carpeta, nunca su contenido
+documentos/*
+!documentos/.gitkeep
 
 # Editores
 .vscode/

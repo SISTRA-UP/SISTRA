@@ -48,8 +48,20 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    # Aplicaciones de SISTRA
+    # Aplicaciones de SISTRA (en orden de dependencia de sus tablas)
+    'apps.usuarios',
+    'apps.parametrizacion',
+    'apps.personas',
+    'apps.procesos',
+    'apps.propuestas',
+    'apps.informes',
+    'apps.cargue_up',
+    'apps.seguimiento',
+    'apps.reportes',
+    'apps.dashboard',
 ]
+
+AUTH_USER_MODEL = 'usuarios.Usuario'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -103,6 +115,10 @@ DATABASES = {
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        # Campos del usuario de SISTRA a los que la contraseña no se puede parecer.
+        'OPTIONS': {
+            'user_attributes': ('nombre', 'cedula', 'correo_institucional', 'nombre_usuario'),
+        },
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
@@ -156,12 +172,13 @@ STORAGES = {
 
 
 # Archivos subidos por los usuarios: plantillas diligenciadas, aval de horas,
-# certificado y evidencias. En el servidor esta carpeta necesita un volumen
-# persistente, igual que PostgreSQL, o se pierden en cada despliegue.
+# certificado y evidencias. La carpeta `documentos/` existe en el repositorio,
+# pero su contenido no se versiona (ver .gitignore). En el servidor necesita
+# un volumen persistente, igual que PostgreSQL, o se pierden en cada despliegue.
 
-MEDIA_URL = 'media/'
+MEDIA_URL = 'documentos/'
 
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = BASE_DIR / 'documentos'
 
 
 # Seguridad en producción
