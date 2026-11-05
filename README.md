@@ -23,9 +23,10 @@ Las pantallas se construyen con plantillas de Django y **Bootstrap 5**. No se es
 4. [Diseño con Bootstrap](#4-diseño-con-bootstrap)
 5. [Crear una app nueva](#5-crear-una-app-nueva)
 6. [Comandos del día a día](#6-comandos-del-día-a-día)
-7. [Convenciones de commits](#7-convenciones-de-commits)
-8. [Cómo abrir un Pull Request](#8-cómo-abrir-un-pull-request)
-9. [Problemas frecuentes](#9-problemas-frecuentes)
+7. [Migraciones](#7-migraciones)
+8. [Convenciones de commits](#8-convenciones-de-commits)
+9. [Cómo abrir un Pull Request](#9-cómo-abrir-un-pull-request)
+10. [Problemas frecuentes](#10-problemas-frecuentes)
 
 ---
 
@@ -38,7 +39,7 @@ Necesitas tener instalado esto **antes** de empezar:
 | **Git** | Versión estable reciente | Descargar y subir el código | `git --version` |
 | **uv** | Versión estable reciente | Gestionar Python y las dependencias | `uv --version` |
 | **Python** | **3.13 o superior** | Ejecutar el proyecto | `uv python list` |
-| **PostgreSQL** | **14 o superior** | Base de datos | `psql --version` |
+| **PostgreSQL** | **18** (el servidor usa la 18.6) | Base de datos | `psql --version` |
 
 
 ### Instalar uv
@@ -119,25 +120,11 @@ Reemplaza `pega-aqui-la-clave-que-generaste` por la clave del paso 3.
 | `POSTGRES_HOST` | Dónde está PostgreSQL | No (por defecto `localhost`) |
 | `POSTGRES_PORT` | Puerto de PostgreSQL | No (por defecto `5432`) |
 
-### Paso 5 · Crear la base de datos
+### Paso 5 · Preparar la base de datos
 
-Los valores tienen que coincidir con los que pusiste en `.env`.
+Necesitas un PostgreSQL 18, la misma versión del servidor, corriendo en tu equipo o en Docker, como prefieras, con una base de datos y un usuario que **coincidan con los valores de tu `.env`**.
 
-En Linux, macOS o WSL:
-
-```bash
-sudo -u postgres psql -c "CREATE USER sistra WITH PASSWORD 'sistra';"
-sudo -u postgres psql -c "CREATE DATABASE sistra OWNER sistra;"
-```
-
-En Windows:
-
-```powershell
-psql -U postgres -c "CREATE USER sistra WITH PASSWORD 'sistra';"
-psql -U postgres -c "CREATE DATABASE sistra OWNER sistra;"
-```
-
-Te va a pedir la contraseña del usuario `postgres`, la que pusiste al instalar PostgreSQL.
+> **Cada quien trabaja con su propia base de datos local.** La estructura de las tablas se comparte por las migraciones (van en git), no copiando la base. Por eso, después de cada `git pull`, corre `migrate`.
 
 ### Paso 6 · Crear las tablas
 
@@ -145,7 +132,15 @@ Te va a pedir la contraseña del usuario `postgres`, la que pusiste al instalar 
 uv run python manage.py migrate
 ```
 
-Este comando crea en PostgreSQL las tablas que Django necesita. Si ves errores de conexión aquí, revisa el [punto 9](#9-problemas-frecuentes).
+Este comando crea en PostgreSQL las tablas que Django necesita. Si ves errores de conexión aquí, revisa el [punto 10](#10-problemas-frecuentes).
+
+Para poder iniciar sesión en tu máquina, crea un administrador local:
+
+```bash
+uv run python manage.py createsuperuser
+```
+
+Te pide correo institucional, nombre, cédula, nombre de usuario y la contraseña dos veces. Queda con el rol **Administrador**. Es el mismo comando con el que se crea el administrador en el servidor.
 
 ### Paso 7 · Levantar el servidor
 
@@ -160,7 +155,7 @@ Starting development server at http://127.0.0.1:8000/
 Quit the server with CONTROL-C.
 ```
 
-Abre esa dirección en el navegador. **Vas a ver una página de error 404**, y eso es lo correcto: el proyecto todavía no tiene ninguna pantalla. Lo importante es que el servidor arrancó.
+Abre esa dirección en el navegador. **Vas a ver una página de error 404 (Page not found)**, y eso es lo correcto: las apps ya tienen sus rutas registradas, pero todavía no hay ninguna pantalla. Lo importante es que el servidor arrancó.
 
 Para detenerlo: `Ctrl + C`.
 
@@ -182,16 +177,132 @@ SISTRA/
 │   ├── asgi.py
 │   └── wsgi.py
 │
-├── apps/               # ← AQUÍ van todas las apps de SISTRA
-│   └── __init__.py     # (está vacía a propósito)
+├── apps/               # ← AQUÍ van todas las apps de SISTRA (ver tabla abajo)
+│   ├── usuarios/
+│   ├── parametrizacion/
+│   ├── personas/
+│   ├── procesos/
+│   ├── propuestas/
+│   ├── informes/
+│   ├── cargue_up/
+│   ├── seguimiento/
+│   ├── reportes/
+│   └── dashboard/
+│
+├── docs/
+│   └── database/       # Diccionario de datos y reglas de negocio de la BD
+│
+├── documentos/         # Archivos que suben los usuarios (su contenido NO se sube a git)
+├── static/             # CSS, JS e imágenes propios del proyecto
 │
 └── templates/          # Plantillas compartidas
     └── base.html       # Diseño base del que heredan todas las páginas
 ```
 
-### Sobre `apps/`
+### Sobre `apps/`: dónde trabaja cada requisito
 
-Está vacía a propósito. Ahí va **una app por cada requisito o grupo de requisitos del BRD**, y nunca sueltas en la raíz del proyecto.
+Las apps están organizadas **por tema, no por requisito**, porque varios requisitos usan las mismas tablas. Por ejemplo, la tabla `cargue_up` la usan SISTRA-03, 04, 05, 08 y 09, y una tabla solo puede vivir en una app. Por eso varios requisitos comparten app.
+
+| App | Tablas (`models.py`) | Requisito → tu archivo en `views/`, `forms/` y `templates/` |
+| --- | --- | --- |
+| `usuarios` | `rol`, `permiso`, `rol_permiso`, `usuario` | SISTRA-10 → `roles` · SISTRA-13 → `logueo` |
+| `parametrizacion` | `facultad`, `carrera`, `periodo_academico`, `actividad`, `tipo_rechazo`, `parametro`, `plantilla`, `version_plantilla` | SISTRA-11 → `parametrizacion` |
+| `personas` | `estudiante`, `director`, `estudiante_carrera`, `director_carrera` | SISTRA-10 → `registro_estudiantes` |
+| `procesos` | `proceso_trabajo_social`, `proceso_actividad` | Sin pantallas propias; la usan SISTRA-01, 06 y 14 |
+| `propuestas` | `propuesta`, `actividad_cronograma` | SISTRA-01 → `montaje` · SISTRA-02 → `aprobacion` |
+| `informes` | `informe` | SISTRA-06 → `montaje` · SISTRA-07 → `aprobacion` |
+| `cargue_up` | `cargue_up`, `historial_cargue_up` | SISTRA-03 → `cargue_propuesta` · SISTRA-04 → `aviso_propuesta` · SISTRA-05 → `verificacion_propuesta` · SISTRA-08 → `aviso_informe` · SISTRA-09 → `verificacion_informe` |
+| `seguimiento` | `historial_estado`, `notificacion`, `auditoria` | Sin pantallas propias; todos los requisitos escriben aquí historial, avisos y auditoría |
+| `reportes` | — | SISTRA-12 → `reportes` |
+| `dashboard` | — | SISTRA-14 → `dashboard` |
+
+Las tablas son las del [diccionario de datos](docs/database/01_diccionario_de_datos.md). Las apps ya están registradas en `INSTALLED_APPS` y sus rutas en `config/urls.py`: **no hace falta crear apps nuevas** para ningún requisito.
+
+### Cómo se trabaja dentro de una app
+
+**Los modelos ya están definidos. Tú trabajas en tus vistas, formularios y plantillas.** Por ejemplo, en `propuestas`:
+
+```
+apps/propuestas/
+├── models.py              # Tablas de la app. No se cambian sin avisar (ver reglas)
+├── urls.py                # Rutas de la app: cada requisito agrega las suyas
+├── views/
+│   ├── montaje.py         # SISTRA-01
+│   └── aprobacion.py      # SISTRA-02
+├── forms/
+│   ├── montaje.py         # SISTRA-01
+│   └── aprobacion.py      # SISTRA-02
+├── templates/propuestas/
+│   ├── montaje/           # Plantillas de SISTRA-01
+│   └── aprobacion/        # Plantillas de SISTRA-02
+└── tests/
+    ├── test_montaje.py    # Pruebas de SISTRA-01
+    └── test_aprobacion.py # Pruebas de SISTRA-02
+```
+
+Los archivos de pruebas empiezan con `test_` para que `uv run python manage.py test` los encuentre solo. `procesos` y `seguimiento`, que no tienen pantallas, tienen un `tests/test_modelos.py` para probar sus restricciones.
+
+Así se conectan las piezas, usando SISTRA-01 de ejemplo:
+
+```python
+# apps/propuestas/views/montaje.py
+from django.shortcuts import render
+
+from apps.propuestas.models import Propuesta
+
+
+def inicio(request):
+    propuestas = Propuesta.objects.filter(...)
+    return render(request, 'propuestas/montaje/inicio.html', {'propuestas': propuestas})
+```
+
+```python
+# apps/propuestas/urls.py  (el import de tu módulo ya está escrito)
+urlpatterns = [
+    # SISTRA-01 · Montaje de propuesta – Trabajo Social
+    path('mi-propuesta/', montaje.inicio, name='montaje'),
+
+    # SISTRA-02 · Aprobación de propuesta
+]
+```
+
+La plantilla va en `apps/propuestas/templates/propuestas/montaje/inicio.html`, y para enlazar la pantalla desde otra plantilla se usa `{% url 'propuestas:montaje' %}`, siempre con el nombre de la app delante.
+
+Si tu requisito usa tablas de otra app (por ejemplo, SISTRA-04 crea filas en `cargue_up` y escribe en `seguimiento`), **importa sus modelos; no los copies ni los vuelvas a definir**.
+
+### Reglas para no pisarse con los compañeros
+
+1. **Solo editas tus archivos**: tu módulo en `views/`, en `forms/` y en `tests/`, y tu carpeta en `templates/`. Si necesitas algo en el archivo de otro requisito, pídeselo a su responsable.
+2. **En `urls.py`, tus rutas van debajo del comentario de tu requisito.** Es el único archivo que comparten todos los de la app; si dos agregan rutas al mismo tiempo y git marca conflicto, se conservan las líneas de los dos.
+3. **`models.py` no se cambia por tu cuenta.** Si necesitas un campo nuevo o un cambio, avisa al equipo y hazlo en un PR aparte, solo con el modelo y su migración (ver [sección 7](#7-migraciones)). Así no salen dos migraciones a la vez en la misma app.
+4. **Si tu archivo crece mucho**, puedes partirlo en otros con el mismo prefijo, por ejemplo `views/montaje_plantilla.py`, sin tocar los de los demás.
+
+### Sobre el usuario del sistema
+
+SISTRA no usa el usuario que trae Django (`auth.User`). Usa el suyo, `Usuario`, en `apps/usuarios/models.py`, con los campos de la tabla `usuario` del DER. Se inicia sesión con **correo institucional y contraseña**.
+
+- **Si tu modelo apunta a un usuario, nunca importes `Usuario` ni uses `auth.User`.** Usa siempre `settings.AUTH_USER_MODEL`:
+
+  ```python
+  from django.conf import settings
+  from django.db import models
+
+  class Estudiante(models.Model):
+      usuario = models.OneToOneField(
+          settings.AUTH_USER_MODEL, on_delete=models.PROTECT, db_column='id_usuario'
+      )
+  ```
+
+- En el resto del código (vistas, servicios), obtén el modelo con `get_user_model()`:
+
+  ```python
+  from django.contrib.auth import get_user_model
+
+  Usuario = get_user_model()
+  ```
+
+- Para crear usuarios, usa `Usuario.objects.create_user(...)`: guarda la contraseña como hash. Nunca asignes `password` directamente.
+- Los permisos salen de las tablas `rol` y `rol_permiso`. En las vistas se comprueban con `request.user.has_perm('nombre_del_permiso')` o con `@permission_required('nombre_del_permiso')`.
 
 ### Sobre el panel administrativo
 
@@ -240,6 +351,8 @@ La documentación oficial está en [getbootstrap.com](https://getbootstrap.com/d
 
 ## 5. Crear una app nueva
 
+> Las apps de los 14 requisitos **ya existen** (ver [sección 3](#3-estructura-del-proyecto)). Esto solo aplica si el equipo decide agregar una app que hoy no está prevista.
+
 `startapp` **no crea la carpeta destino**, así que primero la creas tú y después se la pasas como segundo argumento:
 
 ```bash
@@ -268,6 +381,8 @@ INSTALLED_APPS = [
 
 Si te saltas cualquiera de los dos, Django no encuentra la app y falla al arrancar.
 
+Si la app tiene pantallas, registra también sus rutas en `config/urls.py` con `path('propuestas/', include('apps.propuestas.urls'))`, y sigue la misma organización de las demás: `views/`, `forms/` y `templates/<app>/` con un módulo por requisito.
+
 ---
 
 ## 6. Comandos del día a día
@@ -282,6 +397,8 @@ Todos se ejecutan desde la carpeta del proyecto.
 | `uv run python manage.py makemigrations` | Genera las migraciones tras cambiar un modelo |
 | `uv run python manage.py migrate` | Aplica las migraciones a tu base de datos |
 | `uv run python manage.py check` | Revisa que no haya errores de configuración |
+| `uv run python manage.py test` | Corre las pruebas de todas las apps |
+| `uv run python manage.py test apps.propuestas.tests.test_montaje` | Corre solo las pruebas de un archivo |
 | `uv run python manage.py startapp <nombre> apps/<nombre>` | Crea una app dentro de `apps/` |
 
 ### Después de cada `git pull`
@@ -295,7 +412,67 @@ Si no lo haces, te van a salir errores raros de columnas que no existen.
 
 ---
 
-## 7. Convenciones de commits
+## 7. Migraciones
+
+Las migraciones son el historial de cambios de la estructura de la base de datos. Viven en `apps/<app>/migrations/`, **se suben a git** y son lo que hace que todos tengan las mismas tablas aunque cada quien use su propia base local.
+
+### Flujo normal
+
+Cada vez que cambias un modelo en `models.py`:
+
+```bash
+uv run python manage.py makemigrations propuestas -n agrega_campo_estado   # genera la migración
+uv run python manage.py migrate                                            # la aplica a tu base local
+```
+
+Revisa el archivo que se generó y súbelo **en el mismo commit** que el cambio del modelo. Con `-n` le pones un nombre que diga qué hace, así el historial se entiende.
+
+Antes de crear una migración, trae lo último de `develop`: es la mejor forma de evitar conflictos.
+
+### Reglas
+
+- **Nunca edites ni borres una migración que ya está en `develop`.** A los demás ya se les aplicó. Si te equivocaste, crea una migración nueva que lo corrija.
+- Solo puedes borrar y regenerar migraciones **tuyas que todavía no se han fusionado**.
+- Nunca borres la carpeta `migrations/` ni su `__init__.py`.
+- Si hiciste `pull`, `rebase` o cambiaste de rama y llegaron migraciones nuevas, corre `migrate`.
+
+### Si `makemigrations` te hace una pregunta
+
+Pasa al agregar un campo obligatorio a un modelo que ya tiene filas (el mensaje dice *"you are trying to add a non-nullable field..."*). Tienes dos salidas:
+
+- Escoge la opción 1 y escribe un valor por defecto solo para esa migración, o
+- Cancela con `Ctrl + C`, define `default=...` o `null=True` en el campo y vuelve a correr `makemigrations`.
+
+### Conflicto de migraciones
+
+Si dos personas crean una migración en la misma app (o en apps relacionadas por una `ForeignKey`) partiendo del mismo punto, ambas se llaman `0003_...` y Django se queja:
+
+```
+CommandError: Conflicting migrations detected; multiple leaf nodes in the migration graph
+```
+
+Git no marca conflicto, porque los archivos tienen nombres distintos; el error aparece al correr `migrate`. Como cada quien trabaja en su propia app no debería ser lo normal, pero puede pasar.
+
+**Se arregla en tu rama, antes del PR, y la que se rehace es la tuya:**
+
+1. Borra tu archivo de migración (solo el tuyo; el que ya está en `develop` no se toca).
+2. Recrea tu base local vacía, con los mismos datos de tu `.env`, porque ahí ya estaba aplicada la migración que borraste.
+3. Corre `migrate` (aplica las de `develop`), después `makemigrations` (regenera la tuya) y `migrate` otra vez.
+4. Haz commit de la migración nueva.
+
+Django también sugiere `makemigrations --merge`, pero regenerar la tuya deja un historial más limpio.
+
+### Comandos útiles
+
+| Comando | Qué hace |
+| --- | --- |
+| `uv run python manage.py showmigrations` | Lista las migraciones y cuáles ya aplicaste |
+| `uv run python manage.py migrate <app> <numero>` | Devuelve esa app a una migración anterior |
+| `uv run python manage.py makemigrations --check --dry-run` | Avisa si cambiaste un modelo y falta la migración |
+
+---
+
+## 8. Convenciones de commits
 
 Los mensajes siguen el formato [Conventional Commits](https://www.conventionalcommits.org/es/v1.0.0/):
 
@@ -343,7 +520,7 @@ arreglo de bugs varios        ← sin tipo y son varios cambios
 
 ---
 
-## 8. Cómo abrir un Pull Request
+## 9. Cómo abrir un Pull Request
 
 `main` y `develop` están protegidas: **no se puede hacer `push` directo a ninguna de las dos.** Todo entra por Pull Request hacia `develop`.
 
@@ -407,7 +584,9 @@ Lo revisa y aprueba el **full stack**. Mientras el PR esté abierto, los commits
 ### Antes de abrir el PR, revisa que
 
 - `uv run python manage.py check` pasa sin errores
+- `uv run python manage.py test` pasa sin errores
 - `uv run python manage.py makemigrations --check --dry-run` no reporta migraciones sin generar
+- Solo cambiaste los archivos de tu requisito (y tus líneas en `urls.py`)
 - Las migraciones nuevas están incluidas en el commit
 - Tu rama está actualizada con `develop`
 - No subes `print()` ni credenciales
@@ -423,6 +602,8 @@ git rebase develop
 git push --force-with-lease
 ```
 
+Si al traer `develop` llegaron migraciones nuevas, corre `migrate`. Si Django reporta un conflicto de migraciones, sigue los pasos de la [sección 7](#7-migraciones).
+
 ### Cuando ya fusionaron tu PR
 
 ```bash
@@ -433,14 +614,19 @@ git branch -d feature/propuestas-subir-archivo
 
 ---
 
-## 9. Problemas frecuentes
+## 10. Problemas frecuentes
 
 | Problema | Solución |
 | --- | --- |
 | `KeyError: 'DJANGO_SECRET_KEY'` | Falta el archivo `.env` o le falta esa variable. Repite los pasos 3 y 4 |
 | `connection refused` al migrar | PostgreSQL no está corriendo. En Linux o WSL: `sudo service postgresql start` |
-| `password authentication failed` | El usuario o la contraseña de `.env` no coinciden con los del paso 5 |
-| `database "sistra" does not exist` | Te faltó crear la base de datos. Repite el paso 5 |
+| `password authentication failed` | El usuario o la contraseña de `.env` no coinciden con los de tu PostgreSQL local |
+| `database "sistra" does not exist` | Falta crear la base de datos con el nombre que pusiste en `POSTGRES_DB` de tu `.env` |
+| `permission denied to create database` al correr `test` | Las pruebas crean una base temporal (`test_<tu_base>`), y tu usuario de PostgreSQL necesita permiso para hacerlo: `ALTER USER <tu_usuario> CREATEDB;` |
 | `No module named 'apps.X'` | Revisa el `name` en `apps/X/apps.py` y la entrada en `INSTALLED_APPS`. Los dos llevan el prefijo `apps.` |
 | `relation "..." does not exist` | Falta correr `uv run python manage.py migrate` |
-| El navegador muestra 404 en `/` | Es lo esperado: aún no hay pantallas. El servidor está bien |
+| `Conflicting migrations detected` | Dos migraciones salieron del mismo punto. Sigue los pasos de la [sección 7](#7-migraciones) |
+| `InconsistentMigrationHistory` | Tu base local tiene migraciones aplicadas en un orden distinto al del código (pasa al cambiar de rama o al borrar una migración). Recrea tu base local vacía y corre `migrate` |
+| El navegador muestra un 404 en `/` | Es lo esperado mientras no exista la pantalla de inicio (SISTRA-14). El servidor está bien |
+| `NoReverseMatch` al usar `{% url %}` | Falta el prefijo de la app: es `{% url 'propuestas:montaje' %}`, no `{% url 'montaje' %}` |
+| `TemplateDoesNotExist` | La plantilla va en `apps/<app>/templates/<app>/<tu_modulo>/` y se pide como `'<app>/<tu_modulo>/archivo.html'` |
