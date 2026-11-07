@@ -11,8 +11,8 @@
 <main class="container py-5 private-home">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-5">
         <a class="brand brand-compact" href="{% url 'usuarios:inicio_estudiante' %}" aria-label="SISTRA-UP, inicio">
-            <span class="brand-mark" aria-hidden="true">S</span>
-            <span class="brand-word">SISTRA<span class="brand-period">.</span><small>Universidad de Pamplona</small></span>
+            <span class="brand-mark" aria-hidden="true"><img src="{% static 'usuarios/img/escudo-unipamplona.png' %}" alt=""></span>
+            <span class="brand-word"><span class="brand-name">SISTRA<span class="brand-period">.</span></span><small>Universidad de Pamplona</small></span>
         </a>
         <form method="post" action="{% url 'usuarios:logout_estudiante' %}">
             {% csrf_token %}

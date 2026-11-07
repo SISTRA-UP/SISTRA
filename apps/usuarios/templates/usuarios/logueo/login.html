@@ -12,16 +12,16 @@
     <div class="row g-0 min-vh-100">
         <section class="col-lg-6 access-story d-none d-lg-flex flex-column" aria-label="Información de SISTRA-UP">
             <a class="brand" href="{% url 'usuarios:login_estudiante' %}" aria-label="SISTRA-UP, inicio">
-                <span class="brand-mark" aria-hidden="true">S</span>
-                <span class="brand-word">SISTRA<span class="brand-period">.</span><small>Universidad de Pamplona</small></span>
+                <span class="brand-mark" aria-hidden="true"><img src="{% static 'usuarios/img/escudo-unipamplona.png' %}" alt=""></span>
+                <span class="brand-word"><span class="brand-name">SISTRA<span class="brand-period">.</span></span><small>Universidad de Pamplona</small></span>
             </a>
 
             <div class="story-content my-auto">
-                <p class="eyebrow">TRABAJO SOCIAL · UNIVERSIDAD DE PAMPLONA</p>
-                <h1>Tu proceso de grado<br><em>avanza en diálogo.</em></h1>
-                <p class="story-copy">Presenta y acompaña tus trámites académicos en un espacio institucional pensado para seguir cada etapa con claridad.</p>
+                <p class="eyebrow">TRABAJO DE GRADO · UNIVERSIDAD DE PAMPLONA</p>
+                <h1>Una buena idea<br><em>se construye en diálogo.</em></h1>
+                <p class="story-copy">Un espacio para presentar, revisar y mejorar propuestas de grado, paso a paso y junto a tu director.</p>
 
-                <div class="story-steps" aria-label="Etapas del proceso">
+                <div class="story-steps" aria-label="Flujo de revisión">
                     <span><b>01</b> Propuesta</span><i aria-hidden="true"></i>
                     <span><b>02</b> Revisión</span><i aria-hidden="true"></i>
                     <span><b>03</b> Avance</span>
@@ -29,7 +29,7 @@
 
                 <div class="story-note">
                     <span class="note-seal" aria-hidden="true">S</span>
-                    <span><strong>Tu proceso, en contexto.</strong><small>Información académica organizada y acceso institucional.</small></span>
+                    <span><strong>Tu proceso, en contexto.</strong><small>Versiones, observaciones y acuerdos en un mismo lugar.</small></span>
                 </div>
             </div>
 
@@ -43,14 +43,14 @@
             <div class="access-panel-inner">
                 <div class="mobile-brand d-lg-none">
                     <a class="brand brand-compact" href="{% url 'usuarios:login_estudiante' %}" aria-label="SISTRA-UP, inicio">
-                        <span class="brand-mark" aria-hidden="true">S</span>
-                        <span class="brand-word">SISTRA<span class="brand-period">.</span><small>Universidad de Pamplona</small></span>
+                        <span class="brand-mark" aria-hidden="true"><img src="{% static 'usuarios/img/escudo-unipamplona.png' %}" alt=""></span>
+                        <span class="brand-word"><span class="brand-name">SISTRA<span class="brand-period">.</span></span><small>Universidad de Pamplona</small></span>
                     </a>
                 </div>
 
-                <p class="eyebrow">PORTAL ACADÉMICO · ESTUDIANTES</p>
-                <h2>Continúa tu proceso</h2>
-                <p class="muted">Ingresa con el correo y la contraseña de tu cuenta institucional.</p>
+                <p class="eyebrow">PORTAL ACADÉMICO</p>
+                <h2>Continúa tu propuesta</h2>
+                <p class="muted">Ingresa con tu cuenta institucional para continuar tu proceso.</p>
 
                 {% if form.non_field_errors %}
                     <div class="alert alert-danger login-alert" role="alert" aria-live="polite">
@@ -87,8 +87,8 @@
                 </div>
 
                 <div class="access-seal-row">
-                    <span class="seal-mini" aria-hidden="true">UP</span>
-                    <span>Universidad de Pamplona <b>·</b> Trabajo Social</span>
+                    <img class="seal-mini" src="{% static 'usuarios/img/escudo-unipamplona.png' %}" alt="Escudo de la Universidad de Pamplona">
+                    <span>Universidad de Pamplona <b>·</b> Trabajo de grado</span>
                 </div>
             </div>
         </section>
