@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+
+{% block titulo %}{{ titulo }} · SISTRA{% endblock %}
+
+{% block contenido %}
+<main class="container py-4">
+
+  <nav aria-label="Ruta" class="mb-3">
+    <ol class="breadcrumb mb-0">
+      <li class="breadcrumb-item"><a href="{% url 'usuarios:roles' %}">Roles</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{ titulo }}</li>
+    </ol>
+  </nav>
+
+  <h1 class="h3 mb-4">{{ titulo }}</h1>
+
+  {% include 'usuarios/roles/_mensajes.html' %}
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if formulario.non_field_errors %}
+      <div class="alert alert-danger" role="alert">
+        {{ formulario.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <div class="row g-4">
+      <div class="col-lg-5">
+        <div class="card shadow-sm h-100">
+          <div class="card-body">
+            <h2 class="h6 text-uppercase text-body-secondary mb-3">Datos del rol</h2>
+
+            {% for campo in formulario %}
+              {% if campo.name != 'permisos' %}
+                <div class="mb-3">
+                  <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+                  {{ campo }}
+                  {% if campo.help_text %}
+                    <div class="form-text">{{ campo.help_text }}</div>
+                  {% endif %}
+                  {% for error in campo.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      {% if formulario.permisos %}
+        <div class="col-lg-7">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <h2 class="h6 text-uppercase text-body-secondary mb-1">
+                {{ formulario.permisos.label }}
+              </h2>
+              <p class="form-text mt-0 mb-3">{{ formulario.permisos.help_text }}</p>
+
+              <div class="row row-cols-1 row-cols-md-2 g-2">
+                {% for opcion in formulario.permisos %}
+                  <div class="col">
+                    <div class="form-check">
+                      {{ opcion.tag }}
+                      <label class="form-check-label font-monospace small"
+                             for="{{ opcion.id_for_label }}">{{ opcion.choice_label }}</label>
+                    </div>
+                  </div>
+                {% empty %}
+                  <div class="col">
+                    <p class="text-body-secondary mb-0">
+                      No hay permisos activos para asignar.
+                    </p>
+                  </div>
+                {% endfor %}
+              </div>
+
+              {% for error in formulario.permisos.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="d-flex gap-2 mt-4">
+      <button type="submit" class="btn btn-primary">Guardar</button>
+      <a class="btn btn-outline-secondary" href="{% url 'usuarios:roles' %}">Cancelar</a>
+    </div>
+  </form>
+
+</main>
+{% endblock %}
