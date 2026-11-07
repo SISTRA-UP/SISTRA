@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block titulo %}Acceso verificado · SISTRA-UP{% endblock %}
+
+{% block css %}
+<link rel="stylesheet" href="{% static 'usuarios/css/logueo.css' %}">
+{% endblock %}
+
+{% block contenido %}
+<main class="container py-5 private-home">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-5">
+        <a class="brand brand-compact" href="{% url 'usuarios:inicio_estudiante' %}" aria-label="SISTRA-UP, inicio">
+            <span class="brand-mark" aria-hidden="true">S</span>
+            <span class="brand-word">SISTRA<span class="brand-period">.</span><small>Universidad de Pamplona</small></span>
+        </a>
+        <form method="post" action="{% url 'usuarios:logout_estudiante' %}">
+            {% csrf_token %}
+            <button class="btn btn-outline-secondary" type="submit">Cerrar sesión</button>
+        </form>
+    </div>
+
+    <section class="private-card p-4 p-md-5">
+        <p class="eyebrow">ACCESO INSTITUCIONAL VERIFICADO</p>
+        <h1>Hola, {{ request.user.nombre }}.</h1>
+        <p class="muted mb-0">Tu cuenta activa y tu perfil de estudiante fueron validados correctamente. Esta pantalla es temporal: el dashboard académico se implementará en SISTRA-14.</p>
+    </section>
+</main>
+{% endblock %}
