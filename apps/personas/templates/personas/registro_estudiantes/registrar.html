@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Registrar estudiantes · SISTRA{% endblock %}
+
+{% block contenido %}
+<main class="container py-4">
+
+  <div class="mb-4">
+    <h1 class="h3 mb-1">Registrar estudiantes</h1>
+    {% if carrera %}
+      <p class="text-body-secondary mb-0">
+        Se registran en <strong>{{ carrera.nombre }}</strong>, la carrera que diriges.
+        Cada estudiante recibe su contraseña temporal en su correo institucional.
+      </p>
+    {% endif %}
+  </div>
+
+  {% if messages %}
+    {% for mensaje in messages %}
+      <div class="alert alert-{% if mensaje.tags == 'error' %}danger{% elif mensaje.tags %}{{ mensaje.tags }}{% else %}info{% endif %} alert-dismissible fade show"
+           role="alert">
+        {{ mensaje }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {% if not carrera %}
+    <div class="alert alert-warning" role="alert">
+      <h2 class="h6">No tienes una carrera asignada</h2>
+      <p class="mb-0">
+        Para registrar estudiantes necesitas estar asignado como Director de una carrera.
+        Pídele al administrador que te asigne la tuya.
+      </p>
+    </div>
+  {% else %}
+
+    <ul class="nav nav-tabs mb-0" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-uno" data-bs-toggle="tab"
+                data-bs-target="#panel-uno" type="button" role="tab"
+                aria-controls="panel-uno" aria-selected="true">Uno a uno</button>
+      </li>
+      {% if perms.estudiante.cargar_csv %}
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-csv" data-bs-toggle="tab"
+                  data-bs-target="#panel-csv" type="button" role="tab"
+                  aria-controls="panel-csv" aria-selected="false">Archivo CSV</button>
+        </li>
+      {% endif %}
+    </ul>
+
+    <div class="tab-content">
+
+      <div class="tab-pane fade show active" id="panel-uno" role="tabpanel"
+           aria-labelledby="tab-uno" tabindex="0">
+        <div class="card shadow-sm border-top-0 rounded-top-0">
+          <div class="card-body">
+            <form method="post" action="{% url 'personas:estudiantes' %}" novalidate>
+              {% csrf_token %}
+
+              {% if formulario.non_field_errors %}
+                <div class="alert alert-danger" role="alert">
+                  {{ formulario.non_field_errors }}
+                </div>
+              {% endif %}
+
+              <div class="row g-3">
+                {% for campo in formulario %}
+                  <div class="col-md-4">
+                    <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+                    {{ campo }}
+                    {% if campo.help_text %}
+                      <div class="form-text">{{ campo.help_text }}</div>
+                    {% endif %}
+                    {% for error in campo.errors %}
+                      <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                {% endfor %}
+              </div>
+
+              <button type="submit" class="btn btn-primary mt-4">Registrar</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      {% if perms.estudiante.cargar_csv %}
+        <div class="tab-pane fade" id="panel-csv" role="tabpanel"
+             aria-labelledby="tab-csv" tabindex="0">
+          <div class="card shadow-sm border-top-0 rounded-top-0">
+            <div class="card-body">
+              <form method="post" action="{% url 'personas:estudiantes_csv' %}"
+                    enctype="multipart/form-data" novalidate>
+                {% csrf_token %}
+
+                <label class="form-label" for="{{ cargue.archivo.id_for_label }}">
+                  {{ cargue.archivo.label }}
+                </label>
+                {{ cargue.archivo }}
+                <div class="form-text">
+                  Columnas: {% for columna in columnas %}<code>{{ columna }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}.
+                  {% if maximo_filas %}
+                    Máximo {{ maximo_filas }} filas por archivo.
+                  {% else %}
+                    Todavía no hay un máximo de filas configurado.
+                  {% endif %}
+                </div>
+                {% for error in cargue.archivo.errors %}
+                  <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+
+                <p class="form-text mt-3 mb-0">
+                  Las filas correctas se registran y las que tengan errores se listan abajo
+                  con su motivo, para que las corrijas y vuelvas a cargar solo esas.
+                </p>
+
+                <button type="submit" class="btn btn-primary mt-4">Subir CSV</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+    </div>
+
+    {% if resumen %}
+      <div class="card shadow-sm mt-4">
+        <div class="card-body">
+          <h2 class="h6 text-uppercase text-body-secondary mb-3">Resultado del cargue</h2>
+
+          <div class="d-flex flex-wrap gap-2 mb-3">
+            <span class="badge text-bg-success">{{ resumen.registrados }} registrados</span>
+            <span class="badge text-bg-secondary">{{ resumen.omitidos }} ya estaban registrados</span>
+            {% if resumen.sin_correo %}
+              <span class="badge text-bg-warning">{{ resumen.sin_correo }} sin correo enviado</span>
+            {% endif %}
+            <span class="badge text-bg-{% if resumen.errores %}danger{% else %}light border{% endif %}">
+              {{ resumen.errores|length }} con error
+            </span>
+            <span class="badge text-bg-light border">{{ resumen.total }} filas en el archivo</span>
+          </div>
+
+          {% if resumen.errores %}
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th scope="col">Fila</th>
+                    <th scope="col">Nombre</th>
+                    <th scope="col">Cédula</th>
+                    <th scope="col">Correo</th>
+                    <th scope="col">Motivo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for error in resumen.errores %}
+                    <tr>
+                      <th scope="row">{{ error.fila }}</th>
+                      <td>{{ error.datos.nombre|default:"—" }}</td>
+                      <td>{{ error.datos.cedula|default:"—" }}</td>
+                      <td>{{ error.datos.correo|default:"—" }}</td>
+                      <td class="text-danger-emphasis">{{ error.motivo }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <p class="text-body-secondary mb-0">Todas las filas del archivo se procesaron sin errores.</p>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
+  {% endif %}
+
+</main>
+{% endblock %}
