@@ -12,9 +12,14 @@
         Busca por nombre, cédula, usuario, correo o carrera.
       </p>
     </div>
-    {% if perms.rol.ver %}
-      <a class="btn btn-outline-secondary" href="{% url 'usuarios:roles' %}">Roles</a>
-    {% endif %}
+    <div class="d-flex gap-2">
+      {% if perms.rol.ver %}
+        <a class="btn btn-outline-secondary" href="{% url 'usuarios:roles' %}">Roles</a>
+      {% endif %}
+      {% if perms.usuario.crear %}
+        <a class="btn btn-primary" href="{% url 'usuarios:usuario_nuevo' %}">Nuevo usuario</a>
+      {% endif %}
+    </div>
   </div>
 
   {% include 'usuarios/roles/_mensajes.html' %}
@@ -47,6 +52,7 @@
             <th scope="col">Nombre</th>
             <th scope="col">Cédula</th>
             <th scope="col">Usuario y correo</th>
+            <th scope="col">Carrera</th>
             <th scope="col">Rol</th>
             <th scope="col" class="text-center">Estado</th>
             <th scope="col" class="text-end">Acciones</th>
@@ -61,6 +67,13 @@
                 <span class="font-monospace small">{{ usuario.nombre_usuario }}</span><br>
                 <span class="text-body-secondary small">{{ usuario.correo_institucional }}</span>
               </td>
+              <td>
+                {% for carrera in usuario.carreras %}
+                  <span class="badge text-bg-light border">{{ carrera }}</span>
+                {% empty %}
+                  <span class="text-body-secondary">—</span>
+                {% endfor %}
+              </td>
               <td>{{ usuario.rol.nombre }}</td>
               <td class="text-center">
                 {% if usuario.estado == 'Activo' %}
@@ -70,22 +83,36 @@
                 {% endif %}
               </td>
               <td class="text-end">
-                {% if perms.usuario.inactivar and usuario.pk != request.user.pk %}
-                  <form method="post" action="{% url 'usuarios:usuario_estado' usuario.pk %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-sm btn-outline-secondary">
-                      {% if usuario.estado == 'Activo' %}Inactivar{% else %}Activar{% endif %}
-                    </button>
-                  </form>
-                {% else %}
-                  <span class="text-body-secondary small">—</span>
-                {% endif %}
+                <div class="d-inline-flex gap-2">
+                  {% if perms.usuario.editar %}
+                    <a class="btn btn-sm btn-outline-primary"
+                       href="{% url 'usuarios:usuario_editar' usuario.pk %}">Editar</a>
+                  {% endif %}
+                  {% if perms.usuario.inactivar and usuario.pk != request.user.pk %}
+                    <form method="post" action="{% url 'usuarios:usuario_estado' usuario.pk %}">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-outline-secondary">
+                        {% if usuario.estado == 'Activo' %}Inactivar{% else %}Activar{% endif %}
+                      </button>
+                    </form>
+                  {% endif %}
+                  {% if perms.usuario.eliminar and usuario.pk != request.user.pk and not usuario.tiene_perfil %}
+                    <form method="post" action="{% url 'usuarios:usuario_eliminar' usuario.pk %}"
+                          onsubmit="return confirm('¿Eliminar a {{ usuario.nombre|escapejs }}? Si tiene información registrada, el sistema lo impedirá y podrás inactivarlo.');">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar</button>
+                    </form>
+                  {% endif %}
+                  {% if usuario.pk == request.user.pk %}
+                    <span class="badge text-bg-light border" title="Tu propia cuenta">tú</span>
+                  {% endif %}
+                </div>
               </td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="6" class="text-center text-body-secondary py-4">
-                Ningún usuario coincide con la búsqueda.
+              <td colspan="7" class="text-center text-body-secondary py-4">
+                No se encontraron usuarios con ese criterio.
               </td>
             </tr>
           {% endfor %}
@@ -95,8 +122,8 @@
   </div>
 
   <p class="text-body-secondary small mt-3 mb-0">
-    Los usuarios no se eliminan: se inactivan. Un usuario inactivo no puede entrar al sistema y
-    sus trámites se conservan.
+    Un usuario con información registrada no se elimina: se inactiva. Un usuario inactivo no puede
+    entrar al sistema y sus trámites se conservan. Ningún estudiante ni Director se elimina.
   </p>
 
 </main>
