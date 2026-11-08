@@ -17,6 +17,12 @@ app_name = 'usuarios'
 
 urlpatterns = [
     # SISTRA-10 · Roles (roles, permisos y usuarios)
+    path('roles/', roles.lista_roles, name='roles'),
+    path('roles/nuevo/', roles.crear_rol, name='rol_nuevo'),
+    path('roles/<int:id_rol>/editar/', roles.editar_rol, name='rol_editar'),
+    path('roles/<int:id_rol>/estado/', roles.cambiar_estado_rol, name='rol_estado'),
+    path('gestion/', roles.lista_usuarios, name='usuarios'),
+    path('gestion/<int:id_usuario>/estado/', roles.cambiar_estado_usuario, name='usuario_estado'),
 
     # SISTRA-13 · Logueo
 ]
