@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from apps.cargue_up.models import CargueUp, EstadoVerificacion
 from apps.informes.models import Informe
-from apps.parametrizacion.models import TipoRechazo
+from apps.parametrizacion.models import Parametro, TipoRechazo
 from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.seguimiento.models import Auditoria, HistorialEstado, Notificacion
 from apps.usuarios.models import Estado
@@ -66,12 +66,35 @@ def sanitizar_texto(valor: str) -> str:
     return re.sub(r'<[^>]*?>', '', valor.strip()) if valor else ''
 
 
+def obtener_limites_semaforo() -> tuple[int, int]:
+    """Obtiene los umbrales de días del semáforo desde Parametro en BD con fallback a 7 y 14."""
+    """SUJETO A CAMBIOS. Esperando Parametrizacion"""
+    verde = DIAS_SEMAFORO_VERDE
+    amarillo = DIAS_SEMAFORO_AMARILLO
+    try:
+        p_verde = Parametro.objects.filter(
+            clave__in=['dias_semaforo_verde', 'semaforo_verde', 'DIAS_SEMAFORO_VERDE']
+        ).first()
+        if p_verde and p_verde.valor.strip().isdigit():
+            verde = int(p_verde.valor.strip())
+
+        p_amarillo = Parametro.objects.filter(
+            clave__in=['dias_semaforo_amarillo', 'semaforo_amarillo', 'DIAS_SEMAFORO_AMARILLO']
+        ).first()
+        if p_amarillo and p_amarillo.valor.strip().isdigit():
+            amarillo = int(p_amarillo.valor.strip())
+    except Exception:
+        pass
+    return verde, amarillo
+
+
 def calcular_semaforo(propuesta: Propuesta) -> dict:
     """Calcula días corridos y color del semáforo (RG-07). Pausa en estados no activos."""
     ahora = timezone.now()
     fecha_base = propuesta.fecha_envio or propuesta.fecha_actualizacion or propuesta.fecha_creacion
     dias = max(0, (ahora - fecha_base).days)
     estado = propuesta.estado
+    limite_verde, limite_amarillo = obtener_limites_semaforo()
 
     if estado != EstadoTramite.EN_REVISION:
         return {
@@ -83,7 +106,7 @@ def calcular_semaforo(propuesta: Propuesta) -> dict:
             'tooltip': f'Semáforo detenido en {dias} días (Estado: {estado}).',
         }
 
-    if dias <= DIAS_SEMAFORO_VERDE:
+    if dias <= limite_verde:
         return {
             'dias': dias,
             'color': 'verde',
@@ -92,7 +115,7 @@ def calcular_semaforo(propuesta: Propuesta) -> dict:
             'pausado': False,
             'tooltip': f'Semáforo Verde ({dias} días sin revisión desde su envío).',
         }
-    elif dias <= DIAS_SEMAFORO_AMARILLO:
+    elif dias <= limite_amarillo:
         return {
             'dias': dias,
             'color': 'amarillo',

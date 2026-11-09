@@ -16,6 +16,7 @@ import json
 from pathlib import Path
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse, JsonResponse
@@ -47,6 +48,7 @@ from apps.propuestas.forms.aprobacion import (
 )
 from apps.propuestas.forms.aprobacion_masiva import AccionMasivaForm
 from apps.propuestas.models import EstadoTramite, Propuesta
+from apps.seguimiento.models import HistorialEstado
 from apps.usuarios.models import Estado
 
 ELEMENTOS_POR_PAGINA = 10
@@ -225,8 +227,13 @@ def detalle_propuesta(request: HttpRequest, id_propuesta: int) -> JsonResponse:
     semaforo = calcular_semaforo(propuesta)
     puede_revertir, motivo_bloqueo = puede_revertir_aprobacion(propuesta)
 
+    historial_qs = (
+        HistorialEstado.objects.filter(propuesta=propuesta)
+        .select_related('usuario', 'tipo_rechazo')
+        .order_by('-fecha_hora')
+    )
     historial_lista = []
-    for h in propuesta.historial.order_by('-fecha_hora'):
+    for h in historial_qs:
         historial_lista.append(
             {
                 'fecha_hora': timezone.localtime(h.fecha_hora).strftime('%d/%m/%Y %H:%M'),
@@ -241,11 +248,17 @@ def detalle_propuesta(request: HttpRequest, id_propuesta: int) -> JsonResponse:
         )
 
     tiene_doc = bool(propuesta.version_plantilla and propuesta.version_plantilla.ruta_archivo)
+    programa_estudiante = (
+        propuesta.proceso.estudiante_carrera.carrera.nombre
+        if propuesta.proceso and propuesta.proceso.estudiante_carrera and propuesta.proceso.estudiante_carrera.carrera
+        else 'No registrado'
+    )
     datos = {
         'id_propuesta': propuesta.pk,
         'codigo': propuesta.codigo,
         'titulo': propuesta.titulo,
         'estado': propuesta.estado,
+        'programa': programa_estudiante,
         'fecha_envio': (
             timezone.localtime(propuesta.fecha_envio).strftime('%d/%m/%Y %H:%M')
             if propuesta.fecha_envio
@@ -258,6 +271,7 @@ def detalle_propuesta(request: HttpRequest, id_propuesta: int) -> JsonResponse:
             'nombre': estudiante_usuario.nombre,
             'cedula': estudiante_usuario.cedula,
             'correo': estudiante_usuario.correo_institucional,
+            'programa': programa_estudiante,
         },
         'periodo': (
             propuesta.periodo_academico.nombre
@@ -377,8 +391,13 @@ def cambiar_estado(request: HttpRequest, id_propuesta: int) -> HttpResponse:
 
     except PropuestaBloqueadaError as e:
         messages.error(request, str(e))
-    except Exception as e:
-        messages.error(request, f'Error al procesar la decisión: {e}')
+    except ValidationError as e:
+        messages.error(request, e.message if hasattr(e, 'message') else str(e))
+    except Exception:
+        messages.error(
+            request,
+            'No fue posible procesar la decisión sobre la propuesta. Por favor, inténtalo nuevamente.',
+        )
 
     return redirect('propuestas:aprobacion')
 
@@ -411,8 +430,13 @@ def reactivar_propuesta(request: HttpRequest, id_propuesta: int) -> HttpResponse
         messages.success(request, MSG_02_04)
     except ReactivacionInvalidaError as e:
         messages.error(request, str(e))
-    except Exception as e:
-        messages.error(request, f'Error al reactivar la propuesta: {e}')
+    except ValidationError as e:
+        messages.error(request, e.message if hasattr(e, 'message') else str(e))
+    except Exception:
+        messages.error(
+            request,
+            'No fue posible reactivar la propuesta. Por favor, inténtalo nuevamente.',
+        )
 
     return redirect('propuestas:aprobacion')
 
@@ -438,10 +462,13 @@ def accion_masiva(request: HttpRequest) -> HttpResponse:
             request,
             f'Se procesaron exitosamente {procesadas} propuesta(s) de forma masiva.',
         )
-    except ReactivacionInvalidaError as e:
+    except (ReactivacionInvalidaError, ValidationError) as e:
         messages.error(request, str(e))
-    except Exception as e:
-        messages.error(request, f'No fue posible completar la acción masiva: {e}')
+    except Exception:
+        messages.error(
+            request,
+            'No fue posible completar la acción masiva. Por favor, inténtalo nuevamente.',
+        )
 
     return redirect('propuestas:aprobacion')
 
