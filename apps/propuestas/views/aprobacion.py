@@ -44,6 +44,7 @@ from apps.propuestas.forms.aprobacion import (
     ReactivacionPropuestaForm,
     RechazoPropuestaForm,
     calcular_semaforo,
+    obtener_limites_semaforo,
     puede_revertir_aprobacion,
 )
 from apps.propuestas.forms.aprobacion_masiva import AccionMasivaForm
@@ -185,6 +186,7 @@ def bandeja(request: HttpRequest) -> HttpResponse:
         )
 
     tipos_rechazo = TipoRechazo.objects.filter(estado=Estado.ACTIVO).order_by('nombre')
+    limite_verde, limite_amarillo = obtener_limites_semaforo()
 
     contexto = {
         'asignacion': asignacion,
@@ -194,6 +196,9 @@ def bandeja(request: HttpRequest) -> HttpResponse:
         'propuestas_con_meta': propuestas_con_meta,
         'total_propuestas': total_filtradas,
         'tipos_rechazo': tipos_rechazo,
+        'limite_verde': limite_verde,
+        'limite_amarillo': limite_amarillo,
+        'limite_rojo': limite_amarillo + 1,
         'form_aprobar': AprobacionPropuestaForm(),
         'form_modificar': ModificacionPropuestaForm(),
         'form_rechazar': RechazoPropuestaForm(),

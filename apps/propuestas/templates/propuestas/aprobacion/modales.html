@@ -13,7 +13,7 @@
                         <div class="s" id="det-subtitulo" style="font-size: 13px; color: #4B5263; margin-top: 2px;">Cargando información...</div>
                     </div>
                     <div style="text-align: right;">
-                        <span class="bg" id="det-badge-estado" style="display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #FFF1C2; color: #6B4A00;">En Proceso</span>
+                        <span class="bg" id="det-badge-estado" style="display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #FFF1C2; color: #6B4A00;">En revisión</span>
                         <div class="s" id="det-dias-texto" style="font-size: 13px; color: #4B5263; margin-top: 4px;">-- días</div>
                     </div>
                 </div>
@@ -257,7 +257,7 @@
                 <input type="hidden" name="nuevo_estado" id="dec-nuevo-estado" value="">
 
                 <h2 id="dec-titulo">Confirmar Aprobación de Propuesta(s)</h2>
-                <div class="s" id="dec-subtitulo">TS-0142 · Laura Camila Ortiz</div>
+                <div class="s" id="dec-subtitulo">Cargando propuesta...</div>
 
                 {# Banner contextual informativo #}
                 <div class="i iv" id="dec-banner">
@@ -304,10 +304,10 @@
             <form method="post" id="form-reactivar" class="w" style="width: 100%;">
                 {% csrf_token %}
                 <h2 id="rea-titulo">Confirmar Reactivación de Propuesta</h2>
-                <div class="s" id="rea-subtitulo">TS-0118 · Sofía Carolina Mora</div>
+                <div class="s" id="rea-subtitulo">Cargando propuesta...</div>
 
                 <div class="i ib" style="background: #E4EAF8; color: #1B3A8A; border: 1px solid #1B3A8A;">
-                    Se verificó que el estudiante no tiene otra propuesta ni informe activo. La propuesta retornará a En Proceso conservando su conteo previo en el semáforo (<span id="rea-dias">7</span> días) y quedará registrada en auditoría.
+                    Se verificó que el estudiante no tiene otra propuesta ni informe activo. La propuesta retornará a En revisión conservando su conteo previo en el semáforo (<span id="rea-dias">7</span> días) y quedará registrada en auditoría.
                 </div>
 
                 <div>

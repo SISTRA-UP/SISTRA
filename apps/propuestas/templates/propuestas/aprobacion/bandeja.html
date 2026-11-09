@@ -430,7 +430,7 @@
     {# Título y Breadcrumb oficial #}
     <div>
         <div class="subtitulo-modulo">
-            SISTRA-02 · Trabajo Social
+            SISTRA-02 · Aprobación de propuesta
             {% if carrera %}
                 · <span class="fw-semibold text-dark">{{ carrera.nombre }}</span>
             {% endif %}
@@ -473,7 +473,7 @@
 
                 <select name="estado" id="cmb-est" class="se" aria-label="Filtrar por estado">
                     <option value="">Estado: Todos</option>
-                    <option value="En revisión" {% if request.GET.estado == 'En revisión' %}selected{% endif %}>En Proceso</option>
+                    <option value="En revisión" {% if request.GET.estado == 'En revisión' %}selected{% endif %}>En revisión</option>
                     <option value="Aprobado" {% if request.GET.estado == 'Aprobado' %}selected{% endif %}>Aprobado</option>
                     <option value="Requiere modificación" {% if request.GET.estado == 'Requiere modificación' %}selected{% endif %}>Requiere modificación</option>
                     <option value="Rechazado" {% if request.GET.estado == 'Rechazado' %}selected{% endif %}>Rechazado</option>
@@ -481,9 +481,9 @@
 
                 <select name="semaforo" id="cmb-dias" class="se" aria-label="Filtrar por semáforo y días">
                     <option value="">Semáforo: Todos</option>
-                    <option value="verde" {% if request.GET.semaforo == 'verde' %}selected{% endif %}>0 a 7 días - Verde</option>
-                    <option value="amarillo" {% if request.GET.semaforo == 'amarillo' %}selected{% endif %}>8 a 14 días - Amarillo</option>
-                    <option value="rojo" {% if request.GET.semaforo == 'rojo' %}selected{% endif %}>15+ días - Rojo</option>
+                    <option value="verde" {% if request.GET.semaforo == 'verde' %}selected{% endif %}>0 a {{ limite_verde|default:7 }} días - Verde</option>
+                    <option value="amarillo" {% if request.GET.semaforo == 'amarillo' %}selected{% endif %}>{{ limite_verde|add:1|default:8 }} a {{ limite_amarillo|default:14 }} días - Amarillo</option>
+                    <option value="rojo" {% if request.GET.semaforo == 'rojo' %}selected{% endif %}>{{ limite_rojo|default:15 }}+ días - Rojo</option>
                 </select>
 
                 <a href="{% url 'propuestas:aprobacion' %}" class="b g" style="height: 40px;" title="Limpiar todos los filtros" id="btn-limpiar">
@@ -548,18 +548,18 @@
                         {# 4. Título de la propuesta #}
                         <div>
                             <div class="n" style="font-weight: 500;">{{ prop.titulo|default:"(Sin título registrado)" }}</div>
-                            <div class="t" style="font-size: 12px;">{{ prop.entidad|default:"Entidad comunitaria" }}</div>
+                            <div class="t" style="font-size: 12px;">{{ prop.entidad|default:"Sin entidad especificada" }}</div>
                         </div>
 
                         {# 5. Última modificación #}
                         <div style="font-size: 13px;">
-                            {{ prop.fecha_actualizacion|date:"d/m/Y"|default:"25/10/2026" }}
+                            {{ prop.fecha_actualizacion|date:"d/m/Y"|default:prop.fecha_creacion|date:"d/m/Y"|default:"-" }}
                         </div>
 
                         {# 6. Estado y días #}
                         <div>
                             {% if prop.estado == 'En revisión' %}
-                                <span class="s e">En Proceso</span>
+                                <span class="s e">En revisión</span>
                                 <div class="t">{{ sem.dias }} día{{ sem.dias|pluralize }}</div>
                             {% elif prop.estado == 'Aprobado' %}
                                 <span class="s ap">Aprobado</span>
@@ -637,7 +637,7 @@
                 {% empty %}
                     <div style="padding: 60px 20px; text-align: center; color: var(--sistra-muted);">
                         <div style="width: 44px; height: 44px; border-radius: 50%; background: #E4EAF8; color: #1B3A8A; font-weight: 700; line-height: 44px; margin: 0 auto 10px; font-size: 16px;">i</div>
-                        <div style="font-size: 15px; font-weight: 600; color: var(--sistra-dark); margin-bottom: 6px;">No se encontraron propuestas de Trabajo Social que coincidan con los criterios seleccionados</div>
+                        <div style="font-size: 15px; font-weight: 600; color: var(--sistra-dark); margin-bottom: 6px;">No se encontraron propuestas de {{ carrera.nombre|default:"la carrera" }} que coincidan con los criterios seleccionados</div>
                         <p style="font-size: 13px; margin: 0 0 14px;">Puedes ajustar los filtros de búsqueda o restablecer la vista inicial.</p>
                         <a href="{% url 'propuestas:aprobacion' %}" class="b g">Restablecer filtros</a>
                     </div>
@@ -648,10 +648,10 @@
         {# Pie de página con leyenda del semáforo y paginación #}
         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--sistra-muted); flex-wrap: wrap; gap: 10px;">
             <div>
-                Semáforo en propuestas En Proceso:
-                <span class="sw" style="background:#CFEBD8"></span>0 a 7 días
-                <span class="sw" style="background:#FBE7A6"></span>8 a 14 días
-                <span class="sw" style="background:#F6C5BF"></span>15+ días.
+                Semáforo en propuestas En revisión:
+                <span class="sw" style="background:#CFEBD8"></span>0 a {{ limite_verde|default:7 }} días
+                <span class="sw" style="background:#FBE7A6"></span>{{ limite_verde|add:1|default:8 }} a {{ limite_amarillo|default:14 }} días
+                <span class="sw" style="background:#F6C5BF"></span>{{ limite_rojo|default:15 }}+ días.
                 <span class="ms-2">Aprobado y Rechazado: fondo neutro.</span>
             </div>
 
@@ -802,7 +802,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     document.getElementById('det-dias-texto').textContent = `${data.semaforo ? data.semaforo.dias : '0'} días`;
                     document.getElementById('det-est-nombre').value = (data.estudiante && data.estudiante.nombre) || 'No registrado';
                     document.getElementById('det-est-cedula').value = (data.estudiante && data.estudiante.cedula) || 'No registrado';
-                    document.getElementById('det-est-programa').value = 'Trabajo Social';
+                    document.getElementById('det-est-programa').value = (data.estudiante && data.estudiante.programa) || data.programa || 'No registrado';
                     document.getElementById('det-titulo').value = data.titulo || 'Sin título registrado';
                     document.getElementById('det-descripcion').value = data.objetivos || data.justificacion || 'No registrado';
                     document.getElementById('det-entidad').value = data.entidad || 'No registrada';
@@ -968,7 +968,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 btnSubmit.className = 'b v';
                 btnSubmit.textContent = 'Confirmar Aprobación';
             } else if (targetEstado === 'Requiere modificación') {
-                document.getElementById('dec-titulo').textContent = 'Enviar Propuesta a Modificación (En Proceso)';
+                document.getElementById('dec-titulo').textContent = 'Enviar Propuesta a Modificación';
                 banner.className = 'i ib';
                 banner.style.background = '#FFF1C2';
                 banner.style.color = '#4A3300';
@@ -1176,7 +1176,7 @@ document.addEventListener('DOMContentLoaded', function () {
             banner.style.background = '#E4EAF8';
             banner.style.color = '#1B3A8A';
             banner.style.border = '1px solid #1B3A8A';
-            banner.textContent = 'Las propuestas retornarán a En Proceso conservando su semáforo previo.';
+            banner.textContent = 'Las propuestas retornarán a En revisión conservando su semáforo previo.';
             grupoTipo.style.display = 'none';
             labelObs.textContent = 'Justificación de reactivación (obligatoria)';
             txtObs.placeholder = 'Escriba la justificación para auditoría';
