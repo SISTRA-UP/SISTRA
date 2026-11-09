@@ -14,8 +14,6 @@ Implementa:
 from datetime import timedelta
 import json
 from pathlib import Path
-
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -277,6 +275,20 @@ def detalle_propuesta(request: HttpRequest, id_propuesta: int) -> JsonResponse:
         'impacto_social': propuesta.impacto_social or '',
         'identificacion_poblacion': propuesta.identificacion_poblacion or '',
         'propuesta_social': propuesta.propuesta_social or '',
+        'zona': propuesta.zona or 'No registrada',
+        'area': propuesta.area or 'No registrada',
+        'sector': propuesta.sector or 'No registrado',
+        'unidad': propuesta.unidad or 'No registrada',
+        'fecha_inicio': (
+            propuesta.fecha_inicio.strftime('%d/%m/%Y')
+            if propuesta.fecha_inicio
+            else ''
+        ),
+        'fecha_fin': (
+            propuesta.fecha_fin.strftime('%d/%m/%Y')
+            if propuesta.fecha_fin
+            else ''
+        ),
         'tiene_documento': tiene_doc,
         'cronograma': [
             {
