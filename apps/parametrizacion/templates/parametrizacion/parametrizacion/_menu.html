@@ -7,7 +7,11 @@
     {% else %}
     <a class="sis-nav-item" href="{% url 'parametrizacion:periodos' %}">Periodo académico</a>
     {% endif %}
-    <span class="sis-nav-item is-off">Documentos y formatos <span class="sis-soon">Próximamente</span></span>
+    {% if seccion == 'documentos' %}
+    <a class="sis-nav-item is-active" href="{% url 'parametrizacion:documentos' %}" aria-current="page">Documentos y formatos</a>
+    {% else %}
+    <a class="sis-nav-item" href="{% url 'parametrizacion:documentos' %}">Documentos y formatos</a>
+    {% endif %}
     {% if seccion == 'alertas' %}
     <a class="sis-nav-item is-active" href="{% url 'parametrizacion:alertas' %}" aria-current="page">Alertas y
         plazos</a>

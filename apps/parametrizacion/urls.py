@@ -2,7 +2,7 @@ from django.conf import settings
 from django.contrib.auth.views import LoginView, LogoutView
 from django.urls import path
 
-from .views import alertas, parametrizacion, periodos
+from .views import alertas, documentos, parametrizacion, periodos
 
 app_name = 'parametrizacion'
 
@@ -18,6 +18,11 @@ urlpatterns = [
     path('usuarios/carga-masiva/', parametrizacion.CargaMasivaView.as_view(), name='usuarios_carga'),
     path('usuarios/carga-masiva/<int:pk>/log/', parametrizacion.LogCargaView.as_view(), name='usuarios_carga_log'),
     path('directores/', parametrizacion.DirectoresView.as_view(), name='directores'),
+    # SISTRA-11 · Documentos y formatos
+    path('documentos/', documentos.DocumentosView.as_view(), name='documentos'),
+    path('documentos/nueva/', documentos.CrearPlantillaView.as_view(), name='documentos_nueva'),
+    path('documentos/<int:pk>/editar/', documentos.EditarPlantillaView.as_view(), name='documentos_editar'),
+    path('documentos/<int:pk>/version/', documentos.SubirVersionView.as_view(), name='documentos_version'),
     path('salir/', LogoutView.as_view(next_page=settings.LOGIN_URL), name='salir'),
 ]
 

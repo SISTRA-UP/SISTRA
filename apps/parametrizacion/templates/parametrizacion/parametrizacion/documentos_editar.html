@@ -1,0 +1,32 @@
+{% extends 'parametrizacion/parametrizacion/_pagina.html' %}
+
+{% block titulo %}Editar plantilla · Parametrización · SISTRA-UP{% endblock %}
+
+{% block principal %}
+<p class="sis-eyebrow">Parametrización · SISTRA-11</p>
+<h1 class="sis-titulo mb-1">Editar plantilla</h1>
+<p class="sis-sub mb-4">{{ plantilla.nombre }}</p>
+
+<section class="sis-card">
+    <form method="post">
+        {% csrf_token %}
+        <div class="row g-3">
+            {% for campo in form %}
+            <div class="col-md-6">
+                <label class="form-label fw-semibold" for="{{ campo.id_for_label }}">
+                    {{ campo.label }}
+                </label>
+                {{ campo }}
+                {% if campo.errors %}
+                <div class="invalid-feedback d-block">{{ campo.errors|join:', ' }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="d-flex justify-content-end gap-2 mt-4">
+            <a class="btn btn-outline-secondary" href="{% url 'parametrizacion:documentos' %}">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Guardar cambios</button>
+        </div>
+    </form>
+</section>
+{% endblock %}
