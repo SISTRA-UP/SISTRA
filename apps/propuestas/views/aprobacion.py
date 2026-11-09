@@ -29,8 +29,6 @@ from apps.informes.models import Informe
 from apps.parametrizacion.models import TipoRechazo
 from apps.personas.models import DirectorCarrera
 from apps.propuestas.forms.aprobacion import (
-    DIAS_SEMAFORO_AMARILLO,
-    DIAS_SEMAFORO_VERDE,
     MSG_02_01,
     MSG_02_02,
     MSG_02_03,
@@ -111,6 +109,8 @@ def bandeja(request: HttpRequest) -> HttpResponse:
         .order_by('-fecha_envio', '-fecha_creacion')
     )
 
+    limite_verde, limite_amarillo = obtener_limites_semaforo()
+
     if form_filtro.is_valid():
         buscar = form_filtro.cleaned_data.get('buscar')
         estado = form_filtro.cleaned_data.get('estado')
@@ -131,17 +131,17 @@ def bandeja(request: HttpRequest) -> HttpResponse:
             ahora = timezone.now()
             # El semáforo solo corre en 'En revisión'
             propuestas_qs = propuestas_qs.filter(estado=EstadoTramite.EN_REVISION)
-            limite_verde = ahora - timedelta(days=DIAS_SEMAFORO_VERDE)
-            limite_amarillo = ahora - timedelta(days=DIAS_SEMAFORO_AMARILLO)
+            corte_verde = ahora - timedelta(days=limite_verde)
+            corte_amarillo = ahora - timedelta(days=limite_amarillo)
 
             if semaforo_filtro == 'verde':
-                propuestas_qs = propuestas_qs.filter(fecha_envio__gte=limite_verde)
+                propuestas_qs = propuestas_qs.filter(fecha_envio__gte=corte_verde)
             elif semaforo_filtro == 'amarillo':
                 propuestas_qs = propuestas_qs.filter(
-                    fecha_envio__lt=limite_verde, fecha_envio__gte=limite_amarillo
+                    fecha_envio__lt=corte_verde, fecha_envio__gte=corte_amarillo
                 )
             elif semaforo_filtro == 'rojo':
-                propuestas_qs = propuestas_qs.filter(fecha_envio__lt=limite_amarillo)
+                propuestas_qs = propuestas_qs.filter(fecha_envio__lt=corte_amarillo)
 
     total_filtradas = propuestas_qs.count()
 
@@ -170,12 +170,13 @@ def bandeja(request: HttpRequest) -> HttpResponse:
             )
         )
 
+    limites_sem = (limite_verde, limite_amarillo)
     propuestas_con_meta = []
     for prop in propuestas_pagina:
         bloqueada_reversion = (
             prop.pk in cargues_bloqueados_ids or prop.pk in informes_bloqueados_ids
         )
-        sem = calcular_semaforo(prop)
+        sem = calcular_semaforo(prop, limites=limites_sem)
         propuestas_con_meta.append(
             {
                 'propuesta': prop,
@@ -186,7 +187,6 @@ def bandeja(request: HttpRequest) -> HttpResponse:
         )
 
     tipos_rechazo = TipoRechazo.objects.filter(estado=Estado.ACTIVO).order_by('nombre')
-    limite_verde, limite_amarillo = obtener_limites_semaforo()
 
     contexto = {
         'asignacion': asignacion,

@@ -22,6 +22,7 @@ from apps.parametrizacion.models import (
     Carrera,
     EstadoPeriodo,
     Facultad,
+    Parametro,
     PeriodoAcademico,
     TipoRechazo,
 )
@@ -204,18 +205,21 @@ class TestDominioYSemaforo(BaseAprobacionTestCase):
     """Pruebas unitarias de las funciones de soporte del dominio de aprobación."""
 
     def test_sanitizar_texto_ataque_xss_y_etiquetas(self):
-        """Elimina etiquetas HTML peligrosas y previene Cross-Site Scripting (XSS)."""
+        """Elimina etiquetas HTML peligrosas sin escapar comillas ni ampersand (Django autoescapa al renderizar)."""
         xss_input = "<script>alert('Ataque XSS')</script>Observación limpia"
         resultado = sanitizar_texto(xss_input)
         self.assertNotIn('<script>', resultado)
         self.assertNotIn('</script>', resultado)
-        self.assertIn('alert(&#x27;Ataque XSS&#x27;)Observación limpia', resultado)
+        self.assertEqual(resultado, "alert('Ataque XSS')Observación limpia")
 
         html_input = "<b>Negrita</b> & <img src=x onerror=alert(1)>Texto final"
         resultado_html = sanitizar_texto(html_input)
         self.assertNotIn('<b>', resultado_html)
         self.assertNotIn('<img', resultado_html)
-        self.assertIn('&amp;', resultado_html)
+        self.assertEqual(resultado_html, "Negrita & Texto final")
+
+        ejemplo_revisor = "Revise la sección 'Objetivos' y Peña & Cía"
+        self.assertEqual(sanitizar_texto(ejemplo_revisor), "Revise la sección 'Objetivos' y Peña & Cía")
 
     def test_sanitizar_texto_vacios_y_espacios(self):
         """Maneja correctamente cadenas vacías, None o únicamente con espacios."""
@@ -258,6 +262,27 @@ class TestDominioYSemaforo(BaseAprobacionTestCase):
         self.assertEqual(sem_15['color'], 'rojo')
         self.assertEqual(sem_15['dias'], 15)
         self.assertFalse(sem_15['pausado'])
+
+    def test_calcular_semaforo_parametrizado_desde_bd(self):
+        """El semáforo adopta los umbrales configurados en la tabla Parametro (BD)."""
+        Parametro.objects.create(
+            clave='dias_semaforo_verde',
+            valor='4',
+            usuario_actualizacion=self.user_director,
+        )
+        Parametro.objects.create(
+            clave='dias_semaforo_amarillo',
+            valor='9',
+            usuario_actualizacion=self.user_director,
+        )
+        prop = self.crear_propuesta(self.estudiante_1, 'P-SEM-BD', dias_envio=4)
+        self.assertEqual(calcular_semaforo(prop)['color'], 'verde')
+
+        prop.fecha_envio = timezone.now() - timedelta(days=5)
+        self.assertEqual(calcular_semaforo(prop)['color'], 'amarillo')
+
+        prop.fecha_envio = timezone.now() - timedelta(days=10)
+        self.assertEqual(calcular_semaforo(prop)['color'], 'rojo')
 
     def test_calcular_semaforo_pausado_en_otros_estados(self):
         """El semáforo se detiene cuando la propuesta sale de 'En revisión' (RG-07)."""
@@ -378,6 +403,24 @@ class TestFiltroBandejaPropuestasForm(BaseAprobacionTestCase):
         form_sem = FiltroBandejaPropuestasForm(data={'semaforo': 'azul'})
         self.assertFalse(form_sem.is_valid())
         self.assertIn('semaforo', form_sem.errors)
+
+    def test_filtro_bandeja_opciones_semaforo_dinamicas_desde_bd(self):
+        """Las opciones del selector de semáforo se construyen dinámicamente según Parametro."""
+        Parametro.objects.create(
+            clave='dias_semaforo_verde',
+            valor='5',
+            usuario_actualizacion=self.user_director,
+        )
+        Parametro.objects.create(
+            clave='dias_semaforo_amarillo',
+            valor='12',
+            usuario_actualizacion=self.user_director,
+        )
+        form = FiltroBandejaPropuestasForm()
+        choices = dict(form.fields['semaforo'].choices)
+        self.assertEqual(choices['verde'], 'Verde (0 a 5 días)')
+        self.assertEqual(choices['amarillo'], 'Amarillo (6 a 12 días)')
+        self.assertEqual(choices['rojo'], 'Rojo (13+ días)')
 
 
 # ==============================================================================
@@ -1058,6 +1101,86 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         prop.refresh_from_db()
         self.assertEqual(prop.estado, EstadoTramite.RECHAZADO)
 
+    def test_cambiar_estado_post_bloqueado_desde_borrador(self):
+        """Bloquea cambiar estado si la propuesta se encuentra en BORRADOR."""
+        prop = self.crear_propuesta(
+            self.estudiante_1, 'PROP-BLOQ-BORR', estado=EstadoTramite.BORRADOR
+        )
+        self.client.force_login(self.user_director)
+
+        url = reverse('propuestas:cambiar_estado', args=[prop.pk])
+        response = self.client.post(url, {'nuevo_estado': EstadoTramite.APROBADO})
+        self.assertEqual(response.status_code, 302)
+
+        prop.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.BORRADOR)
+
+    def test_cambiar_estado_post_bloqueado_desde_requiere_modificacion(self):
+        """Bloquea cambiar estado si la propuesta se encuentra en REQUIERE_MODIFICACION."""
+        prop = self.crear_propuesta(
+            self.estudiante_1, 'PROP-BLOQ-MOD', estado=EstadoTramite.REQUIERE_MODIFICACION
+        )
+        self.client.force_login(self.user_director)
+
+        url = reverse('propuestas:cambiar_estado', args=[prop.pk])
+        response = self.client.post(url, {'nuevo_estado': EstadoTramite.APROBADO})
+        self.assertEqual(response.status_code, 302)
+
+        prop.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.REQUIERE_MODIFICACION)
+
+    def test_cambiar_estado_post_bloqueado_desde_aprobado_si_tiene_cargue_up(self):
+        """Bloquea cambiar estado desde APROBADO si ya tiene cargue UP registrado (RN-02-04)."""
+        prop = self.crear_propuesta(
+            self.estudiante_1, 'PROP-BLOQ-CARGUE', estado=EstadoTramite.APROBADO
+        )
+        CargueUp.objects.create(
+            propuesta=prop,
+            estado_verificacion=EstadoVerificacion.PENDIENTE,
+        )
+        self.client.force_login(self.user_director)
+
+        url = reverse('propuestas:cambiar_estado', args=[prop.pk])
+        response = self.client.post(
+            url,
+            {
+                'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION,
+                'observacion': 'Ajuste posterior al cargue oficial',
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        prop.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.APROBADO)
+
+    def test_bandeja_filtro_semaforo_limites_dinamicos_desde_bd(self):
+        """El filtrado por semáforo en bandeja obedece los límites dinámicos de Parametro."""
+        Parametro.objects.create(
+            clave='dias_semaforo_verde',
+            valor='3',
+            usuario_actualizacion=self.user_director,
+        )
+        Parametro.objects.create(
+            clave='dias_semaforo_amarillo',
+            valor='8',
+            usuario_actualizacion=self.user_director,
+        )
+        p_verde = self.crear_propuesta(self.estudiante_1, 'P-FILT-VERDE', dias_envio=2)
+        p_amarillo = self.crear_propuesta(self.estudiante_2, 'P-FILT-AMAR', dias_envio=5)
+
+        self.client.force_login(self.user_director)
+        response_verde = self.client.get(reverse('propuestas:aprobacion'), {'semaforo': 'verde'})
+        self.assertEqual(response_verde.status_code, 200)
+        props_verde = [m['propuesta'].pk for m in response_verde.context['propuestas_con_meta']]
+        self.assertIn(p_verde.pk, props_verde)
+        self.assertNotIn(p_amarillo.pk, props_verde)
+
+        response_amarillo = self.client.get(reverse('propuestas:aprobacion'), {'semaforo': 'amarillo'})
+        self.assertEqual(response_amarillo.status_code, 200)
+        props_amarillo = [m['propuesta'].pk for m in response_amarillo.context['propuestas_con_meta']]
+        self.assertIn(p_amarillo.pk, props_amarillo)
+        self.assertNotIn(p_verde.pk, props_amarillo)
+
     def test_reactivar_propuesta_post_exito(self):
         """Endpoint POST para reactivar una propuesta rechazada por error."""
         prop = self.crear_propuesta(
@@ -1119,7 +1242,9 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.assertEqual(datos['id_propuesta'], prop.pk)
         self.assertEqual(datos['codigo'], prop.codigo)
         self.assertEqual(datos['titulo'], prop.titulo)
+        self.assertEqual(datos['programa'], self.carrera.nombre)
         self.assertEqual(datos['estudiante']['nombre'], self.estudiante_1.usuario.nombre)
+        self.assertEqual(datos['estudiante']['programa'], self.carrera.nombre)
         self.assertEqual(datos['semaforo']['color'], 'verde')
         self.assertTrue(datos['puede_revertir'])
         self.assertEqual(len(datos['cronograma']), 1)

@@ -88,13 +88,17 @@ def obtener_limites_semaforo() -> tuple[int, int]:
     return verde, amarillo
 
 
-def calcular_semaforo(propuesta: Propuesta) -> dict:
+def calcular_semaforo(
+    propuesta: Propuesta, limites: tuple[int, int] | None = None
+) -> dict:
     """Calcula días corridos y color del semáforo (RG-07). Pausa en estados no activos."""
     ahora = timezone.now()
     fecha_base = propuesta.fecha_envio or propuesta.fecha_actualizacion or propuesta.fecha_creacion
     dias = max(0, (ahora - fecha_base).days)
     estado = propuesta.estado
-    limite_verde, limite_amarillo = obtener_limites_semaforo()
+    limite_verde, limite_amarillo = (
+        limites if limites is not None else obtener_limites_semaforo()
+    )
 
     if estado != EstadoTramite.EN_REVISION:
         return {
@@ -267,6 +271,16 @@ class FiltroBandejaPropuestasForm(forms.Form):
     semaforo = forms.ChoiceField(
         required=False, choices=OPCIONES_SEMAFORO, widget=forms.Select(attrs={'class': 'form-select', 'id': 'cmb-dias'})
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        verde, amarillo = obtener_limites_semaforo()
+        self.fields['semaforo'].choices = [
+            ('', 'Todos los semáforos'),
+            ('verde', f'Verde (0 a {verde} días)'),
+            ('amarillo', f'Amarillo ({verde + 1} a {amarillo} días)'),
+            ('rojo', f'Rojo ({amarillo + 1}+ días)'),
+        ]
 
     def clean_buscar(self) -> str:
         return sanitizar_texto(self.cleaned_data.get('buscar', ''))
