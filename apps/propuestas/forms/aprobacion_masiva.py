@@ -56,7 +56,19 @@ class AccionMasivaForm(forms.Form):
         self.fields['tipo_rechazo'].queryset = TipoRechazo.objects.filter(estado=Estado.ACTIVO).order_by('nombre')
 
     def clean_propuestas_ids(self) -> list[int]:
-        ids = [int(i.strip()) for i in self.cleaned_data.get('propuestas_ids', '').split(',') if i.strip().isdigit()]
+        # Soporta tanto lista de inputs en HTML (getlist) como cadena separada por comas
+        raw_list = self.data.getlist('propuestas_ids') if hasattr(self.data, 'getlist') else []
+        elementos = []
+        for val in raw_list:
+            elementos.extend(str(val).split(','))
+        cleaned = self.cleaned_data.get('propuestas_ids', '')
+        if isinstance(cleaned, str):
+            elementos.extend(cleaned.split(','))
+        elif isinstance(cleaned, (list, tuple)):
+            for val in cleaned:
+                elementos.extend(str(val).split(','))
+
+        ids = list(dict.fromkeys(int(i.strip()) for i in elementos if str(i).strip().isdigit()))
         if not ids:
             raise ValidationError('Debe seleccionar al menos una propuesta.')
         return ids

@@ -794,6 +794,20 @@ class TestAccionMasivaForm(BaseAprobacionTestCase):
         form.is_valid()
         self.assertEqual(form.cleaned_data['propuestas_ids'], [10, 20, 30])
 
+    def test_masivo_soporta_multiples_inputs_getlist(self):
+        """Soporta que el navegador envíe múltiples inputs con el mismo nombre 'propuestas_ids'."""
+        from django.http import QueryDict
+
+        qdict = QueryDict(mutable=True)
+        qdict['accion'] = 'aprobar'
+        qdict.appendlist('propuestas_ids', '10')
+        qdict.appendlist('propuestas_ids', '20')
+        qdict.appendlist('propuestas_ids', '30')
+
+        form = AccionMasivaForm(data=qdict)
+        self.assertTrue(form.is_valid())
+        self.assertEqual(form.cleaned_data['propuestas_ids'], [10, 20, 30])
+
     def test_masivo_falla_si_propuestas_pertenecen_a_otra_carrera(self):
         """Aislamiento por carrera: Falla si se intenta procesar una propuesta de otra carrera."""
         prop_propia = self.crear_propuesta(self.estudiante_1, 'PROP-MAS-PROPIA')
@@ -1258,3 +1272,33 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         url = reverse('propuestas:descargar_documento', args=[prop.pk])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 404)
+
+    def test_descargar_documento_pdf_content_type_inline(self):
+        """Descarga de documento PDF responde content_type application/pdf e inline para previsualización."""
+        import tempfile
+        from apps.parametrizacion.models import Plantilla, VersionPlantilla
+
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=True) as tf:
+            tf.write(b'%PDF-1.4 dummy content')
+            tf.flush()
+
+            plantilla = Plantilla.objects.create(nombre='Plantilla Propuesta', tipo='propuesta', estado='activo')
+            version = VersionPlantilla.objects.create(
+                plantilla=plantilla,
+                usuario=self.user_director,
+                numero_version=1,
+                nombre_archivo='propuesta_estudiante.pdf',
+                ruta_archivo=tf.name,
+                es_vigente=True,
+            )
+            prop = self.crear_propuesta(self.estudiante_1, 'PROP-DOC-PDF')
+            prop.version_plantilla = version
+            prop.save()
+
+            self.client.force_login(self.user_director)
+            url = reverse('propuestas:descargar_documento', args=[prop.pk])
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response['Content-Type'], 'application/pdf')
+            self.assertIn('inline', response['Content-Disposition'])
+            self.assertIn('propuesta_estudiante.pdf', response['Content-Disposition'])

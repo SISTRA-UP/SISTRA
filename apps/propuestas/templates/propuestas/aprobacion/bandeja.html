@@ -1015,12 +1015,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         if (nuevoEstado === 'Rechazado') {
-            if (!selTipo.value || obsVal.length < 1) {
+            if (!selTipo.value || obsVal.length < 10) {
                 e.preventDefault();
                 if (!selTipo.value) selTipo.classList.add('er');
-                if (obsVal.length < 1) txtObs.classList.add('er');
+                if (obsVal.length < 10) txtObs.classList.add('er');
                 errorDiv.style.display = 'flex';
-                errorDiv.textContent = "Es obligatorio seleccionar una opción en el campo 'Tipo de Rechazo' y registrar en el campo de texto 'Observación' el detalle del rechazo antes de confirmar.";
+                errorDiv.textContent = "Es obligatorio seleccionar una opción en el campo 'Tipo de Rechazo' y registrar en el campo de texto 'Observación' el detalle del rechazo (mínimo 10 caracteres).";
                 return;
             }
         }
@@ -1122,14 +1122,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (seleccionadas.length === 0) return;
 
         const contenedorIds = document.getElementById('mas-contenedor-ids');
-        contenedorIds.innerHTML = '';
-        seleccionadas.forEach(id => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'propuestas_ids';
-            input.value = id;
-            contenedorIds.appendChild(input);
-        });
+        contenedorIds.innerHTML = `<input type="hidden" name="propuestas_ids" value="${seleccionadas.join(',')}">`;
 
         document.getElementById('mas-accion').value = accion;
         document.getElementById('mas-subtitulo').textContent = `${seleccionadas.length} propuesta${seleccionadas.length === 1 ? '' : 's'} seleccionada${seleccionadas.length === 1 ? '' : 's'}`;
@@ -1200,12 +1193,12 @@ document.addEventListener('DOMContentLoaded', function () {
         const obsVal = txtObs.value.trim();
 
         if (accion === 'rechazar') {
-            if (!selTipo.value || obsVal.length < 1) {
+            if (!selTipo.value || obsVal.length < 10) {
                 e.preventDefault();
                 if (!selTipo.value) selTipo.classList.add('er');
-                if (obsVal.length < 1) txtObs.classList.add('er');
+                if (obsVal.length < 10) txtObs.classList.add('er');
                 errorDiv.style.display = 'flex';
-                errorDiv.textContent = "Es obligatorio seleccionar una opción en el campo 'Tipo de Rechazo' y registrar en el campo de texto 'Observación' el detalle del rechazo antes de confirmar.";
+                errorDiv.textContent = "Es obligatorio seleccionar una opción en el campo 'Tipo de Rechazo' y registrar en el campo de texto 'Observación' el detalle del rechazo (mínimo 10 caracteres).";
                 return;
             }
         }

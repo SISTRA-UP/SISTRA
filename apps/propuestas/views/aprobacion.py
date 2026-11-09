@@ -13,6 +13,7 @@ Implementa:
 
 from datetime import timedelta
 import json
+import mimetypes
 from pathlib import Path
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -501,8 +502,11 @@ def descargar_documento(request: HttpRequest, id_propuesta: int) -> HttpResponse
 
     try:
         archivo = open(ruta, 'rb')
-        response = FileResponse(archivo, content_type='application/octet-stream')
         nombre = propuesta.version_plantilla.nombre_archivo or ruta.name
+        content_type, _ = mimetypes.guess_type(nombre)
+        if not content_type:
+            content_type = 'application/pdf' if nombre.lower().endswith('.pdf') else 'application/octet-stream'
+        response = FileResponse(archivo, content_type=content_type)
         response['Content-Disposition'] = f'inline; filename="{nombre}"'
         return response
     except Exception:
