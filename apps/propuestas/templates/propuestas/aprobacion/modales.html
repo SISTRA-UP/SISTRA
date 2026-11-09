@@ -1,0 +1,395 @@
+{# Modales oficiales de SISTRA-02 (Aprobación, Modificación, Rechazo, Reactivación y Ver Detalle) #}
+{# Estructurados con Bootstrap 5.3 y fidelidad visual 100% al Mockup Figma #}
+
+{# 1. Modal: Ver Detalle de Propuesta (900px, Ficha rápida, Detalle exhaustivo, Cronograma e Historial) #}
+<div class="modal fade" id="modal-detalle" tabindex="-1" aria-labelledby="modalDetalleTitulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 920px;">
+        <div class="modal-content" style="border: none; border-radius: 12px; box-shadow: 0 10px 30px rgba(20,24,40,.25); overflow: hidden;">
+            <div class="w" style="width: 100%; padding: 24px;">
+                {# Header del modal con código y semáforo #}
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                    <div>
+                        <h2 id="modalDetalleTitulo" style="margin: 0; font-size: 20px; font-weight: 600; color: #1F2430;">Detalle de la propuesta</h2>
+                        <div class="s" id="det-subtitulo" style="font-size: 13px; color: #4B5263; margin-top: 2px;">Cargando información...</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <span class="bg" id="det-badge-estado" style="display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #FFF1C2; color: #6B4A00;">En Proceso</span>
+                        <div class="s" id="det-dias-texto" style="font-size: 13px; color: #4B5263; margin-top: 4px;">-- días</div>
+                    </div>
+                </div>
+
+                {# Pestañas para navegación completa entre Ficha/PDF, Contenido Detallado, Cronograma e Historial #}
+                <ul class="nav nav-tabs mb-3" id="det-pestanas" role="tablist" style="border-bottom: 1px solid var(--sistra-border); gap: 4px;">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active fw-semibold" id="tab-ficha-btn" data-bs-toggle="tab" data-bs-target="#tab-ficha-panel" type="button" role="tab" style="font-size: 13px; color: var(--sistra-dark);">
+                            Ficha y Documento PDF
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-semibold" id="tab-contenido-btn" data-bs-toggle="tab" data-bs-target="#tab-contenido-panel" type="button" role="tab" style="font-size: 13px; color: var(--sistra-muted);">
+                            Contenido del Proyecto
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-semibold" id="tab-cronograma-btn" data-bs-toggle="tab" data-bs-target="#tab-cronograma-panel" type="button" role="tab" style="font-size: 13px; color: var(--sistra-muted);">
+                            Cronograma (<span id="det-crono-badge">0</span>)
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-semibold" id="tab-historial-btn" data-bs-toggle="tab" data-bs-target="#tab-historial-panel" type="button" role="tab" style="font-size: 13px; color: var(--sistra-muted);">
+                            Historial (<span id="det-hist-badge">0</span>)
+                        </button>
+                    </li>
+                </ul>
+
+                {# Spinner de carga inicial #}
+                <div id="det-loading" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 380px; gap: 14px;">
+                    <span class="sp" style="width: 32px; height: 32px; border-width: 3px; border-color: #C9CEDA; border-top-color: #1B3A8A;"></span>
+                    <div class="s">Cargando información de la propuesta...</div>
+                </div>
+
+                {# Contenedor principal de pestañas #}
+                <div id="det-body" style="display: none;">
+                    <div class="tab-content" id="det-tab-content">
+                        {# PESTAÑA 1: FICHA RESUMEN Y DOCUMENTO PDF (Exacto Figma Mockup) #}
+                        <div class="tab-pane fade show active" id="tab-ficha-panel" role="tabpanel">
+                            <div style="display: grid; grid-template-columns: 360px 1fr; gap: 20px; margin-bottom: 16px;">
+                                {# Columna Izquierda: Ficha de datos clave #}
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                    <div>
+                                        <label class="fl">Estudiante</label>
+                                        <input class="ro" readonly id="det-est-nombre" value="">
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                        <div>
+                                            <label class="fl">Cédula</label>
+                                            <input class="ro" readonly id="det-est-cedula" value="">
+                                        </div>
+                                        <div>
+                                            <label class="fl">Programa</label>
+                                            <input class="ro" readonly id="det-est-programa" value="">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="fl">Título de la propuesta</label>
+                                        <input class="ro" readonly id="det-titulo" value="">
+                                    </div>
+                                    <div>
+                                        <label class="fl">Descripción y objetivos</label>
+                                        <textarea class="ro" style="height: 84px; resize: none;" readonly id="det-descripcion"></textarea>
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                        <div>
+                                            <label class="fl">Lugar o entidad</label>
+                                            <input class="ro" readonly id="det-entidad" value="">
+                                        </div>
+                                        <div>
+                                            <label class="fl">Sector entidad</label>
+                                            <input class="ro" readonly id="det-sector-entidad" value="">
+                                        </div>
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                        <div>
+                                            <label class="fl">Fecha de inicio</label>
+                                            <input class="ro" readonly id="det-fecha-inicio" value="">
+                                        </div>
+                                        <div>
+                                            <label class="fl">Fecha de fin</label>
+                                            <input class="ro" readonly id="det-fecha-fin" value="">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {# Columna Derecha: Vista previa del documento PDF (EX-06) #}
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                    <div style="display: flex; justify-content: space-between; font-size: 13px; color: #4B5263;">
+                                        <span id="det-doc-nombre">propuesta.pdf</span>
+                                        <span id="det-doc-estado">Pág. 1 / 1</span>
+                                    </div>
+
+                                    {# Contenedor de visor PDF #}
+                                    <div class="vw" id="det-doc-visor" style="display: flex; align-items: center; justify-content: center; height: 330px; background: #E8EAF0; border-radius: 8px; overflow: hidden;">
+                                        {# Hoja de previsualización estilizada #}
+                                        <div class="pg" id="det-doc-hoja" style="width: 240px; height: 310px; margin: 10px auto; background: #fff; box-shadow: 0 2px 8px rgba(20,24,40,.2); padding: 22px; box-sizing: border-box;">
+                                            <div style="height: 14px; width: 70%; background: #9AA3B5; border-radius: 2px; margin-bottom: 18px;"></div>
+                                            <div style="height: 230px; background: repeating-linear-gradient(#fff 0 8px, #DDE1EA 8px 10px);"></div>
+                                        </div>
+
+                                        {# Alerta cuando no hay documento o falla la carga #}
+                                        <div class="al" id="det-doc-alerta" style="display: none; background: #FBE3E0; border: 1px solid #B42318; border-radius: 8px; padding: 16px; width: 300px; text-align: center;">
+                                            <div class="m" id="det-doc-alerta-msg">El documento PDF adjunto no se encuentra disponible en el servidor.</div>
+                                        </div>
+                                    </div>
+
+                                    {# Botón Descargar PDF #}
+                                    <a href="#" class="b p text-center text-decoration-none" id="det-btn-descargar" target="_blank" style="display: flex; align-items: center; justify-content: center; height: 40px;">
+                                        Descargar PDF
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        {# PESTAÑA 2: CONTENIDO COMPLETO Y MARCO SOCIAL #}
+                        <div class="tab-pane fade" id="tab-contenido-panel" role="tabpanel">
+                            <div style="display: flex; flex-direction: column; gap: 14px; max-height: 480px; overflow-y: auto; padding-right: 6px;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                    <div>
+                                        <label class="fl">Objetivos generales y específicos</label>
+                                        <textarea class="ro" style="height: 95px; resize: none;" readonly id="det-objetivos-full"></textarea>
+                                    </div>
+                                    <div>
+                                        <label class="fl">Justificación</label>
+                                        <textarea class="ro" style="height: 95px; resize: none;" readonly id="det-justificacion-full"></textarea>
+                                    </div>
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                    <div>
+                                        <label class="fl">Identificación de la necesidad</label>
+                                        <textarea class="ro" style="height: 90px; resize: none;" readonly id="det-necesidad"></textarea>
+                                    </div>
+                                    <div>
+                                        <label class="fl">Reseña histórica de la comunidad</label>
+                                        <textarea class="ro" style="height: 90px; resize: none;" readonly id="det-resena"></textarea>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="fl">Referente teórico y metodológico</label>
+                                    <textarea class="ro" style="height: 85px; resize: none;" readonly id="det-referente"></textarea>
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                    <div>
+                                        <label class="fl">Impacto social proyectado</label>
+                                        <textarea class="ro" style="height: 85px; resize: none;" readonly id="det-impacto"></textarea>
+                                    </div>
+                                    <div>
+                                        <label class="fl">Propuesta social formulada</label>
+                                        <textarea class="ro" style="height: 85px; resize: none;" readonly id="det-propuesta-social"></textarea>
+                                    </div>
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                    <div>
+                                        <label class="fl">Población beneficiada</label>
+                                        <input class="ro" readonly id="det-poblacion-beneficiada" value="">
+                                    </div>
+                                    <div>
+                                        <label class="fl">Identificación de la población</label>
+                                        <input class="ro" readonly id="det-identificacion-poblacion" value="">
+                                    </div>
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+                                    <div>
+                                        <label class="fl">Zona</label>
+                                        <input class="ro" readonly id="det-zona" value="">
+                                    </div>
+                                    <div>
+                                        <label class="fl">Área</label>
+                                        <input class="ro" readonly id="det-area" value="">
+                                    </div>
+                                    <div>
+                                        <label class="fl">Sector</label>
+                                        <input class="ro" readonly id="det-sector-ubi" value="">
+                                    </div>
+                                    <div>
+                                        <label class="fl">Unidad</label>
+                                        <input class="ro" readonly id="det-unidad" value="">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {# PESTAÑA 3: CRONOGRAMA DE ACTIVIDADES #}
+                        <div class="tab-pane fade" id="tab-cronograma-panel" role="tabpanel">
+                            <div style="max-height: 480px; overflow-y: auto;">
+                                <div class="tabla-contenedor" style="border-radius: 8px;">
+                                    <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 45px; text-align: center;">#</th>
+                                                <th style="width: 220px;">Actividad</th>
+                                                <th>Descripción</th>
+                                                <th style="width: 110px;">Inicio</th>
+                                                <th style="width: 110px;">Fin</th>
+                                                <th style="width: 160px;">Responsable</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="det-cronograma-tbody">
+                                            {# Filas inyectadas por JS #}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div id="det-cronograma-vacio" style="display: none; padding: 30px; text-align: center; color: var(--sistra-muted); font-size: 13px;">
+                                    Esta propuesta no registra actividades en el formulario web (el cronograma completo se encuentra en el documento PDF adjunto).
+                                </div>
+                            </div>
+                        </div>
+
+                        {# PESTAÑA 4: HISTORIAL DE REVISIONES Y DECISIONES #}
+                        <div class="tab-pane fade" id="tab-historial-panel" role="tabpanel">
+                            <div style="max-height: 480px; overflow-y: auto; padding: 4px;">
+                                <div id="det-historial-lista">
+                                    {# Inyectado dinámicamente con filas .hi o mensaje vacío #}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# Botón de cierre inferior #}
+                    <div style="display: flex; justify-content: flex-end; margin-top: 16px; border-top: 1px solid var(--sistra-border); padding-top: 12px;">
+                        <button type="button" class="b g" data-bs-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# 2. Modal: Confirmación de Decisión Individual (Aprobar, Modificar, Rechazar) #}
+<div class="modal fade" id="modal-decision" tabindex="-1" aria-labelledby="dec-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+        <div class="modal-content" style="border: none; border-radius: 12px; box-shadow: 0 10px 30px rgba(20,24,40,.25);">
+            <form method="post" id="form-decision" class="w" style="width: 100%;">
+                {% csrf_token %}
+                <input type="hidden" name="nuevo_estado" id="dec-nuevo-estado" value="">
+
+                <h2 id="dec-titulo">Confirmar Aprobación de Propuesta(s)</h2>
+                <div class="s" id="dec-subtitulo">TS-0142 · Laura Camila Ortiz</div>
+
+                {# Banner contextual informativo #}
+                <div class="i iv" id="dec-banner">
+                    La propuesta pasará al proceso de cargue al sistema UP y se notificará al estudiante.
+                </div>
+
+                {# Selector de Causal de Rechazo (solo para Rechazado) #}
+                <div id="dec-grupo-tipo-rechazo" style="display: none;">
+                    <label for="dec-tipo-rechazo" class="fl">Tipo de Rechazo (obligatorio)</label>
+                    <select name="tipo_rechazo" id="dec-tipo-rechazo" class="se" style="width: 100%; height: 40px;">
+                        <option value="">Seleccione un tipo</option>
+                        {% for tr in tipos_rechazo %}
+                            <option value="{{ tr.pk }}">{{ tr.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {# Campo de Observación / Correcciones #}
+                <div>
+                    <label for="dec-obs" id="dec-label-obs" class="fl">Observaciones (opcional)</label>
+                    <textarea name="observacion" id="dec-obs" class="ta" placeholder="Escriba una observación para el estudiante"></textarea>
+                </div>
+
+                {# Mensaje de error de validación local #}
+                <div class="m" id="dec-error" style="display: none;"></div>
+
+                {# Contador de caracteres 0 / 1000 #}
+                <div class="n" id="dec-contador">0 / 1000</div>
+
+                {# Botones Cancelar y Confirmar #}
+                <div class="f">
+                    <button type="button" class="b g" data-bs-dismiss="modal" id="btn-cancelar-decision">Cancelar</button>
+                    <button type="submit" class="b v" id="btn-confirmar-decision">Confirmar Aprobación</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# 3. Modal: Reactivación Individual (RG-04 / EX-02) #}
+<div class="modal fade" id="modal-reactivar" tabindex="-1" aria-labelledby="rea-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+        <div class="modal-content" style="border: none; border-radius: 12px; box-shadow: 0 10px 30px rgba(20,24,40,.25);">
+            <form method="post" id="form-reactivar" class="w" style="width: 100%;">
+                {% csrf_token %}
+                <h2 id="rea-titulo">Confirmar Reactivación de Propuesta</h2>
+                <div class="s" id="rea-subtitulo">TS-0118 · Sofía Carolina Mora</div>
+
+                <div class="i ib" style="background: #E4EAF8; color: #1B3A8A; border: 1px solid #1B3A8A;">
+                    Se verificó que el estudiante no tiene otra propuesta ni informe activo. La propuesta retornará a En Proceso conservando su conteo previo en el semáforo (<span id="rea-dias">7</span> días) y quedará registrada en auditoría.
+                </div>
+
+                <div>
+                    <label for="rea-motivo" class="fl">Justificación de reactivación (obligatoria)</label>
+                    <textarea name="motivo_reactivacion" id="rea-motivo" class="ta" placeholder="Escriba la justificación de auditoría"></textarea>
+                </div>
+
+                {# Mensaje de error de validación local #}
+                <div class="m" id="rea-error" style="display: none;">
+                    Por políticas de auditoría, es estrictamente obligatorio registrar en el campo de texto la justificación por la cual se reactiva esta propuesta (mínimo 10 caracteres).
+                </div>
+
+                <div class="n" id="rea-contador">0 / 1000</div>
+
+                <div class="f">
+                    <button type="button" class="b g" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="b p" id="btn-confirmar-reactivar">Confirmar Reactivación</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# 4. Modal: Acciones Masivas (Aprobar Masivo, Rechazar Masivo, Reactivar Masivo) #}
+<div class="modal fade" id="modal-masivo" tabindex="-1" aria-labelledby="mas-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+        <div class="modal-content" style="border: none; border-radius: 12px; box-shadow: 0 10px 30px rgba(20,24,40,.25);">
+            <form method="post" action="{% url 'propuestas:accion_masiva' %}" id="form-masivo" class="w" style="width: 100%;">
+                {% csrf_token %}
+                <input type="hidden" name="accion" id="mas-accion" value="">
+                <div id="mas-contenedor-ids"></div>
+
+                <h2 id="mas-titulo">Confirmar Acción Masiva</h2>
+                <div class="s" id="mas-subtitulo">0 propuestas seleccionadas</div>
+
+                <div class="i iv" id="mas-banner">
+                    Se procesarán las propuestas seleccionadas.
+                </div>
+
+                {# Tipo de Rechazo Masivo #}
+                <div id="mas-grupo-tipo-rechazo" style="display: none;">
+                    <label for="mas-tipo-rechazo" class="fl">Tipo de Rechazo (obligatorio)</label>
+                    <select name="tipo_rechazo" id="mas-tipo-rechazo" class="se" style="width: 100%; height: 40px;">
+                        <option value="">Seleccione un tipo</option>
+                        {% for tr in tipos_rechazo %}
+                            <option value="{{ tr.pk }}">{{ tr.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {# Observación / Motivo Masivo #}
+                <div>
+                    <label for="mas-obs" id="mas-label-obs" class="fl">Observaciones (opcional)</label>
+                    <textarea name="observacion" id="mas-obs" class="ta" placeholder="Escriba una observación general"></textarea>
+                </div>
+
+                <div class="m" id="mas-error" style="display: none;"></div>
+
+                <div class="n" id="mas-contador">0 / 1000</div>
+
+                <div class="f">
+                    <button type="button" class="b g" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="b v" id="btn-confirmar-masivo">Confirmar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# 5. Modal: Bloqueo de Reversión (EX-05 / MSG-14) #}
+<div class="modal fade" id="modal-bloqueo" tabindex="-1" aria-labelledby="bloq-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+        <div class="modal-content" style="border: none; border-radius: 12px; box-shadow: 0 10px 30px rgba(20,24,40,.25);">
+            <div class="w" style="width: 100%; background: #FBE3E0; border: 1px solid #B42318; color: #8E1C12;">
+                <div class="cd" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;" id="bloq-titulo">MSG-14 · Error de regla de negocio</div>
+                <div style="font-size: 13px; line-height: 1.5;" id="bloq-mensaje">
+                    No es posible modificar ni rechazar esta propuesta porque el estudiante ya notificó su cargue oficial en el sistema de la UP (estado 'Cargado en UP') o ya inició el montaje de su informe final de trabajo social.
+                </div>
+                <div style="margin-top: 12px; text-align: right;">
+                    <button type="button" class="b g" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
