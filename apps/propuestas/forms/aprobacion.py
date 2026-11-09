@@ -3,7 +3,6 @@
 Solo el responsable de este requisito edita este archivo.
 """
 
-import html
 import re
 
 from django import forms
@@ -63,8 +62,8 @@ class ReactivacionInvalidaError(Exception):
 
 
 def sanitizar_texto(valor: str) -> str:
-    """Elimina etiquetas HTML y espacios sobrantes."""
-    return html.escape(re.sub(r'<[^>]*?>', '', valor.strip())) if valor else ''
+    """Elimina etiquetas HTML y espacios sobrantes"""
+    return re.sub(r'<[^>]*?>', '', valor.strip()) if valor else ''
 
 
 def calcular_semaforo(propuesta: Propuesta) -> dict:
@@ -272,6 +271,8 @@ class AprobacionPropuestaForm(forms.Form):
                 raise ValidationError('Una propuesta rechazada solo puede ser reactivada mediante el modal de reactivación justificando el motivo.')
             if lock.estado == EstadoTramite.APROBADO:
                 return
+            if lock.estado != EstadoTramite.EN_REVISION:
+                raise ValidationError(f"Solo se puede aprobar una propuesta en estado 'En revisión' (estado actual: {lock.estado}).")
             obs = self.cleaned_data.get('observacion', '')
             notif = 'Tu propuesta cambió a Aprobado.' + (f' Observación del Director: {obs}' if obs else '')
             aplicar_transicion(lock, usuario, EstadoTramite.APROBADO, 'Aprobación', 'APROBAR_PROPUESTA', observacion=obs, mensaje_notif=notif)
@@ -314,12 +315,14 @@ class ModificacionPropuestaForm(forms.Form):
             lock = Propuesta.objects.select_for_update().select_related('proceso__estudiante_carrera__estudiante__usuario').get(pk=propuesta.pk)
             if lock.estado == EstadoTramite.RECHAZADO:
                 raise ValidationError('Una propuesta rechazada solo puede ser reactivada mediante el modal de reactivación justificando el motivo.')
+            if lock.estado == EstadoTramite.REQUIERE_MODIFICACION:
+                return
+            if lock.estado not in [EstadoTramite.EN_REVISION, EstadoTramite.APROBADO]:
+                raise ValidationError(f"Solo se puede solicitar modificación a propuestas en 'En revisión' o 'Aprobado' (estado actual: {lock.estado}).")
             if lock.estado == EstadoTramite.APROBADO:
                 puede, motivo = puede_revertir_aprobacion(lock)
                 if not puede:
                     raise PropuestaBloqueadaError(motivo)
-            if lock.estado == EstadoTramite.REQUIERE_MODIFICACION:
-                return
             obs = self.cleaned_data['observacion']
             aplicar_transicion(lock, usuario, EstadoTramite.REQUIERE_MODIFICACION, 'Solicitud de modificación', 'SOLICITAR_MODIFICACION_PROPUESTA', observacion=obs, mensaje_notif=f'Tu propuesta cambió a Requiere modificación. Observación del Director: {obs}')
 
@@ -371,12 +374,14 @@ class RechazoPropuestaForm(forms.Form):
 
         with transaction.atomic():
             lock = Propuesta.objects.select_for_update().select_related('proceso__estudiante_carrera__estudiante__usuario').get(pk=propuesta.pk)
+            if lock.estado == EstadoTramite.RECHAZADO:
+                return
+            if lock.estado not in [EstadoTramite.EN_REVISION, EstadoTramite.APROBADO]:
+                raise ValidationError(f"Solo se puede rechazar una propuesta en estado 'En revisión' o 'Aprobado' (estado actual: {lock.estado}).")
             if lock.estado == EstadoTramite.APROBADO:
                 puede, motivo = puede_revertir_aprobacion(lock)
                 if not puede:
                     raise PropuestaBloqueadaError(motivo)
-            if lock.estado == EstadoTramite.RECHAZADO:
-                return
             tipo_rec = self.cleaned_data['tipo_rechazo']
             obs = self.cleaned_data['observacion']
             aplicar_transicion(lock, usuario, EstadoTramite.RECHAZADO, 'Rechazo', 'RECHAZAR_PROPUESTA', tipo_rechazo=tipo_rec, observacion=obs, mensaje_notif=f'Tu propuesta cambió a Rechazado ({tipo_rec.nombre}). Observación del Director: {obs}')

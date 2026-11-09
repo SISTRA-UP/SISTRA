@@ -323,12 +323,24 @@ def cambiar_estado(request: HttpRequest, id_propuesta: int) -> HttpResponse:
         proceso__estudiante_carrera__carrera=asignacion.carrera,
     )
 
-    if propuesta.estado == EstadoTramite.RECHAZADO:
-        messages.error(
-            request,
-            'Una propuesta rechazada solo puede ser reactivada mediante el modal de reactivación justificando el motivo.',
-        )
+    if propuesta.estado not in [EstadoTramite.EN_REVISION, EstadoTramite.APROBADO]:
+        if propuesta.estado == EstadoTramite.RECHAZADO:
+            messages.error(
+                request,
+                'Una propuesta rechazada solo puede ser reactivada mediante el modal de reactivación justificando el motivo.',
+            )
+        else:
+            messages.error(
+                request,
+                f"Solo se puede decidir sobre propuestas en estado 'En revisión' o 'Aprobado' (estado actual: {propuesta.estado}).",
+            )
         return redirect('propuestas:aprobacion')
+
+    if propuesta.estado == EstadoTramite.APROBADO:
+        puede, motivo = puede_revertir_aprobacion(propuesta)
+        if not puede:
+            messages.error(request, motivo)
+            return redirect('propuestas:aprobacion')
 
     nuevo_estado = request.POST.get('nuevo_estado', '').strip()
 
