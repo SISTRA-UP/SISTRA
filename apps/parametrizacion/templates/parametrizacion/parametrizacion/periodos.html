@@ -1,0 +1,58 @@
+{% extends 'parametrizacion/parametrizacion/_pagina.html' %}
+
+{% block titulo %}Periodo académico · Parametrización · SISTRA-UP{% endblock %}
+
+{% block principal %}
+<p class="sis-eyebrow">Parametrización · SISTRA-11</p>
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h1 class="sis-titulo">Periodo académico</h1>
+        <p class="sis-sub mb-0">Fechas de cada periodo. Solo uno puede estar vigente a la vez.</p>
+    </div>
+    <a class="btn btn-primary" href="{% url 'parametrizacion:periodo_nuevo' %}">Nuevo periodo</a>
+</div>
+
+<section class="sis-card">
+    {% if periodos %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th scope="col">Periodo</th>
+                    <th scope="col">Inicio</th>
+                    <th scope="col">Fin</th>
+                    <th scope="col">Cierre de propuesta</th>
+                    <th scope="col">Cierre de informe</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col"><span class="visually-hidden">Acciones</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in periodos %}
+                <tr>
+                    <td class="fw-semibold">{{ p.nombre }}</td>
+                    <td>{{ p.fecha_inicio|date:"d/m/Y" }}</td>
+                    <td>{{ p.fecha_fin|date:"d/m/Y" }}</td>
+                    <td>{{ p.fecha_cierre_propuesta|date:"d/m/Y" }}</td>
+                    <td>{{ p.fecha_cierre_informe|date:"d/m/Y" }}</td>
+                    <td>
+                        {% if p.estado == 'Vigente' %}
+                        <span class="badge text-bg-success">Vigente</span>
+                        {% else %}
+                        <span class="badge text-bg-secondary">Cerrado</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-secondary"
+                            href="{% url 'parametrizacion:periodo_editar' p.pk %}">Editar</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="sis-sub mb-0">Todavía no hay periodos. Cree el primero con «Nuevo periodo».</p>
+    {% endif %}
+</section>
+{% endblock %}

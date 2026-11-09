@@ -211,3 +211,19 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+
+
+# Parametrización · Usuarios
+DOMINIOS_CORREO_PERMITIDOS = ['unipamplona.edu.co']
+
+
+if DEBUG:
+    LOGIN_URL = 'parametrizacion:acceso_dev'
+    LOGIN_REDIRECT_URL = 'parametrizacion:parametrizacion'
+
+
+
+CARGA_MASIVA_MAX_FILAS = 100
+CARGA_MASIVA_MAX_MB = 2
+
+

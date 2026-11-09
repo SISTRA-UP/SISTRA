@@ -1,0 +1,31 @@
+<p class="sis-eyebrow">Parametrización</p>
+<nav class="sis-nav" aria-label="Secciones de parametrización">
+    {% if puede_parametrizar %}
+    {% if seccion == 'periodos' %}
+    <a class="sis-nav-item is-active" href="{% url 'parametrizacion:periodos' %}" aria-current="page">Periodo
+        académico</a>
+    {% else %}
+    <a class="sis-nav-item" href="{% url 'parametrizacion:periodos' %}">Periodo académico</a>
+    {% endif %}
+    <span class="sis-nav-item is-off">Documentos y formatos <span class="sis-soon">Próximamente</span></span>
+    {% if seccion == 'alertas' %}
+    <a class="sis-nav-item is-active" href="{% url 'parametrizacion:alertas' %}" aria-current="page">Alertas y
+        plazos</a>
+    {% else %}
+    <a class="sis-nav-item" href="{% url 'parametrizacion:alertas' %}">Alertas y plazos</a>
+    {% endif %}
+    <span class="sis-nav-item is-off">Estados del proceso <span class="sis-soon">Próximamente</span></span>
+    {% if seccion == 'directores' %}
+    <a class="sis-nav-item is-active" href="{% url 'parametrizacion:directores' %}" aria-current="page">Directores</a>
+    {% else %}
+    <a class="sis-nav-item" href="{% url 'parametrizacion:directores' %}">Directores</a>
+    {% endif %}
+    {% endif %}
+    {% if puede_crear_usuarios %}
+    {% if seccion == 'usuarios' %}
+    <a class="sis-nav-item is-active" href="{% url 'parametrizacion:usuarios' %}" aria-current="page">Usuarios</a>
+    {% else %}
+    <a class="sis-nav-item" href="{% url 'parametrizacion:usuarios' %}">Usuarios</a>
+    {% endif %}
+    {% endif %}
+</nav>

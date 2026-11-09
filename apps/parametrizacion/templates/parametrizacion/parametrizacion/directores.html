@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block titulo %}Directores · Parametrización · SISTRA-UP{% endblock %}
+
+{% block css %}
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:wght@500;600&display=swap">
+<link rel="stylesheet" href="{% static 'css/sistra.css' %}">
+{% endblock %}
+
+{% block contenido %}
+<header class="sis-top">
+  <a class="sis-brand" href="/">SISTRA-UP</a>
+  <div class="sis-user">
+    <span>Espacio del {{ request.user.rol.nombre|lower }}</span>
+    <span class="sis-avatar" aria-hidden="true">{{ request.user.nombre|slice:":1" }}</span>
+    <span>{{ request.user.nombre }}</span>
+    <form method="post" action="{% url 'parametrizacion:salir' %}" class="sis-salir-form">
+      {% csrf_token %}<button type="submit" class="sis-salir">Cerrar sesión</button>
+    </form>
+  </div>
+</header>
+
+<div class="sis-layout">
+  <aside>{% include 'parametrizacion/parametrizacion/_menu.html' %}</aside>
+
+  <main>
+    <p class="sis-eyebrow">Parametrización · SISTRA-11</p>
+    <h1 class="sis-titulo">Directores</h1>
+    <p class="sis-sub">Cree directores y asígnelos a su carrera. Cada carrera tiene un solo director activo.</p>
+
+    {% for mensaje in messages %}
+      <div class="sis-alert sis-alert-{{ mensaje.level_tag }}" role="status">{{ mensaje }}</div>
+    {% endfor %}
+
+    <section class="sis-card" aria-labelledby="titulo-director">
+      <p class="sis-eyebrow">Alta individual</p>
+      <h2 id="titulo-director">Crear director</h2>
+
+      {% if form.non_field_errors %}
+        <div class="sis-alert sis-alert-error" role="alert">
+          {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+        </div>
+      {% endif %}
+
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <div class="row g-3">
+          {% for campo in form %}
+            <div class="col-md-6">
+              <label class="sis-label" for="{{ campo.id_for_label }}">
+                {{ campo.label }}{% if campo.field.required %}<span class="sis-req" aria-hidden="true"> *</span>{% endif %}
+              </label>
+              {{ campo }}
+              {% if campo.help_text %}<div class="sis-help">{{ campo.help_text }}</div>{% endif %}
+              {% for error in campo.errors %}<div class="sis-error" role="alert">{{ error }}</div>{% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+        <div class="sis-pie">
+          <span>La contraseña temporal se envía por correo y nunca se muestra.</span>
+          <button type="submit" class="sis-btn">Crear director →</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="sis-card mt-4" aria-labelledby="titulo-activos">
+      <p class="sis-eyebrow">Asignaciones vigentes</p>
+      <h2 id="titulo-activos">Directores activos</h2>
+      {% if asignaciones %}
+        <div class="table-responsive">
+          <table class="sis-tabla">
+            <thead><tr><th>Carrera</th><th>Director</th><th>Correo</th><th>Desde</th></tr></thead>
+            <tbody>
+              {% for a in asignaciones %}
+                <tr>
+                  <td>{{ a.carrera.nombre }}</td>
+                  <td>{{ a.director.usuario.nombre }}</td>
+                  <td>{{ a.director.usuario.correo_institucional }}</td>
+                  <td>{{ a.fecha_inicio|date:"d/m/Y" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="sis-sub mb-0">Todavía no hay directores asignados.</p>
+      {% endif %}
+    </section>
+  </main>
+</div>
+{% endblock %}

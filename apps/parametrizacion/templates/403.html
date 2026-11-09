@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block titulo %}Sin permisos · SISTRA-UP{% endblock %}
+
+{% block css %}
+<link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:wght@500;600&display=swap">
+<link rel="stylesheet" href="{% static 'css/sistra.css' %}">
+{% endblock %}
+
+{% block contenido %}
+<main class="sis-layout" style="grid-template-columns: 1fr; max-width: 640px; padding-top: 80px;">
+    <section class="sis-card text-center">
+        <h1 class="sis-titulo">No tiene permisos para acceder</h1>
+        <p class="sis-sub">Esta sección está disponible solo para el rol Administrador.</p>
+        <a class="sis-btn" href="/" style="display:inline-block; text-decoration:none;">Volver al inicio</a> 
+    </section>
+</main>
+{% endblock %}
