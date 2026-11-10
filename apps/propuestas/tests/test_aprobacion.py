@@ -1444,6 +1444,39 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         prop.refresh_from_db()
         self.assertEqual(prop.estado, EstadoTramite.APROBADO)
 
+    def test_acciones_post_sin_carrera_activa_responden_403(self):
+        """Decidir, reactivar y la acción masiva niegan el acceso (403) sin carrera activa, sin cambios."""
+        prop = self.crear_propuesta(self.estudiante_1, 'PROP-403-DEC')
+        rechazada = self.crear_propuesta(
+            self.estudiante_2, 'PROP-403-REA', estado=EstadoTramite.RECHAZADO
+        )
+        self.asignacion_director.activo = False
+        self.asignacion_director.save()
+        self.client.force_login(self.user_director)
+
+        casos = [
+            (
+                reverse('propuestas:cambiar_estado', args=[prop.pk]),
+                {'nuevo_estado': EstadoTramite.APROBADO},
+            ),
+            (
+                reverse('propuestas:reactivar_propuesta', args=[rechazada.pk]),
+                {'motivo_reactivacion': 'Reactivación sin carrera activa.'},
+            ),
+            (
+                reverse('propuestas:accion_masiva'),
+                {'accion': 'aprobar', 'propuestas_ids': f'{prop.pk}'},
+            ),
+        ]
+        for url, datos in casos:
+            with self.subTest(url=url):
+                self.assertEqual(self.client.post(url, datos).status_code, 403)
+
+        prop.refresh_from_db()
+        rechazada.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.EN_REVISION)
+        self.assertEqual(rechazada.estado, EstadoTramite.RECHAZADO)
+
     def test_errores_de_formulario_se_muestran_como_texto_plano(self):
         """Los errores del formulario llegan al Director como texto, sin <ul> ni corchetes."""
         prop = self.crear_propuesta(self.estudiante_1, 'PROP-MSG-TXT')

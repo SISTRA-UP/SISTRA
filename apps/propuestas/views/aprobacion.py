@@ -347,8 +347,7 @@ def cambiar_estado(request: HttpRequest, id_propuesta: int) -> HttpResponse:
     """Aplica una decisión individual: Aprobar, Requiere modificación o Rechazar."""
     asignacion = _carrera_activa_del_director(request.user)
     if not asignacion:
-        messages.error(request, 'No tienes permisos de Director activo.')
-        return redirect('propuestas:aprobacion')
+        raise PermissionDenied
 
     propuesta = get_object_or_404(
         Propuesta.objects.select_related(
@@ -438,8 +437,7 @@ def reactivar_propuesta(request: HttpRequest, id_propuesta: int) -> HttpResponse
     """Aplica la reactivación de una propuesta rechazada por error (RG-04 / EX-02)."""
     asignacion = _carrera_activa_del_director(request.user)
     if not asignacion:
-        messages.error(request, 'No tienes permisos de Director activo.')
-        return redirect('propuestas:aprobacion')
+        raise PermissionDenied
 
     propuesta = get_object_or_404(
         Propuesta.objects.select_related(
@@ -476,8 +474,7 @@ def accion_masiva(request: HttpRequest) -> HttpResponse:
     """Aplica la acción en lote (Aprobar, Rechazar o Reactivar masivo)."""
     asignacion = _carrera_activa_del_director(request.user)
     if not asignacion:
-        messages.error(request, 'No tienes permisos de Director activo.')
-        return redirect('propuestas:aprobacion')
+        raise PermissionDenied
 
     form = AccionMasivaForm(request.POST)
     if not form.is_valid():
