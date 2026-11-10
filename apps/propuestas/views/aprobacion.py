@@ -143,17 +143,19 @@ def bandeja(request: HttpRequest) -> HttpResponse:
             ahora = timezone.now()
             # El semáforo solo corre en 'En revisión'
             propuestas_qs = propuestas_qs.filter(estado=EstadoTramite.EN_REVISION)
-            corte_verde = ahora - timedelta(days=limite_verde)
-            corte_amarillo = ahora - timedelta(days=limite_amarillo)
+            # La fila cuenta días completos (7,5 días = 7). Verde es "menos de verde + 1 días"
+            # transcurridos; por eso cada corte se corre un día para coincidir con el color.
+            corte_verde = ahora - timedelta(days=limite_verde + 1)
+            corte_amarillo = ahora - timedelta(days=limite_amarillo + 1)
 
             if semaforo_filtro == 'verde':
-                propuestas_qs = propuestas_qs.filter(fecha_envio__gte=corte_verde)
+                propuestas_qs = propuestas_qs.filter(fecha_envio__gt=corte_verde)
             elif semaforo_filtro == 'amarillo':
                 propuestas_qs = propuestas_qs.filter(
-                    fecha_envio__lt=corte_verde, fecha_envio__gte=corte_amarillo
+                    fecha_envio__lte=corte_verde, fecha_envio__gt=corte_amarillo
                 )
             elif semaforo_filtro == 'rojo':
-                propuestas_qs = propuestas_qs.filter(fecha_envio__lt=corte_amarillo)
+                propuestas_qs = propuestas_qs.filter(fecha_envio__lte=corte_amarillo)
 
     total_filtradas = propuestas_qs.count()
 

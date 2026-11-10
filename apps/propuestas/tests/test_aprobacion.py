@@ -1727,6 +1727,34 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.assertIn(p_amarillo.pk, props_amarillo)
         self.assertNotIn(p_verde.pk, props_amarillo)
 
+    def test_bandeja_filtro_semaforo_coincide_con_el_color_de_la_fila_en_los_bordes(self):
+        """Cada propuesta aparece solo en el filtro del color que muestra su fila.
+
+        La fila cuenta días completos (7,5 días = 7 → verde); el filtro debe cortar igual.
+        """
+        estudiante_3 = self._crear_estudiante('1098111005', 'Estudiante Cinco', self.carrera)
+        props = [
+            self.crear_propuesta(self.estudiante_1, 'P-BORDE-7.5', dias_envio=7.5),
+            self.crear_propuesta(self.estudiante_2, 'P-BORDE-14.5', dias_envio=14.5),
+            self.crear_propuesta(estudiante_3, 'P-BORDE-15', dias_envio=15),
+        ]
+        self.client.force_login(self.user_director)
+        todas = self.client.get(reverse('propuestas:aprobacion')).context['propuestas_con_meta']
+        color_fila = {m['propuesta'].pk: m['semaforo']['color'] for m in todas}
+        self.assertEqual(
+            [color_fila[p.pk] for p in props], ['verde', 'amarillo', 'rojo']
+        )
+
+        for color in ('verde', 'amarillo', 'rojo'):
+            with self.subTest(filtro=color):
+                filtradas = self.client.get(
+                    reverse('propuestas:aprobacion'), {'semaforo': color}
+                ).context['propuestas_con_meta']
+                self.assertEqual(
+                    {m['propuesta'].pk for m in filtradas},
+                    {pk for pk, c in color_fila.items() if c == color},
+                )
+
     def test_reactivar_propuesta_post_exito(self):
         """Endpoint POST para reactivar una propuesta rechazada por error."""
         prop = self.crear_propuesta(
