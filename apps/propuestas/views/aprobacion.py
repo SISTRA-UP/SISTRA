@@ -15,6 +15,7 @@ from datetime import timedelta
 import json
 import mimetypes
 from pathlib import Path
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -473,7 +474,7 @@ def descargar_documento(request: HttpRequest, id_propuesta: int) -> HttpResponse
     """Permite previsualizar o descargar el documento adjunto de la propuesta."""
     asignacion = _carrera_activa_del_director(request.user)
     if not asignacion:
-        raise Http404('Permiso denegado.')
+        raise PermissionDenied
 
     propuesta = get_object_or_404(
         Propuesta,
@@ -481,21 +482,25 @@ def descargar_documento(request: HttpRequest, id_propuesta: int) -> HttpResponse
         proceso__estudiante_carrera__carrera=asignacion.carrera,
     )
 
-    if not (propuesta.version_plantilla and propuesta.version_plantilla.ruta_archivo):
+    version = propuesta.version_plantilla
+    if not (version and version.ruta_archivo):
         raise Http404('La propuesta no cuenta con documento adjunto.')
 
-    ruta = Path(propuesta.version_plantilla.ruta_archivo)
-    if not ruta.is_file():
+    # La ruta viene de la base de datos: solo se sirve si queda dentro de MEDIA_ROOT
+    # (quien la escribe debe guardar el archivo bajo MEDIA_ROOT, es decir documentos/).
+    raiz = Path(settings.MEDIA_ROOT).resolve()
+    ruta = (raiz / version.ruta_archivo).resolve()
+    if not (ruta.is_relative_to(raiz) and ruta.is_file()):
         raise Http404('El archivo solicitado no se encuentra en el servidor.')
 
     try:
         archivo = open(ruta, 'rb')
-        nombre = propuesta.version_plantilla.nombre_archivo or ruta.name
-        content_type, _ = mimetypes.guess_type(nombre)
-        if not content_type:
-            content_type = 'application/pdf' if nombre.lower().endswith('.pdf') else 'application/octet-stream'
-        response = FileResponse(archivo, content_type=content_type)
-        response['Content-Disposition'] = f'inline; filename="{nombre}"'
-        return response
-    except Exception:
+    except OSError:
         raise Http404('El archivo solicitado no se encuentra en el servidor.')
+    # FileResponse cierra el archivo, deduce el tipo MIME y escapa el nombre en Content-Disposition.
+    nombre = version.nombre_archivo or ruta.name
+    # Solo el PDF se previsualiza inline; cualquier otro tipo (HTML, SVG, sin extensión...) se fuerza
+    # como descarga para que el navegador no lo ejecute en nuestro origen (XSS almacenado).
+    # Se usa mimetypes.guess_type sobre el mismo nombre con que FileResponse deduce el Content-Type.
+    es_pdf = mimetypes.guess_type(nombre) == ('application/pdf', None)
+    return FileResponse(archivo, filename=nombre, as_attachment=not es_pdf)
