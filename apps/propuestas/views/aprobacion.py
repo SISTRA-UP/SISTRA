@@ -13,6 +13,7 @@ Implementa:
 
 from datetime import timedelta
 import json
+import logging
 import mimetypes
 from pathlib import Path
 from django.conf import settings
@@ -39,6 +40,7 @@ from apps.propuestas.forms.aprobacion import (
     MSG_02_05,
     MSG_02_07,
     RESULTADO_BLOQUEADO,
+    RESULTADO_FALLO,
     AprobacionPropuestaForm,
     FiltroBandejaPropuestasForm,
     ModificacionPropuestaForm,
@@ -58,6 +60,8 @@ from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.seguimiento.models import HistorialEstado
 from apps.usuarios.models import Estado
 
+logger = logging.getLogger(__name__)
+
 ELEMENTOS_POR_PAGINA = 10
 # Permiso del rol que decide sobre las propuestas (BRD Tabla 32); lo siembra propuestas/0002.
 PERMISO_APROBAR = 'propuesta.aprobar'
@@ -68,6 +72,25 @@ MSG_BLOQUEO_REQUIERE_MODIFICACION = (
 )
 # Tope del estado solicitado que se copia a la auditoría de intentos bloqueados.
 LONGITUD_MAXIMA_ESTADO = 50
+
+
+def _registrar_fallo(request: HttpRequest, accion: str, propuesta: Propuesta | None = None) -> None:
+    """BRD §5.3.5: registra la operación fallida sin exponer detalles técnicos al Director.
+
+    El detalle técnico va al log; la auditoría solo guarda que hubo un fallo.
+    """
+    logger.exception('Error inesperado en %s (usuario %s)', accion, request.user.pk)
+    try:
+        _auditar(
+            request.user,
+            accion,
+            propuesta,
+            detalle_extra='Error inesperado; la operación no se guardó.',
+            resultado=RESULTADO_FALLO,
+        )
+    except Exception:
+        # Si tampoco se puede auditar (p. ej. base caída), queda solo el log.
+        logger.exception('No se pudo auditar el fallo de %s', accion)
 
 
 def _mostrar_errores(request: HttpRequest, form) -> None:
@@ -434,6 +457,7 @@ def cambiar_estado(request: HttpRequest, id_propuesta: int) -> HttpResponse:
     except ValidationError as e:
         messages.error(request, e.messages[0])
     except Exception:
+        _registrar_fallo(request, 'CAMBIAR_ESTADO_FALLIDO', propuesta)
         messages.error(
             request,
             'No fue posible procesar la decisión sobre la propuesta. Por favor, inténtalo nuevamente.',
@@ -472,6 +496,7 @@ def reactivar_propuesta(request: HttpRequest, id_propuesta: int) -> HttpResponse
     except ValidationError as e:
         messages.error(request, e.messages[0])
     except Exception:
+        _registrar_fallo(request, 'REACTIVAR_PROPUESTA_FALLIDA', propuesta)
         messages.error(
             request,
             'No fue posible reactivar la propuesta. Por favor, inténtalo nuevamente.',
@@ -506,6 +531,7 @@ def accion_masiva(request: HttpRequest) -> HttpResponse:
         # str() de un ValidationError devuelve la lista ['...']; se muestra solo el texto.
         messages.error(request, e.messages[0])
     except Exception:
+        _registrar_fallo(request, 'ACCION_MASIVA_FALLIDA')
         messages.error(
             request,
             'No fue posible completar la acción masiva. Por favor, inténtalo nuevamente.',

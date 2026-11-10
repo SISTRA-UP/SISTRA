@@ -1485,6 +1485,52 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.assertIn('Restablecer filtros', html)
         self.assertNotIn('No tienes propuestas para revisar.', html)
 
+    def test_errores_inesperados_se_registran_sin_exponer_detalles(self):
+        """BRD §5.3.5: las operaciones fallidas se registran (log + auditoría Fallo) y el
+        Director solo ve un mensaje general, sin el detalle técnico."""
+        from unittest import mock
+
+        prop = self.crear_propuesta(self.estudiante_1, 'PROP-FALLO-1')
+        rechazada = self.crear_propuesta(
+            self.estudiante_2, 'PROP-FALLO-2', estado=EstadoTramite.RECHAZADO
+        )
+        self.client.force_login(self.user_director)
+        casos = [
+            (
+                AprobacionPropuestaForm,
+                reverse('propuestas:cambiar_estado', args=[prop.pk]),
+                {'nuevo_estado': EstadoTramite.APROBADO},
+                prop.pk,
+            ),
+            (
+                ReactivacionPropuestaForm,
+                reverse('propuestas:reactivar_propuesta', args=[rechazada.pk]),
+                {'motivo_reactivacion': 'Reactivación que falla en el servidor.'},
+                rechazada.pk,
+            ),
+            (
+                AccionMasivaForm,
+                reverse('propuestas:accion_masiva'),
+                {'accion': 'aprobar', 'propuestas_ids': f'{prop.pk}'},
+                None,
+            ),
+        ]
+        for form_cls, url, datos, id_registro in casos:
+            with self.subTest(form=form_cls.__name__):
+                with mock.patch.object(form_cls, 'procesar', side_effect=RuntimeError('detalle-tecnico-secreto')), \
+                        self.assertLogs('apps.propuestas.views.aprobacion', level='ERROR') as logs:
+                    response = self.client.post(url, datos, follow=True)
+
+                mensajes = ' '.join(str(m) for m in response.context['messages'])
+                self.assertIn('No fue posible', mensajes)
+                self.assertNotIn('detalle-tecnico-secreto', mensajes)
+                self.assertIn('detalle-tecnico-secreto', '\n'.join(logs.output))
+
+                fila = Auditoria.objects.filter(resultado='Fallo').latest('id_auditoria')
+                self.assertEqual(fila.usuario_id, self.user_director.pk)
+                self.assertEqual(fila.id_registro_afectado, id_registro)
+                self.assertNotIn('detalle-tecnico-secreto', fila.detalle)
+
     def test_acciones_post_sin_carrera_activa_responden_403(self):
         """Decidir, reactivar y la acción masiva niegan el acceso (403) sin carrera activa, sin cambios."""
         prop = self.crear_propuesta(self.estudiante_1, 'PROP-403-DEC')
