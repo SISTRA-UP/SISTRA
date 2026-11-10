@@ -23,9 +23,9 @@ from .servicios import (
 
 logger = logging.getLogger(__name__)
 
-COLUMNAS = ('nombre', 'apellido', 'cc', 'correo', 'telefono', 'carrera')
-COLUMNAS_REQUERIDAS = ('nombre', 'apellido', 'cc', 'correo', 'carrera')
-PLANTILLA_CSV = 'nombre,apellido,cc,correo,telefono,carrera\r\n,,,,,\r\n,,,,,\r\n'
+COLUMNAS = ('nombre', 'cc', 'correo', 'carrera', 'apellido', 'telefono')
+COLUMNAS_REQUERIDAS = ('nombre', 'cc', 'correo', 'carrera')
+PLANTILLA_CSV = 'nombre,cc,correo,carrera\r\n,,,\r\n,,,\r\n'
 
 
 class ErrorArchivo(Exception):
@@ -78,6 +78,7 @@ def _parsear(texto):
             f'{settings.CARGA_MASIVA_MAX_FILAS}.'
         )
     for _, datos in filas:
+        datos.setdefault('apellido', '')
         datos.setdefault('telefono', '')
     return filas
 

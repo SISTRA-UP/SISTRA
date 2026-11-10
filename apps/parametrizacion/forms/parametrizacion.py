@@ -11,8 +11,7 @@ class CrearUsuarioForm(forms.Form):
     """Datos de un estudiante. Las reglas de negocio viven en
     `apps.usuarios.servicios`; aquí solo se valida la forma."""
 
-    nombre = forms.CharField(label='Nombre', max_length=100, widget=forms.TextInput(attrs=_TEXTO))
-    apellido = forms.CharField(label='Apellido', max_length=100, widget=forms.TextInput(attrs=_TEXTO))
+    nombre = forms.CharField(label='Nombre', max_length=120, widget=forms.TextInput(attrs=_TEXTO))
     cedula = forms.CharField(
         label='Cédula (CC)', max_length=15, help_text='Solo números.',
         widget=forms.TextInput(attrs={**_TEXTO, 'inputmode': 'numeric'}),
@@ -21,10 +20,6 @@ class CrearUsuarioForm(forms.Form):
         label='Correo institucional', max_length=254,
         help_text='Debe terminar en @unipamplona.edu.co.',
         widget=forms.EmailInput(attrs=_TEXTO),
-    )
-    telefono = forms.CharField(
-        label='Teléfono', max_length=20, required=False,
-        widget=forms.TextInput(attrs={**_TEXTO, 'inputmode': 'tel'}),
     )
 
     def full_clean(self):

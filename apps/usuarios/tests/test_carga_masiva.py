@@ -100,3 +100,9 @@ class CargaMasivaTests(TestCase):
         carga = self.cargar(ENC + 'Ana,Pérez,1001234567,=1+1@unipamplona.edu.co,,Derecho\n')
         contenido = log_errores_csv(carga).decode('utf-8-sig')
         self.assertIn("'=1+1@unipamplona.edu.co", contenido)
+
+    def test_acepta_csv_sin_apellido_ni_telefono(self):
+        csv_simple = 'nombre,cc,correo,carrera\nMario Moreno,1099887766,mario@unipamplona.edu.co,Derecho\n'
+        carga = self.cargar(csv_simple)
+        self.assertEqual(carga.creadas, 1)
+        self.assertEqual(Usuario.objects.get(cedula='1099887766').nombre, 'Mario Moreno')

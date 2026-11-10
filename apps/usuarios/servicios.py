@@ -113,7 +113,7 @@ def carrera_del_director(usuario):
     return asignacion.carrera if asignacion else None
 
 
-def _validar_datos(nombre, apellido, cedula, correo, telefono=''):
+def _validar_datos(nombre, apellido='', cedula='', correo='', telefono=''):
     Usuario = get_user_model()
     nombre = ' '.join(f'{nombre or ""} {apellido or ""}'.split())
     cedula = normalizar_cedula(cedula)
@@ -121,7 +121,7 @@ def _validar_datos(nombre, apellido, cedula, correo, telefono=''):
     telefono = re.sub(r'[\s().-]', '', telefono or '')
 
     if not nombre or len(nombre) > 120:
-        raise ErrorCreacion('Ingrese el nombre y el apellido (máximo 120 caracteres en total).')
+        raise ErrorCreacion('Ingrese el nombre (máximo 120 caracteres en total).')
     if not re.fullmatch(r'\d{5,15}', cedula):
         raise ErrorCreacion('La cédula debe tener solo números (entre 5 y 15 dígitos).')
     try:
@@ -227,7 +227,7 @@ def crear_usuario(
     return usuario
 
 
-def crear_director(*, nombre, apellido, cedula, correo, telefono, carrera, creado_por=None):
+def crear_director(*, nombre, cedula, correo, carrera, apellido='', telefono='', creado_por=None):
     """Crea un Director y lo asigna a la carrera. Una carrera solo puede tener
     un director activo; si ya lo tiene, no se crea nada."""
     if carrera is None or carrera.estado != 'Activo':

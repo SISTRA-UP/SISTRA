@@ -53,9 +53,9 @@ class UsuariosView(CrearUsuariosRequeridoMixin, View):
             datos = form.cleaned_data
             try:
                 usuario = crear_usuario(
-                    nombre=datos['nombre'], apellido=datos['apellido'],
+                    nombre=datos['nombre'],
                     cedula=datos['cedula'], correo=datos['correo'],
-                    telefono=datos['telefono'], rol=ROL_ESTUDIANTE,
+                    rol=ROL_ESTUDIANTE,
                     carrera=carrera, creado_por=request.user,
                 )
             except ErrorCreacion as error:
@@ -143,9 +143,9 @@ class DirectoresView(ParametrizarRequeridoMixin, View):
             datos = form.cleaned_data
             try:
                 director = crear_director(
-                    nombre=datos['nombre'], apellido=datos['apellido'],
+                    nombre=datos['nombre'],
                     cedula=datos['cedula'], correo=datos['correo'],
-                    telefono=datos['telefono'], carrera=datos['carrera'],
+                    carrera=datos['carrera'],
                     creado_por=request.user,
                 )
             except ErrorCreacion as error:

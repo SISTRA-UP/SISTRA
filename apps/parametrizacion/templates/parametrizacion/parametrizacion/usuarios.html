@@ -82,8 +82,8 @@
         <section class="sis-card mt-4" aria-labelledby="titulo-masiva">
             <p class="sis-eyebrow">Alta masiva</p>
             <h2 id="titulo-masiva">Carga masiva (CSV)</h2>
-            <p class="sis-sub">Crea estudiantes desde un archivo. Si la cédula y el correo ya existen, se actualizan el
-                nombre y el teléfono.</p>
+            <p class="sis-sub">Crea estudiantes desde un archivo. Si la cédula y el correo ya existen, se actualiza el
+                nombre.</p>
 
             <form method="post" action="{% url 'parametrizacion:usuarios_carga' %}" enctype="multipart/form-data">
                 {% csrf_token %}
@@ -98,7 +98,7 @@
                     <button type="submit" class="sis-btn">Crear →</button>
                 </div>
                         <div class="sis-help mt-2">
-                            Columnas: nombre, apellido, cc, correo, telefono, carrera
+                            Columnas: nombre, cc, correo, carrera
                             · máximo {{ max_filas }} filas
                             · {{ max_mb }} MB.
                         </div>
