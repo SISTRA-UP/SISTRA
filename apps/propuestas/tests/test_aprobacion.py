@@ -14,7 +14,9 @@ from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -700,9 +702,10 @@ class TestReactivacionPropuestaForm(BaseAprobacionTestCase):
         self.assertEqual(hist.estado_nuevo, EstadoTramite.EN_REVISION)
         self.assertEqual(hist.motivo_reactivacion, motivo)
 
-        # Semáforo se reactiva y cuenta desde fecha_envio original
+        # Semáforo se reactiva conservando los días que llevaba al rechazarse
         sem = calcular_semaforo(prop)
         self.assertFalse(sem['pausado'])
+        self.assertEqual(sem['dias'], 5)
         self.assertEqual(sem['color'], 'verde')
 
     def test_reactivar_falla_si_propuesta_esta_archivada(self):
@@ -1009,6 +1012,155 @@ class TestAccionMasivaForm(BaseAprobacionTestCase):
         with self.assertRaises(ReactivacionInvalidaError) as ctx:
             form.procesar(self.carrera, self.user_director)
         self.assertIn(self.estudiante_1.usuario.nombre, str(ctx.exception))
+
+
+class TestSemaforoDetenidoYReactivacion(BaseAprobacionTestCase):
+    """El semáforo se detiene al decidir y conserva sus días al reactivar (RG-07)."""
+
+    def _decidir(self, form_cls, prop: Propuesta, hace_dias: int = 0, **datos) -> None:
+        """Aplica la decisión y ubica su registro de historial `hace_dias` días atrás."""
+        form = form_cls(data={'observacion': 'Observación válida para la decisión.', **datos})
+        self.assertTrue(form.is_valid(), form.errors)
+        form.procesar(prop, self.user_director)
+        HistorialEstado.objects.filter(propuesta=prop).update(
+            fecha_hora=timezone.now() - timedelta(days=hace_dias)
+        )
+        prop.refresh_from_db()
+
+    def _rechazar(self, prop: Propuesta, hace_dias: int) -> None:
+        self._decidir(
+            RechazoPropuestaForm, prop, hace_dias, tipo_rechazo=self.tipo_rechazo_activo.pk
+        )
+
+    def test_rechazo_por_error_y_reactivacion_18_dias_despues_conserva_2_dias(self):
+        """Escenario del revisor: 2 días en revisión, rechazo, reactivación 18 días después."""
+        prop = self.crear_propuesta(self.estudiante_1, 'PROP-SEM-REV', dias_envio=20)
+        self._rechazar(prop, hace_dias=18)
+
+        # Detenido: 18 días después del rechazo sigue marcando los 2 días que estuvo en revisión
+        sem = calcular_semaforo(prop)
+        self.assertTrue(sem['pausado'])
+        self.assertEqual(sem['dias'], 2)
+
+        form = ReactivacionPropuestaForm(
+            data={'motivo_reactivacion': 'Se rechazó por error; el contenido es válido.'}
+        )
+        self.assertTrue(form.is_valid())
+        form.procesar(prop, self.user_director)
+        prop.refresh_from_db()
+
+        self.assertEqual(prop.estado, EstadoTramite.EN_REVISION)
+        sem = calcular_semaforo(prop)
+        self.assertFalse(sem['pausado'])
+        self.assertEqual(sem['dias'], 2)
+        self.assertEqual(sem['color'], 'verde')
+
+        # Segunda decisión 3 días después: acumula 2 + 3 y vuelve a detenerse
+        Propuesta.objects.filter(pk=prop.pk).update(
+            fecha_envio=prop.fecha_envio - timedelta(days=3)
+        )
+        prop.refresh_from_db()
+        form = AprobacionPropuestaForm(data={})
+        self.assertTrue(form.is_valid())
+        form.procesar(prop, self.user_director)
+        prop.refresh_from_db()
+        sem = calcular_semaforo(prop)
+        self.assertTrue(sem['pausado'])
+        self.assertEqual(sem['dias'], 5)
+
+    def test_aprobado_y_requiere_modificacion_no_siguen_sumando_dias(self):
+        """Tras decidir, los días quedan fijos en los que la propuesta estuvo en revisión."""
+        casos = [
+            (AprobacionPropuestaForm, self.estudiante_1, EstadoTramite.APROBADO),
+            (ModificacionPropuestaForm, self.estudiante_2, EstadoTramite.REQUIERE_MODIFICACION),
+        ]
+        for form_cls, estudiante, estado in casos:
+            with self.subTest(estado=estado):
+                prop = self.crear_propuesta(estudiante, f'PROP-SEM-{estado[:3]}', dias_envio=30)
+                self._decidir(form_cls, prop, hace_dias=27)
+                self.assertEqual(prop.estado, estado)
+                sem = calcular_semaforo(prop)
+                self.assertTrue(sem['pausado'])
+                self.assertEqual(sem['dias'], 3)
+
+    def test_reenvio_desde_requiere_modificacion_no_ajusta_fecha_envio(self):
+        """El ajuste de fecha_envio es exclusivo de la reactivación desde 'Rechazado'.
+
+        Al volver a 'En revisión' desde 'Requiere modificación' aplicar_transicion deja
+        fecha_envio intacta: reiniciarla al reenviar (semáforo desde 0, RG-03) le
+        corresponde a SISTRA-01, no a este módulo.
+        """
+        prop = self.crear_propuesta(self.estudiante_1, 'PROP-SEM-REENV', dias_envio=9)
+        self._decidir(ModificacionPropuestaForm, prop, hace_dias=0)
+        self.assertEqual(prop.estado, EstadoTramite.REQUIERE_MODIFICACION)
+        fecha_envio_antes = prop.fecha_envio
+
+        aplicar_transicion(
+            prop, self.user_director, EstadoTramite.EN_REVISION, 'Reenvío', 'REENVIAR_PROPUESTA'
+        )
+        prop.refresh_from_db()
+
+        self.assertEqual(prop.estado, EstadoTramite.EN_REVISION)
+        self.assertEqual(prop.fecha_envio, fecha_envio_antes)
+
+    def test_auditoria_de_la_decision_registra_los_dias_en_revision(self):
+        """La auditoría guarda los días al decidir, no cero ni los días desde el envío."""
+        prop = self.crear_propuesta(self.estudiante_1, 'PROP-SEM-AUD', dias_envio=4)
+        self._rechazar(prop, hace_dias=0)
+        aud = Auditoria.objects.get(accion='RECHAZAR_PROPUESTA', id_registro_afectado=prop.pk)
+        self.assertIn('Días semáforo: 4', aud.detalle)
+
+    def test_reactivacion_masiva_conserva_dias(self):
+        """La reactivación masiva retoma cada semáforo con los días que llevaba."""
+        prop1 = self.crear_propuesta(self.estudiante_1, 'PROP-SEM-MAS-1', dias_envio=20)
+        prop2 = self.crear_propuesta(self.estudiante_2, 'PROP-SEM-MAS-2', dias_envio=30)
+        self._rechazar(prop1, hace_dias=18)
+        self._rechazar(prop2, hace_dias=21)
+
+        form = AccionMasivaForm(
+            data={
+                'accion': 'reactivar',
+                'propuestas_ids': f'{prop1.pk},{prop2.pk}',
+                'observacion': 'Reactivación masiva tras revisar los rechazos.',
+            }
+        )
+        self.assertTrue(form.is_valid())
+        self.assertEqual(form.procesar(self.carrera, self.user_director), 2)
+
+        for prop, dias in [(prop1, 2), (prop2, 9)]:
+            prop.refresh_from_db()
+            sem = calcular_semaforo(prop)
+            self.assertEqual(prop.estado, EstadoTramite.EN_REVISION)
+            self.assertEqual(sem['dias'], dias)
+
+    def test_bandeja_muestra_dias_detenidos_sin_consultas_por_fila(self):
+        """La bandeja usa la fecha anotada: mismas consultas con 1 o 3 propuestas detenidas."""
+        self.client.force_login(self.user_director)
+        url = reverse('propuestas:aprobacion')
+
+        def consultas_bandeja() -> tuple[int, dict]:
+            self.client.get(url)  # calienta cachés (sesión, permisos)
+            with CaptureQueriesContext(connection) as ctx:
+                response = self.client.get(url)
+            self.assertEqual(response.status_code, 200)
+            dias = {
+                m['propuesta'].codigo: m['semaforo']['dias']
+                for m in response.context['propuestas_con_meta']
+            }
+            return len(ctx), dias
+
+        prop = self.crear_propuesta(self.estudiante_1, 'PROP-SEM-NQ-1', dias_envio=20)
+        self._rechazar(prop, hace_dias=18)
+        con_una, dias = consultas_bandeja()
+        self.assertEqual(dias, {'PROP-SEM-NQ-1': 2})
+
+        for codigo, estudiante in [('PROP-SEM-NQ-2', self.estudiante_1), ('PROP-SEM-NQ-3', self.estudiante_2)]:
+            otra = self.crear_propuesta(estudiante, codigo, dias_envio=20)
+            self._rechazar(otra, hace_dias=18)
+        con_tres, dias = consultas_bandeja()
+        self.assertEqual(set(dias.values()), {2})
+        self.assertEqual(len(dias), 3)
+        self.assertEqual(con_tres, con_una)
 
 
 # ==============================================================================

@@ -3,9 +3,12 @@
 Solo el responsable de este requisito edita este archivo.
 """
 
+from datetime import timedelta
+
 from django import forms
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import OuterRef, Subquery
 from django.utils import timezone
 
 from apps.cargue_up.models import CargueUp, EstadoVerificacion
@@ -86,13 +89,47 @@ def obtener_limites_semaforo() -> tuple[int, int]:
     return verde, amarillo
 
 
+def _salidas_de_revision(propuesta):
+    """Fechas en que la propuesta salió de 'En revisión' (decisiones), la más reciente primero."""
+    return (
+        HistorialEstado.objects.filter(propuesta=propuesta, estado_anterior=EstadoTramite.EN_REVISION)
+        .order_by('-fecha_hora')
+        .values('fecha_hora')
+    )
+
+
+def anotar_ultima_decision(propuestas_qs):
+    """Anota fecha_ultima_decision para que calcular_semaforo no consulte por fila (sin N+1)."""
+    return propuestas_qs.annotate(
+        fecha_ultima_decision=Subquery(_salidas_de_revision(OuterRef('pk'))[:1])
+    )
+
+
+def _tiempo_en_revision(propuesta: Propuesta) -> timedelta:
+    """Tiempo que la propuesta lleva (o llevaba al decidirse) En revisión (RG-07).
+
+    En revisión cuenta hasta hoy; en cualquier otro estado el conteo queda detenido en la
+    última decisión. Sin historial de decisión (datos previos) se usa fecha_actualizacion,
+    que no avanza sola, como aproximación de esa fecha.
+    """
+    fecha_base = propuesta.fecha_envio or propuesta.fecha_actualizacion or propuesta.fecha_creacion
+    if propuesta.estado == EstadoTramite.EN_REVISION:
+        corte = timezone.now()
+    else:
+        # La bandeja trae la fecha anotada; detalle y auditoría hacen una única consulta.
+        if hasattr(propuesta, 'fecha_ultima_decision'):
+            corte = propuesta.fecha_ultima_decision
+        else:
+            corte = _salidas_de_revision(propuesta).values_list('fecha_hora', flat=True).first()
+        corte = corte or propuesta.fecha_actualizacion
+    return max(timedelta(0), corte - fecha_base)
+
+
 def calcular_semaforo(
     propuesta: Propuesta, limites: tuple[int, int] | None = None
 ) -> dict:
-    """Calcula días corridos y color del semáforo (RG-07). Pausa en estados no activos."""
-    ahora = timezone.now()
-    fecha_base = propuesta.fecha_envio or propuesta.fecha_actualizacion or propuesta.fecha_creacion
-    dias = max(0, (ahora - fecha_base).days)
+    """Calcula días corridos En revisión y color del semáforo (RG-07). Se detiene al decidir."""
+    dias = _tiempo_en_revision(propuesta).days
     estado = propuesta.estado
     limite_verde, limite_amarillo = (
         limites if limites is not None else obtener_limites_semaforo()
@@ -219,6 +256,15 @@ def aplicar_transicion(
 ) -> None:
     """Aplica el cambio de estado, registra historial, notifica y audita."""
     estado_anterior = propuesta.estado
+    if (
+        estado_anterior == EstadoTramite.RECHAZADO
+        and estado_nuevo == EstadoTramite.EN_REVISION
+        and propuesta.fecha_envio
+    ):
+        # Solo reactivación (individual o masiva): el semáforo retoma con los días que llevaba
+        # al rechazarse, sin sumar el tiempo detenida (RG-07). El reenvío desde 'Requiere
+        # modificación' no se ajusta aquí: SISTRA-01 reinicia el semáforo desde 0 (paso 8, RG-03).
+        propuesta.fecha_envio = timezone.now() - _tiempo_en_revision(propuesta)
     propuesta.estado = estado_nuevo
     propuesta.save()
 

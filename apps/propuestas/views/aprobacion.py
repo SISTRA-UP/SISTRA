@@ -46,6 +46,7 @@ from apps.propuestas.forms.aprobacion import (
     ReactivacionPropuestaForm,
     RechazoPropuestaForm,
     _auditar,
+    anotar_ultima_decision,
     calcular_semaforo,
     obtener_limites_semaforo,
     puede_revertir_aprobacion,
@@ -141,7 +142,8 @@ def bandeja(request: HttpRequest) -> HttpResponse:
 
     total_filtradas = propuestas_qs.count()
 
-    paginador = Paginator(propuestas_qs, ELEMENTOS_POR_PAGINA)
+    # Fecha de la última decisión anotada en la misma consulta de la página (sin N+1).
+    paginador = Paginator(anotar_ultima_decision(propuestas_qs), ELEMENTOS_POR_PAGINA)
     numero_pagina = request.GET.get('page')
     pagina_obj = paginador.get_page(numero_pagina)
     propuestas_pagina = list(pagina_obj.object_list)
