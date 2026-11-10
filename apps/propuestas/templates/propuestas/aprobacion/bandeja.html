@@ -1,0 +1,1434 @@
+{% extends 'base.html' %}
+
+{% block titulo %}SISTRA-02 · Aprobación de propuestas{% endblock %}
+
+{% block css %}
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+    /* ==========================================================================
+       ESTILOS OFICIALES SISTRA-02 · FIGMA MOCKUP & COMPATIBILIDAD BOOTSTRAP 5
+       ========================================================================== */
+    :root {
+        --sistra-blue: #1B3A8A;
+        --sistra-dark: #1F2430;
+        --sistra-muted: #4B5263;
+        --sistra-border: #E3E6EC;
+        --sistra-border-dark: #B9BFCC;
+        --sistra-bg: #F5F6F9;
+        --sistra-green: #1E7D3E;
+        --sistra-yellow: #F2B01E;
+        --sistra-red: #B42318;
+    }
+
+    body {
+        margin: 0;
+        font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif !important;
+        color: var(--sistra-dark);
+        background-color: var(--sistra-bg);
+    }
+
+    /* Layout principal */
+    .sistra-contenedor {
+        min-height: 850px;
+        background: var(--sistra-bg);
+        padding: 28px 32px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    /* Encabezado */
+    .subtitulo-modulo {
+        font-size: 13px;
+        color: var(--sistra-muted);
+        font-weight: 500;
+    }
+    .titulo-modulo {
+        margin: 4px 0 0;
+        font-size: 28px;
+        font-weight: 600;
+        color: var(--sistra-dark);
+    }
+
+    /* Barra de filtros y acciones superiores */
+    .card-filtros {
+        background: #fff;
+        border: 1px solid var(--sistra-border);
+        border-radius: 10px;
+        padding: 16px 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .fr {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    /* Input con icono de lupa */
+    .q {
+        position: relative;
+        display: flex;
+        align-items: center;
+        margin: 0;
+    }
+    .q svg {
+        position: absolute;
+        left: 12px;
+        pointer-events: none;
+    }
+    .q input {
+        height: 40px;
+        width: 380px;
+        padding: 0 12px 0 36px;
+        border: 1px solid var(--sistra-border-dark);
+        border-radius: 6px;
+        font: 14px 'IBM Plex Sans', system-ui, sans-serif;
+        color: var(--sistra-dark);
+        background: #fff;
+        box-sizing: border-box;
+    }
+    .q input:focus, .se:focus, .ta:focus {
+        outline: none;
+        border-color: var(--sistra-blue);
+        box-shadow: 0 0 0 3px rgba(27, 58, 138, 0.15);
+    }
+
+    /* Selectores */
+    .se, select.se {
+        height: 40px !important;
+        padding: 0 12px;
+        border: 1px solid var(--sistra-border-dark);
+        border-radius: 6px;
+        font: 14px 'IBM Plex Sans', system-ui, sans-serif;
+        background: #fff;
+        color: var(--sistra-dark);
+        cursor: pointer;
+        box-sizing: border-box;
+    }
+    .w select.se {
+        width: 100%;
+        height: 40px !important;
+    }
+
+    /* Botones estándar del mockup */
+    .b {
+        height: 38px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: 6px;
+        font: 500 13px 'IBM Plex Sans', system-ui, sans-serif;
+        color: #fff;
+        cursor: pointer;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition: opacity 0.15s ease, background-color 0.15s ease;
+        text-decoration: none;
+        box-sizing: border-box;
+    }
+    .b:hover:not(:disabled) {
+        opacity: 0.92;
+        color: #fff;
+    }
+    .b.v { background: var(--sistra-green); }
+    .b.o { background: var(--sistra-yellow); color: #2E2100; }
+    .b.x { background: var(--sistra-red); }
+    .b.p { background: var(--sistra-blue); }
+    .b.g { background: #E8EAF0; color: #2A3040; }
+    .b.g:hover:not(:disabled) { background: #DDE1EA; color: #2A3040; }
+    .b.l { background: #E3EDFC; color: #174FA3; }
+    .b.l:hover:not(:disabled) { background: #D0E2FA; color: #174FA3; }
+    .b:disabled {
+        opacity: .45;
+        cursor: not-allowed;
+    }
+
+    /* Tabla con Grid del Mockup */
+    .tabla-contenedor {
+        position: relative;
+        background: #F5F6F9;
+        border: 1px solid #D5D9E2;
+        border-radius: 10px;
+        overflow-x: auto;
+    }
+    /* Indicador mientras la tabla se recarga (BRD: estado de carga). */
+    .tabla-cargando {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: 80px;
+        gap: 10px;
+        background: rgba(245, 246, 249, .85);
+        z-index: 2;
+    }
+    .tabla-cargando.activo { display: flex; }
+    .tabla-grid {
+        min-width: 1290px;
+    }
+    .r {
+        display: grid;
+        grid-template-columns: 40px 90px 220px minmax(220px, 1fr) 100px 140px 420px;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 20px;
+        border-top: 1px solid var(--sistra-border);
+        font-size: 14px;
+        transition: background-color 0.15s ease;
+    }
+    .r:hover:not(.h) {
+        filter: brightness(0.98);
+    }
+    .h {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--sistra-muted);
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        background: #E8EAF0;
+        border-top: 0;
+        padding-top: 14px;
+        padding-bottom: 14px;
+    }
+
+    /* Degradados oficiales del semáforo en fila */
+    .gv { background: linear-gradient(90deg, #CFEBD8, #F3FAF5); }
+    .ga { background: linear-gradient(90deg, #FBE7A6, #FFF8E0); }
+    .gr { background: linear-gradient(90deg, #F6C5BF, #FDF0EE); }
+    .r.neutro { background: #fff; }
+
+    /* Textos en celdas */
+    .n { font-weight: 600; color: var(--sistra-dark); }
+    .t { font-size: 13px; color: var(--sistra-muted); margin-top: 2px; }
+
+    /* Badges de Estado */
+    .s {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        text-align: center;
+    }
+    .s.e { background: #FFF1C2; color: #6B4A00; }
+    .s.ap { background: #DDF3E4; color: #14612F; }
+    .s.re { background: #FBE3E0; color: #8E1C12; }
+    .s.mo { background: #FFE8D6; color: #8F3E00; }
+
+    /* Control deslizante de 3 estados (Slider) */
+    .ac {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        justify-content: flex-end;
+    }
+    .sl {
+        display: flex;
+        gap: 2px;
+        padding: 2px;
+        border: 1px solid var(--sistra-border-dark);
+        border-radius: 999px;
+        background: #fff;
+    }
+    .sl button {
+        border: 0;
+        border-radius: 999px;
+        height: 32px;
+        padding: 0 12px;
+        background: none;
+        color: var(--sistra-muted);
+        font: 500 12px 'IBM Plex Sans', system-ui, sans-serif;
+        cursor: pointer;
+        transition: background-color 0.15s ease, color 0.15s ease;
+    }
+    .sl button:hover:not(:disabled) {
+        color: var(--sistra-dark);
+    }
+    .sl .r1 { background: var(--sistra-red) !important; color: #fff !important; font-weight: 600; }
+    .sl .y1 { background: var(--sistra-yellow) !important; color: #2E2100 !important; font-weight: 600; }
+    .sl .g1 { background: var(--sistra-green) !important; color: #fff !important; font-weight: 600; }
+    .sl button:disabled { cursor: not-allowed; }
+
+    /* Checkbox estilo Figma */
+    input[type=checkbox] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--sistra-blue);
+        cursor: pointer;
+    }
+    input[type=checkbox]:disabled {
+        cursor: not-allowed;
+        opacity: 0.4;
+    }
+
+    /* Muestras de la leyenda inferior */
+    .sw {
+        display: inline-block;
+        width: 28px;
+        height: 12px;
+        border-radius: 3px;
+        vertical-align: -1px;
+        margin: 0 6px 0 14px;
+        border: 1px solid rgba(0,0,0,0.06);
+    }
+
+    /* Banners de notificación */
+    .bn {
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+    }
+    .bn.bn-amarillo { background: #FFF1C2; color: #4A3300; border: 1px solid #F2B01E; }
+    .bn.bn-rojo { background: #FBE3E0; color: #8E1C12; border: 1px solid #B42318; }
+    .bn.bn-verde { background: #E6F5EA; color: #14612F; border: 1px solid #1E7D3E; }
+
+    /* ==========================================================================
+       ESTILOS PARA LOS MODALES DE FIGMA (Ver Detalle, Decisiones, Reactivar)
+       ========================================================================== */
+    .w {
+        background: #fff;
+        border-radius: 12px;
+        padding: 22px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        font-size: 14px;
+        color: var(--sistra-dark);
+    }
+    .w h2 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--sistra-dark);
+    }
+    .w label {
+        font-weight: 500;
+    }
+    .w .s {
+        display: block;
+        padding: 0;
+        border-radius: 0;
+        font-size: 13px;
+        font-weight: normal;
+        color: var(--sistra-muted);
+        text-align: left;
+    }
+    .fl {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--sistra-muted);
+        margin-bottom: 4px;
+    }
+    .ro {
+        width: 100%;
+        box-sizing: border-box;
+        height: 36px;
+        padding: 0 10px;
+        border: 1px solid #D5D9E2;
+        border-radius: 6px;
+        background: #F5F6F9;
+        font: 14px 'IBM Plex Sans', system-ui, sans-serif;
+        color: var(--sistra-dark);
+    }
+    textarea.ro {
+        padding: 8px 10px;
+    }
+    .ta {
+        width: 100%;
+        height: 96px;
+        box-sizing: border-box;
+        padding: 10px 12px;
+        border: 1px solid var(--sistra-border-dark);
+        border-radius: 6px;
+        font: 14px 'IBM Plex Sans', system-ui, sans-serif;
+        resize: none;
+        color: var(--sistra-dark);
+    }
+    .ta.er, .er {
+        border: 2px solid var(--sistra-red) !important;
+        background: #FFF5F4;
+    }
+    .m {
+        display: flex;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--sistra-red);
+        line-height: 1.4;
+        text-align: left;
+    }
+    .m::before {
+        content: "!";
+        flex: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--sistra-red);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 700;
+        text-align: center;
+        line-height: 16px;
+    }
+    .n {
+        font-size: 12px;
+        color: var(--sistra-muted);
+        text-align: right;
+    }
+    .i {
+        padding: 10px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        line-height: 1.4;
+    }
+    .iv { background: #E6F5EA; color: #14612F; border: 1px solid #1E7D3E; }
+    .ib { background: #E4EAF8; color: #1B3A8A; border: 1px solid #1B3A8A; }
+    .ir { background: #FBE3E0; color: #8E1C12; border: 1px solid #B42318; }
+    .f {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 4px;
+        gap: 10px;
+    }
+    .hi {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        padding: 8px 0;
+        border-top: 1px solid var(--sistra-border);
+        font-size: 13px;
+    }
+    .ch {
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #E8EAF0;
+        font-size: 12px;
+        font-weight: 600;
+        color: #2A3040;
+        white-space: nowrap;
+    }
+    .sp {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255, 255, 255, .4);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin .8s linear infinite;
+        vertical-align: -2px;
+        margin-right: 6px;
+    }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block contenido %}
+<div class="sistra-contenedor">
+    {# Título y Breadcrumb oficial #}
+    <div>
+        <div class="subtitulo-modulo">
+            SISTRA-02 · Aprobación de propuesta
+            {% if carrera %}
+                · <span class="fw-semibold text-dark">{{ carrera.nombre }}</span>
+            {% endif %}
+        </div>
+        <h1 class="titulo-modulo">Aprobación de propuestas</h1>
+    </div>
+
+    {# Banners de mensajes oficiales del sistema #}
+    {% if messages %}
+        <div>
+            {% for message in messages %}
+                <div class="bn {% if message.tags == 'error' %}bn-rojo{% elif message.tags == 'warning' %}bn-amarillo{% else %}bn-verde{% endif %}">
+                    <div>{{ message }}</div>
+                    <button type="button" class="btn-close btn-close-sm" onclick="this.parentElement.remove()" aria-label="Cerrar"></button>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+        {# Barra de búsqueda, filtros y botones masivos (Mockup 1:1) #}
+        <div class="card-filtros">
+            {# Izquierda: Buscador y filtros #}
+            <form method="get" class="fr" id="form-filtros">
+                <label class="q">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4B5263" stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7"></circle>
+                        <path d="M20 20l-4-4"></path>
+                    </svg>
+                    <input type="text" name="buscar" id="txt-busq-gen" value="{{ request.GET.buscar|default:'' }}"
+                           aria-label="Buscar por nombre, cédula, código o título"
+                           placeholder="Buscar por nombre, cédula, código o título">
+                </label>
+
+                <select name="estado" id="cmb-est" class="se" aria-label="Filtrar por estado">
+                    <option value="">Estado: Todos</option>
+                    <option value="En revisión" {% if request.GET.estado == 'En revisión' %}selected{% endif %}>En revisión</option>
+                    <option value="Aprobado" {% if request.GET.estado == 'Aprobado' %}selected{% endif %}>Aprobado</option>
+                    <option value="Requiere modificación" {% if request.GET.estado == 'Requiere modificación' %}selected{% endif %}>Requiere modificación</option>
+                    <option value="Rechazado" {% if request.GET.estado == 'Rechazado' %}selected{% endif %}>Rechazado</option>
+                </select>
+
+                <select name="semaforo" id="cmb-dias" class="se" aria-label="Filtrar por semáforo y días">
+                    <option value="">Semáforo: Todos</option>
+                    <option value="verde" {% if request.GET.semaforo == 'verde' %}selected{% endif %}>0 a {{ limite_verde|default:7 }} días - Verde</option>
+                    <option value="amarillo" {% if request.GET.semaforo == 'amarillo' %}selected{% endif %}>{{ limite_verde|add:1|default:8 }} a {{ limite_amarillo|default:14 }} días - Amarillo</option>
+                    <option value="rojo" {% if request.GET.semaforo == 'rojo' %}selected{% endif %}>{{ limite_rojo|default:15 }}+ días - Rojo</option>
+                </select>
+
+                <a href="{% url 'propuestas:aprobacion' %}" class="b g" style="height: 40px;" title="Limpiar todos los filtros" id="btn-limpiar">
+                    Limpiar filtros
+                </a>
+            </form>
+
+            {# Derecha: Acciones masivas con casillas #}
+            <div class="fr">
+                <span id="contador-seleccionadas" style="font-size: 13px; color: var(--sistra-muted); margin-right: 4px;">
+                    0 seleccionadas
+                </span>
+                <button type="button" class="b v" id="btn-masivo-aprobar" data-accion="aprobar" style="height: 40px;" disabled>
+                    Aprobar Masivo
+                </button>
+                <button type="button" class="b x" id="btn-masivo-rechazar" data-accion="rechazar" style="height: 40px;" disabled>
+                    Rechazar Masivo
+                </button>
+                <button type="button" class="b p" id="btn-masivo-reactivar" data-accion="reactivar" style="height: 40px;" disabled>
+                    Reactivar Masivo
+                </button>
+            </div>
+        </div>
+
+        {# Tabla principal con estructura y diseño Figma #}
+        <div class="tabla-contenedor">
+            <div class="tabla-cargando" id="tbl-cargando" role="status" aria-live="polite">
+                <span class="sp" style="width: 28px; height: 28px; border-width: 3px; border-color: #C9CEDA; border-top-color: #1B3A8A;"></span>
+                <div class="s">Cargando propuestas...</div>
+            </div>
+            <div class="tabla-grid" id="tbl-propuestas">
+                {# Fila de encabezado #}
+                <div class="r h">
+                    <input type="checkbox" id="chk-todos" aria-label="Seleccionar todos">
+                    <div>Código</div>
+                    <div>Cédula y estudiante</div>
+                    <div>Título de la propuesta</div>
+                    <div>Últ. modif.</div>
+                    <div>Estado y días</div>
+                    <div style="text-align: right;">Acciones</div>
+                </div>
+
+                {# Filas de propuestas #}
+                {% for meta in propuestas_con_meta %}
+                    {% with prop=meta.propuesta sem=meta.semaforo %}
+                    <div class="r {% if sem.color == 'verde' %}gv{% elif sem.color == 'amarillo' %}ga{% elif sem.color == 'rojo' %}gr{% else %}neutro{% endif %}"
+                         id="fila-propuesta-{{ prop.pk }}" data-estado="{{ prop.estado }}" data-archivada="{{ prop.archivada|yesno:'true,false' }}">
+                        {# 1. Checkbox #}
+                        <div>
+                            <input type="checkbox" class="chk-fila" value="{{ prop.pk }}" data-estado="{{ prop.estado }}"
+                                   aria-label="Seleccionar {{ prop.codigo }}"
+                                   {% if meta.bloqueada_reversion %}disabled title="{{ meta.motivo_bloqueo }}"{% endif %}>
+                        </div>
+
+                        {# 2. Código #}
+                        <div class="fw-semibold font-monospace" style="color: var(--sistra-blue);">
+                            {{ prop.codigo }}
+                        </div>
+
+                        {# 3. Cédula y estudiante #}
+                        <div>
+                            <div class="n">{{ prop.proceso.estudiante_carrera.estudiante.usuario.nombre }}</div>
+                            <div class="t">C.C. {{ prop.proceso.estudiante_carrera.estudiante.usuario.cedula }}</div>
+                        </div>
+
+                        {# 4. Título de la propuesta #}
+                        <div>
+                            <div class="n" style="font-weight: 500;">{{ prop.titulo|default:"(Sin título registrado)" }}</div>
+                            <div class="t" style="font-size: 12px;">{{ prop.entidad|default:"Sin entidad especificada" }}</div>
+                        </div>
+
+                        {# 5. Última modificación #}
+                        <div style="font-size: 13px;">
+                            {{ prop.fecha_actualizacion|date:"d/m/Y"|default:prop.fecha_creacion|date:"d/m/Y"|default:"-" }}
+                        </div>
+
+                        {# 6. Estado y días #}
+                        <div>
+                            {% if prop.estado == 'En revisión' %}
+                                <span class="s e">En revisión</span>
+                                <div class="t">{{ sem.dias }} día{{ sem.dias|pluralize }}</div>
+                            {% elif prop.estado == 'Aprobado' %}
+                                <span class="s ap">Aprobado</span>
+                                <div class="t">
+                                    {% if meta.bloqueada_reversion %}
+                                        Finalizado · Cargado en UP
+                                    {% else %}
+                                        Finalizado (Detenido)
+                                    {% endif %}
+                                </div>
+                            {% elif prop.estado == 'Requiere modificación' %}
+                                <span class="s mo">Requiere modif.</span>
+                                <div class="t">{{ sem.dias }} día{{ sem.dias|pluralize }}</div>
+                            {% elif prop.estado == 'Rechazado' %}
+                                <span class="s re">Rechazado</span>
+                                <div class="t">Pausado en {{ sem.dias }} días</div>
+                            {% else %}
+                                <span class="s">{{ prop.estado }}</span>
+                            {% endif %}
+                        </div>
+
+                        {# 7. Acciones #}
+                        <div class="ac">
+                            {% if prop.estado == 'Rechazado' %}
+                                <button type="button" class="b l btn-detalle" data-id="{{ prop.pk }}">
+                                    Ver detalle
+                                </button>
+                                <button type="button" class="b p btn-reactivar"
+                                        data-id="{{ prop.pk }}"
+                                        data-codigo="{{ prop.codigo }}"
+                                        data-estudiante="{{ prop.proceso.estudiante_carrera.estudiante.usuario.nombre }}"
+                                        data-dias="{{ sem.dias }}">
+                                    Reactivar Propuesta
+                                </button>
+                            {% elif meta.bloqueada_reversion %}
+                                {# Bloqueada: cargue en UP, informe iniciado o esperando el reenvío del estudiante #}
+                                <div class="sl" style="opacity: .5;" role="radiogroup" aria-disabled="true" title="{{ meta.motivo_bloqueo }}">
+                                    <button type="button" role="radio" class="btn-bloqueado" data-motivo="{{ meta.motivo_bloqueo }}">Rechazado</button>
+                                    <button type="button" role="radio" class="{% if prop.estado == 'Requiere modificación' %}y1 {% endif %}btn-bloqueado" data-motivo="{{ meta.motivo_bloqueo }}">Modificar</button>
+                                    <button type="button" role="radio" class="{% if prop.estado != 'Requiere modificación' %}g1 {% endif %}btn-bloqueado" data-motivo="{{ meta.motivo_bloqueo }}">Aprobado</button>
+                                </div>
+                                <button type="button" class="b l btn-detalle" data-id="{{ prop.pk }}">
+                                    Ver detalle
+                                </button>
+                            {% else %}
+                                {# Slider interactivo de 3 estados (EX-04) #}
+                                <div class="sl" role="radiogroup" aria-label="Cambiar estado {{ prop.codigo }}"
+                                     data-id="{{ prop.pk }}"
+                                     data-codigo="{{ prop.codigo }}"
+                                     data-estudiante="{{ prop.proceso.estudiante_carrera.estudiante.usuario.nombre }}"
+                                     data-estado="{{ prop.estado }}">
+                                    <button type="button" role="radio" aria-checked="{% if prop.estado == 'Rechazado' %}true{% else %}false{% endif %}"
+                                            class="btn-sl {% if prop.estado == 'Rechazado' %}r1{% endif %}"
+                                            data-target="Rechazado">
+                                        Rechazado
+                                    </button>
+                                    <button type="button" role="radio" aria-checked="{% if prop.estado == 'Requiere modificación' %}true{% else %}false{% endif %}"
+                                            class="btn-sl {% if prop.estado == 'Requiere modificación' %}y1{% endif %}"
+                                            data-target="Requiere modificación">
+                                        Modificar
+                                    </button>
+                                    <button type="button" role="radio" aria-checked="{% if prop.estado == 'Aprobado' %}true{% else %}false{% endif %}"
+                                            class="btn-sl {% if prop.estado == 'Aprobado' %}g1{% endif %}"
+                                            data-target="Aprobado">
+                                        Aprobado
+                                    </button>
+                                </div>
+                                <button type="button" class="b l btn-detalle" data-id="{{ prop.pk }}">
+                                    Ver detalle
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endwith %}
+                {% empty %}
+                    <div style="padding: 60px 20px; text-align: center; color: var(--sistra-muted);">
+                        <div style="width: 44px; height: 44px; border-radius: 50%; background: #E4EAF8; color: #1B3A8A; font-weight: 700; line-height: 44px; margin: 0 auto 10px; font-size: 16px;">i</div>
+                        {% if hay_filtros %}
+                            <div style="font-size: 15px; font-weight: 600; color: var(--sistra-dark); margin-bottom: 6px;">No se encontraron propuestas de {{ carrera.nombre|default:"la carrera" }} que coincidan con los criterios seleccionados</div>
+                            <p style="font-size: 13px; margin: 0 0 14px;">Puedes ajustar los filtros de búsqueda o restablecer la vista inicial.</p>
+                            <a href="{% url 'propuestas:aprobacion' %}" class="b g">Restablecer filtros</a>
+                        {% else %}
+                            <div style="font-size: 15px; font-weight: 600; color: var(--sistra-dark);">No tienes propuestas para revisar.</div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# Pie de página con leyenda del semáforo y paginación #}
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--sistra-muted); flex-wrap: wrap; gap: 10px;">
+            <div>
+                Semáforo en propuestas En revisión:
+                <span class="sw" style="background:#CFEBD8"></span>0 a {{ limite_verde|default:7 }} días
+                <span class="sw" style="background:#FBE7A6"></span>{{ limite_verde|add:1|default:8 }} a {{ limite_amarillo|default:14 }} días
+                <span class="sw" style="background:#F6C5BF"></span>{{ limite_rojo|default:15 }}+ días.
+                <span class="ms-2">Aprobado y Rechazado: fondo neutro.</span>
+            </div>
+
+            {% if pagina_obj.has_other_pages %}
+                <nav aria-label="Paginación de propuestas">
+                    <ul class="pagination pagination-sm mb-0">
+                        {% if pagina_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ pagina_obj.previous_page_number }}{% if request.GET.buscar %}&buscar={{ request.GET.buscar|urlencode }}{% endif %}{% if request.GET.estado %}&estado={{ request.GET.estado|urlencode }}{% endif %}{% if request.GET.semaforo %}&semaforo={{ request.GET.semaforo|urlencode }}{% endif %}">Anterior</a>
+                            </li>
+                        {% endif %}
+                        {% for num in pagina_obj.paginator.page_range %}
+                            <li class="page-item {% if pagina_obj.number == num %}active{% endif %}">
+                                <a class="page-link" href="?page={{ num }}{% if request.GET.buscar %}&buscar={{ request.GET.buscar|urlencode }}{% endif %}{% if request.GET.estado %}&estado={{ request.GET.estado|urlencode }}{% endif %}{% if request.GET.semaforo %}&semaforo={{ request.GET.semaforo|urlencode }}{% endif %}">{{ num }}</a>
+                            </li>
+                        {% endfor %}
+                        {% if pagina_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ pagina_obj.next_page_number }}{% if request.GET.buscar %}&buscar={{ request.GET.buscar|urlencode }}{% endif %}{% if request.GET.estado %}&estado={{ request.GET.estado|urlencode }}{% endif %}{% if request.GET.semaforo %}&semaforo={{ request.GET.semaforo|urlencode }}{% endif %}">Siguiente</a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            {% endif %}
+        </div>
+</div>
+
+{# Inclusión de modales con diseño Figma y Bootstrap 5 #}
+{% include "propuestas/aprobacion/modales.html" %}
+
+{% endblock %}
+
+{% block js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // -------------------------------------------------------------
+    // 1. Instanciación de Modales Bootstrap 5
+    // -------------------------------------------------------------
+    const modalDetalle = new bootstrap.Modal(document.getElementById('modal-detalle'));
+    const modalDecision = new bootstrap.Modal(document.getElementById('modal-decision'));
+    const modalReactivar = new bootstrap.Modal(document.getElementById('modal-reactivar'));
+    const modalMasivo = new bootstrap.Modal(document.getElementById('modal-masivo'));
+    const modalBloqueo = new bootstrap.Modal(document.getElementById('modal-bloqueo'));
+
+    // Sesión expirada: el servidor redirige al Logueo (SISTRA-13); se vuelve a esta bandeja al entrar.
+    function irAlLogin(urlLogin) {
+        const destino = new URL(urlLogin, window.location.origin);
+        destino.searchParams.set('next', window.location.pathname + window.location.search);
+        window.location.assign(destino.toString());
+    }
+
+    // -------------------------------------------------------------
+    // Visor del documento PDF (EX-06)
+    // Se descarga como blob: X-Frame-Options (DENY) impide incrustar la URL directamente,
+    // y así se detectan errores y el tiempo agotado. Solo se previsualiza si es PDF.
+    // -------------------------------------------------------------
+    const TIEMPO_MAX_PDF_MS = 20000;
+    const visorPdf = {
+        iframe: document.getElementById('det-doc-iframe'),
+        cargando: document.getElementById('det-doc-cargando'),
+        alerta: document.getElementById('det-doc-alerta'),
+        alertaMsg: document.getElementById('det-doc-alerta-msg'),
+        btnReintentar: document.getElementById('det-doc-reintentar'),
+        estado: document.getElementById('det-doc-estado'),
+        url: '',
+        urlBlob: null,
+        controlador: null,
+
+        limpiar() {
+            if (this.controlador) this.controlador.abort();
+            this.controlador = null;
+            if (this.urlBlob) URL.revokeObjectURL(this.urlBlob);
+            this.urlBlob = null;
+            this.iframe.removeAttribute('src');
+            this.iframe.style.display = 'none';
+            this.cargando.style.display = 'none';
+            this.alerta.style.display = 'none';
+        },
+
+        mostrarAlerta(mensaje, reintentable) {
+            this.limpiar();
+            this.alertaMsg.textContent = mensaje;
+            this.btnReintentar.style.display = reintentable ? 'inline-flex' : 'none';
+            this.alerta.style.display = 'block';
+            this.estado.textContent = 'No disponible';
+        },
+
+        cargar(url) {
+            this.limpiar();
+            this.url = url;
+            this.cargando.style.display = 'flex';
+            this.estado.textContent = 'Cargando...';
+
+            const controlador = new AbortController();
+            this.controlador = controlador;
+            let tiempoAgotado = false;
+            const temporizador = setTimeout(() => {
+                tiempoAgotado = true;
+                controlador.abort();
+            }, TIEMPO_MAX_PDF_MS);
+
+            fetch(url, { signal: controlador.signal })
+                .then(res => {
+                    if (res.redirected) {
+                        irAlLogin(res.url);
+                        return null;
+                    }
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return res.blob();
+                })
+                .then(blob => {
+                    if (!blob || this.controlador !== controlador) return;
+                    if (blob.type !== 'application/pdf') {
+                        this.mostrarAlerta('La vista previa solo está disponible para documentos PDF. Descárguelo directamente.', false);
+                        return;
+                    }
+                    this.cargando.style.display = 'none';
+                    this.urlBlob = URL.createObjectURL(blob);
+                    this.iframe.src = this.urlBlob;
+                    this.iframe.style.display = 'block';
+                    this.estado.textContent = 'Vista previa';
+                })
+                .catch(err => {
+                    // Un abort sin tiempo agotado es porque se cerró el modal o se abrió otra propuesta.
+                    if (err.name === 'AbortError' && !tiempoAgotado) return;
+                    this.mostrarAlerta(
+                        tiempoAgotado
+                            ? 'Tiempo agotado. La carga del documento está tardando más de lo esperado. Presione Reintentar carga o descárguelo directamente.'
+                            : 'No fue posible previsualizar el documento. Presione Reintentar carga o descárguelo directamente.',
+                        true
+                    );
+                })
+                .finally(() => clearTimeout(temporizador));
+        },
+    };
+    visorPdf.btnReintentar.addEventListener('click', () => visorPdf.cargar(visorPdf.url));
+    document.getElementById('modal-detalle').addEventListener('hidden.bs.modal', () => visorPdf.limpiar());
+
+    // -------------------------------------------------------------
+    // Procesando (EX-01): bloquea botones y cierre del modal mientras se envía.
+    // -------------------------------------------------------------
+    function marcarProcesando(form, btnSubmit) {
+        const modal = form.closest('.modal');
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = '<span class="sp"></span> Procesando...';
+        form.querySelectorAll('[data-bs-dismiss="modal"]').forEach(b => { b.disabled = true; });
+        const aviso = form.querySelector('[data-procesando]');
+        if (aviso) aviso.style.display = 'block';
+        modal.dataset.procesando = 'true';
+    }
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('hide.bs.modal', e => {
+            if (modal.dataset.procesando === 'true') e.preventDefault();
+        });
+    });
+
+    // -------------------------------------------------------------
+    // EX-03 / MSG-02-05: Confirmar queda deshabilitado mientras falten obligatorios.
+    // -------------------------------------------------------------
+    const MSG_02_05 = '{{ msg_02_05|escapejs }}';
+    const MIN_OBS = 10;
+    const MAX_OBS = 1000;
+
+    function mensajeFaltante(cfg) {
+        const { obs: obsObligatoria, tipo: tipoObligatorio } = cfg.requisitos();
+        const largo = cfg.obs.value.trim().length;
+        if (cfg.obs.value.length > MAX_OBS) {
+            return 'El texto ingresado supera el límite máximo permitido de 1000 caracteres.';
+        }
+        const faltaTipo = tipoObligatorio && !cfg.tipo.value;
+        const faltaObs = obsObligatoria && largo < MIN_OBS;
+        if (!faltaTipo && !faltaObs) return '';
+        return faltaObs && largo > 0
+            ? `${MSG_02_05} La observación debe tener al menos ${MIN_OBS} caracteres.`
+            : MSG_02_05;
+    }
+
+    // mostrar=false al abrir: el botón se deshabilita sin pintar errores todavía.
+    function actualizarConfirmar(cfg, mostrar) {
+        const mensaje = mensajeFaltante(cfg);
+        cfg.btn.disabled = Boolean(mensaje);
+        cfg.btn.title = mensaje;
+        if (mostrar) {
+            cfg.errorDiv.textContent = mensaje;
+            cfg.errorDiv.style.display = mensaje ? 'flex' : 'none';
+            const { obs: obsObligatoria, tipo: tipoObligatorio } = cfg.requisitos();
+            cfg.obs.classList.toggle('er', Boolean(mensaje) && (obsObligatoria || cfg.obs.value.length > MAX_OBS));
+            if (cfg.tipo) cfg.tipo.classList.toggle('er', tipoObligatorio && !cfg.tipo.value);
+        } else {
+            cfg.errorDiv.style.display = 'none';
+            cfg.obs.classList.remove('er');
+            if (cfg.tipo) cfg.tipo.classList.remove('er');
+        }
+    }
+
+    function vigilarConfirmar(cfg) {
+        cfg.obs.addEventListener('input', () => actualizarConfirmar(cfg, true));
+        if (cfg.tipo) cfg.tipo.addEventListener('change', () => actualizarConfirmar(cfg, true));
+        return cfg;
+    }
+
+    const confirmarDecision = vigilarConfirmar({
+        btn: document.getElementById('btn-confirmar-decision'),
+        obs: document.getElementById('dec-obs'),
+        tipo: document.getElementById('dec-tipo-rechazo'),
+        errorDiv: document.getElementById('dec-error'),
+        requisitos: () => {
+            const estado = document.getElementById('dec-nuevo-estado').value;
+            return { obs: estado !== 'Aprobado', tipo: estado === 'Rechazado' };
+        },
+    });
+    const confirmarReactivar = vigilarConfirmar({
+        btn: document.getElementById('btn-confirmar-reactivar'),
+        obs: document.getElementById('rea-motivo'),
+        tipo: null,
+        errorDiv: document.getElementById('rea-error'),
+        requisitos: () => ({ obs: true, tipo: false }),
+    });
+    const confirmarMasivo = vigilarConfirmar({
+        btn: document.getElementById('btn-confirmar-masivo'),
+        obs: document.getElementById('mas-obs'),
+        tipo: document.getElementById('mas-tipo-rechazo'),
+        errorDiv: document.getElementById('mas-error'),
+        requisitos: () => {
+            const accion = document.getElementById('mas-accion').value;
+            return { obs: accion !== 'aprobar', tipo: accion === 'rechazar' };
+        },
+    });
+
+    // -------------------------------------------------------------
+    // 2. Filtros con auto-envío
+    // -------------------------------------------------------------
+    const formFiltros = document.getElementById('form-filtros');
+    const indicadorTabla = document.getElementById('tbl-cargando');
+    const mostrarCargandoTabla = () => indicadorTabla.classList.add('activo');
+
+    const cmbEstado = document.getElementById('cmb-est');
+    const cmbDias = document.getElementById('cmb-dias');
+    [cmbEstado, cmbDias].forEach(sel => {
+        if (sel) {
+            sel.addEventListener('change', () => {
+                mostrarCargandoTabla();
+                formFiltros.submit();
+            });
+        }
+    });
+    formFiltros.addEventListener('submit', mostrarCargandoTabla);
+    document.querySelectorAll('.pagination a.page-link').forEach(a => a.addEventListener('click', mostrarCargandoTabla));
+    // Al volver con "Atrás" el navegador puede restaurar la página con el indicador visible.
+    window.addEventListener('pageshow', () => indicadorTabla.classList.remove('activo'));
+
+    // TXT-BUSQ-GEN · filtra en tiempo real: se envía al dejar de escribir.
+    const ESPERA_BUSQUEDA_MS = 500;
+    const CLAVE_FOCO_BUSQUEDA = 'sistra02.busqueda-en-vivo';
+    const txtBusqueda = document.getElementById('txt-busq-gen');
+    if (txtBusqueda) {
+        const valorInicial = txtBusqueda.value.trim();
+        let temporizadorBusqueda = null;
+        txtBusqueda.addEventListener('input', () => {
+            clearTimeout(temporizadorBusqueda);
+            temporizadorBusqueda = setTimeout(() => {
+                if (txtBusqueda.value.trim() === valorInicial) return;
+                try { sessionStorage.setItem(CLAVE_FOCO_BUSQUEDA, '1'); } catch (e) { /* sin almacenamiento */ }
+                mostrarCargandoTabla();
+                formFiltros.submit();
+            }, ESPERA_BUSQUEDA_MS);
+        });
+        // Tras recargar por la búsqueda en vivo se devuelve el foco al campo, con el cursor al final.
+        let volverAlCampo = false;
+        try {
+            volverAlCampo = sessionStorage.getItem(CLAVE_FOCO_BUSQUEDA) === '1';
+            sessionStorage.removeItem(CLAVE_FOCO_BUSQUEDA);
+        } catch (e) { /* sin almacenamiento */ }
+        if (volverAlCampo) {
+            txtBusqueda.focus();
+            const fin = txtBusqueda.value.length;
+            txtBusqueda.setSelectionRange(fin, fin);
+        }
+    }
+
+    // -------------------------------------------------------------
+    // 3. Selección masiva y botones de acción (Regla RN-02-03)
+    // -------------------------------------------------------------
+    const chkTodos = document.getElementById('chk-todos');
+    const chkFilas = document.querySelectorAll('.chk-fila:not(:disabled)');
+    const contadorSel = document.getElementById('contador-seleccionadas');
+    const btnMasivoAprobar = document.getElementById('btn-masivo-aprobar');
+    const btnMasivoRechazar = document.getElementById('btn-masivo-rechazar');
+    const btnMasivoReactivar = document.getElementById('btn-masivo-reactivar');
+
+    function actualizarAccionesMasivas() {
+        const seleccionadas = Array.from(chkFilas).filter(c => c.checked);
+        const total = seleccionadas.length;
+
+        if (contadorSel) {
+            contadorSel.textContent = `${total} seleccionada${total === 1 ? '' : 's'}`;
+        }
+
+        if (total === 0) {
+            [btnMasivoAprobar, btnMasivoRechazar, btnMasivoReactivar].forEach(btn => {
+                if (btn) btn.disabled = true;
+            });
+            return;
+        }
+
+        const estados = seleccionadas.map(c => c.dataset.estado);
+        const todasEnRevision = estados.every(e => e === 'En revisión');
+        const todasRechazadas = estados.every(e => e === 'Rechazado');
+
+        if (btnMasivoAprobar) btnMasivoAprobar.disabled = !todasEnRevision;
+        if (btnMasivoRechazar) btnMasivoRechazar.disabled = !todasEnRevision;
+        if (btnMasivoReactivar) btnMasivoReactivar.disabled = !todasRechazadas;
+    }
+
+    if (chkTodos) {
+        chkTodos.addEventListener('change', function () {
+            chkFilas.forEach(c => c.checked = chkTodos.checked);
+            actualizarAccionesMasivas();
+        });
+    }
+    chkFilas.forEach(c => c.addEventListener('change', actualizarAccionesMasivas));
+
+    // -------------------------------------------------------------
+    // 4. Ver Detalle (Carga perezosa JSON, vista previa PDF e historial)
+    // -------------------------------------------------------------
+    document.querySelectorAll('.btn-detalle').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const idPropuesta = this.dataset.id;
+
+            // Restablecer a la primera pestaña (Ficha y Documento)
+            const tabFichaBtn = document.getElementById('tab-ficha-btn');
+            if (tabFichaBtn) {
+                bootstrap.Tab.getOrCreateInstance(tabFichaBtn).show();
+            }
+
+            modalDetalle.show();
+
+            cargarDetalle(idPropuesta);
+        });
+    });
+
+    function cargarDetalle(idPropuesta) {
+            const loading = document.getElementById('det-loading');
+            const body = document.getElementById('det-body');
+            loading.innerHTML = `
+                <span class="sp" style="width: 32px; height: 32px; border-width: 3px; border-color: #C9CEDA; border-top-color: #1B3A8A;"></span>
+                <div class="s">Cargando información de la propuesta...</div>
+            `;
+            loading.style.display = 'flex';
+            body.style.display = 'none';
+
+            fetch(`/propuestas/aprobacion/${idPropuesta}/detalle/`)
+                .then(res => {
+                    if (res.redirected) {
+                        irAlLogin(res.url);
+                        return null;
+                    }
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return res.json();
+                })
+                .then(data => {
+                    if (!data) return;
+                    document.getElementById('det-subtitulo').textContent = `${data.codigo} · Última modificación ${data.fecha_envio}`;
+                    
+                    const badge = document.getElementById('det-badge-estado');
+                    badge.textContent = data.estado;
+                    if (data.estado === 'Aprobado') {
+                        badge.style.background = '#DDF3E4';
+                        badge.style.color = '#14612F';
+                    } else if (data.estado === 'Rechazado') {
+                        badge.style.background = '#FBE3E0';
+                        badge.style.color = '#8E1C12';
+                    } else if (data.estado === 'Requiere modificación') {
+                        badge.style.background = '#FFE8D6';
+                        badge.style.color = '#8F3E00';
+                    } else {
+                        badge.style.background = '#FFF1C2';
+                        badge.style.color = '#6B4A00';
+                    }
+                    
+                    // 1. Ficha general (Pestaña 1)
+                    document.getElementById('det-dias-texto').textContent = `${data.semaforo ? data.semaforo.dias : '0'} días`;
+                    document.getElementById('det-est-nombre').value = (data.estudiante && data.estudiante.nombre) || 'No registrado';
+                    document.getElementById('det-est-cedula').value = (data.estudiante && data.estudiante.cedula) || 'No registrado';
+                    document.getElementById('det-est-programa').value = (data.estudiante && data.estudiante.programa) || data.programa || 'No registrado';
+                    document.getElementById('det-titulo').value = data.titulo || 'Sin título registrado';
+                    document.getElementById('det-descripcion').value = data.objetivos || data.justificacion || 'No registrado';
+                    document.getElementById('det-entidad').value = data.entidad || 'No registrada';
+                    document.getElementById('det-sector-entidad').value = data.sector_entidad || 'No registrado';
+                    
+                    const fechasCrono = data.cronograma && data.cronograma.length > 0;
+                    document.getElementById('det-fecha-inicio').value = data.fecha_inicio || (fechasCrono ? data.cronograma[0].fecha_inicio : 'No registrado');
+                    document.getElementById('det-fecha-fin').value = data.fecha_fin || (fechasCrono ? data.cronograma[data.cronograma.length - 1].fecha_fin : 'No registrado');
+
+                    // Visor y descarga de documento PDF (EX-06)
+                    const btnDescargar = document.getElementById('det-btn-descargar');
+                    document.getElementById('det-doc-nombre').textContent = `propuesta_${data.codigo}.pdf`;
+                    if (data.tiene_documento) {
+                        btnDescargar.classList.remove('disabled');
+                        btnDescargar.style.opacity = '1';
+                        btnDescargar.style.pointerEvents = 'auto';
+                        btnDescargar.href = `/propuestas/aprobacion/${data.id_propuesta}/documento/`;
+                        visorPdf.cargar(btnDescargar.href);
+                    } else {
+                        btnDescargar.classList.add('disabled');
+                        btnDescargar.style.opacity = '0.5';
+                        btnDescargar.style.pointerEvents = 'none';
+                        btnDescargar.href = '#';
+                        visorPdf.mostrarAlerta('El documento PDF adjunto no se encuentra disponible en el servidor.', false);
+                    }
+
+                    // 2. Contenido detallado del proyecto (Pestaña 2)
+                    document.getElementById('det-objetivos-full').value = data.objetivos || 'Sin objetivos registrados en el formulario.';
+                    document.getElementById('det-justificacion-full').value = data.justificacion || 'Sin justificación registrada en el formulario.';
+                    document.getElementById('det-necesidad').value = data.identificacion_necesidad || 'Sin necesidad identificada.';
+                    document.getElementById('det-resena').value = data.resena_historica || 'Sin reseña histórica registrada.';
+                    document.getElementById('det-referente').value = data.referente_teorico || 'Sin referentes teóricos registrados.';
+                    document.getElementById('det-impacto').value = data.impacto_social || 'Sin impacto social registrado.';
+                    document.getElementById('det-propuesta-social').value = data.propuesta_social || 'Sin propuesta social registrada.';
+                    document.getElementById('det-poblacion-beneficiada').value = data.poblacion_beneficiada || 'No especificada';
+                    document.getElementById('det-identificacion-poblacion').value = data.identificacion_poblacion || 'No especificada';
+                    document.getElementById('det-zona').value = data.zona || 'No registrada';
+                    document.getElementById('det-area').value = data.area || 'No registrada';
+                    document.getElementById('det-sector-ubi').value = data.sector || 'No registrado';
+                    document.getElementById('det-unidad').value = data.unidad || 'No registrada';
+
+                    // 3. Cronograma de actividades (Pestaña 3)
+                    const cronoBadge = document.getElementById('det-crono-badge');
+                    const cronoTbody = document.getElementById('det-cronograma-tbody');
+                    const cronoVacio = document.getElementById('det-cronograma-vacio');
+                    cronoTbody.innerHTML = '';
+                    if (data.cronograma && data.cronograma.length > 0) {
+                        cronoBadge.textContent = data.cronograma.length;
+                        cronoVacio.style.display = 'none';
+                        data.cronograma.forEach(act => {
+                            const tr = document.createElement('tr');
+                            [
+                                ['text-center fw-semibold text-muted', act.orden],
+                                ['fw-semibold text-dark', act.nombre],
+                                ['text-secondary', act.descripcion || '-'],
+                                ['text-nowrap', act.fecha_inicio || '-'],
+                                ['text-nowrap', act.fecha_fin || '-'],
+                                ['text-secondary', act.responsable || '-'],
+                            ].forEach(([clase, valor]) => {
+                                const td = document.createElement('td');
+                                td.className = clase;
+                                td.textContent = valor;
+                                tr.appendChild(td);
+                            });
+                            cronoTbody.appendChild(tr);
+                        });
+                    } else {
+                        cronoBadge.textContent = '0';
+                        cronoVacio.style.display = 'block';
+                    }
+
+                    // 4. Historial de revisiones (Pestaña 4)
+                    const histBadge = document.getElementById('det-hist-badge');
+                    const historialContainer = document.getElementById('det-historial-lista');
+                    historialContainer.innerHTML = '';
+                    if (data.historial && data.historial.length > 0) {
+                        histBadge.textContent = data.historial.length;
+                        data.historial.forEach(h => {
+                            const fila = document.createElement('div');
+                            fila.className = 'hi';
+                            [
+                                ['s', 'color: var(--sistra-muted);', h.fecha_hora],
+                                ['ch', '', h.tipo_accion],
+                                ['fw-medium text-dark', 'min-width: 140px;', h.usuario],
+                                ['', 'color: var(--sistra-dark);', h.observacion || h.motivo_reactivacion || 'Sin observaciones registradas'],
+                            ].forEach(([clase, estilo, valor]) => {
+                                const span = document.createElement('span');
+                                if (clase) span.className = clase;
+                                if (estilo) span.style.cssText = estilo;
+                                span.textContent = valor;
+                                fila.appendChild(span);
+                            });
+                            historialContainer.appendChild(fila);
+                        });
+                    } else {
+                        histBadge.textContent = '0';
+                        historialContainer.innerHTML = '<div class="s" style="padding: 10px 0; border-top: 1px solid var(--sistra-border); color: var(--sistra-muted);">Esta propuesta aún no registra revisiones ni observaciones previas.</div>';
+                    }
+
+                    loading.style.display = 'none';
+                    body.style.display = 'block';
+                })
+                .catch(err => {
+                    console.error('Error al cargar detalle:', err);
+                    loading.innerHTML = '<div class="al"><div class="m">Error al cargar la información de la propuesta. Por favor intente nuevamente.</div></div>';
+                    const btnReintentar = document.createElement('button');
+                    btnReintentar.type = 'button';
+                    btnReintentar.className = 'b g';
+                    btnReintentar.textContent = 'Reintentar';
+                    btnReintentar.addEventListener('click', () => cargarDetalle(idPropuesta));
+                    loading.appendChild(btnReintentar);
+                });
+    }
+
+    // -------------------------------------------------------------
+    // 5. Botones bloqueados (MSG-14)
+    // -------------------------------------------------------------
+    document.querySelectorAll('.btn-bloqueado').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const motivo = this.dataset.motivo;
+            if (motivo) {
+                document.getElementById('bloq-mensaje').textContent = motivo;
+            }
+            modalBloqueo.show();
+        });
+    });
+
+    // -------------------------------------------------------------
+    // 6. Slider de 3 estados (Aprobar, Modificar, Rechazar)
+    // -------------------------------------------------------------
+    document.querySelectorAll('.btn-sl').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const sl = this.closest('.sl');
+            const idPropuesta = sl.dataset.id;
+            const codigo = sl.dataset.codigo;
+            const estudiante = sl.dataset.estudiante;
+            const estadoActual = sl.dataset.estado;
+            const targetEstado = this.dataset.target;
+
+            // Si se pulsa el estado que ya tiene activo, no hace nada
+            if (estadoActual === targetEstado) return;
+
+            const form = document.getElementById('form-decision');
+            form.action = `/propuestas/aprobacion/${idPropuesta}/decidir/`;
+            document.getElementById('dec-nuevo-estado').value = targetEstado;
+            document.getElementById('dec-subtitulo').textContent = `${codigo} · ${estudiante}`;
+
+            const banner = document.getElementById('dec-banner');
+            const grupoTipoRechazo = document.getElementById('dec-grupo-tipo-rechazo');
+            const labelObs = document.getElementById('dec-label-obs');
+            const txtObs = document.getElementById('dec-obs');
+            const btnSubmit = document.getElementById('btn-confirmar-decision');
+            const errorDiv = document.getElementById('dec-error');
+
+            txtObs.value = '';
+            txtObs.classList.remove('er');
+            errorDiv.style.display = 'none';
+            document.getElementById('dec-contador').textContent = '0 / 1000';
+
+            if (targetEstado === 'Aprobado') {
+                document.getElementById('dec-titulo').textContent = 'Confirmar Aprobación de Propuesta(s)';
+                banner.className = 'i iv';
+                banner.style.background = '#E6F5EA';
+                banner.style.color = '#14612F';
+                banner.style.border = '1px solid #1E7D3E';
+                banner.textContent = 'La propuesta pasará al proceso de cargue al sistema UP y se notificará al estudiante.';
+                grupoTipoRechazo.style.display = 'none';
+                labelObs.textContent = 'Observaciones (opcional)';
+                txtObs.placeholder = 'Escriba una observación para el estudiante';
+                btnSubmit.className = 'b v';
+                btnSubmit.textContent = 'Confirmar Aprobación';
+            } else if (targetEstado === 'Requiere modificación') {
+                document.getElementById('dec-titulo').textContent = 'Enviar Propuesta a Modificación';
+                banner.className = 'i ib';
+                banner.style.background = '#FFF1C2';
+                banner.style.color = '#4A3300';
+                banner.style.border = '1px solid #F2B01E';
+                banner.textContent = 'La propuesta retornará al estudiante para correcciones. El semáforo se detiene hasta que el estudiante la reenvíe.';
+                grupoTipoRechazo.style.display = 'none';
+                labelObs.textContent = 'Correcciones o motivo (obligatorio)';
+                txtObs.placeholder = 'Detalle los ajustes que debe realizar el estudiante';
+                btnSubmit.className = 'b o';
+                btnSubmit.textContent = 'Confirmar y Notificar';
+            } else if (targetEstado === 'Rechazado') {
+                document.getElementById('dec-titulo').textContent = 'Confirmar Rechazo de Propuesta(s)';
+                banner.className = 'i ir';
+                banner.style.background = '#FBE3E0';
+                banner.style.color = '#8E1C12';
+                banner.style.border = '1px solid #B42318';
+                banner.textContent = 'Esta acción detendrá el semáforo y pausará el trámite. Si fue por error, podrá reactivarla antes de que se archive.';
+                grupoTipoRechazo.style.display = 'block';
+                labelObs.textContent = 'Observación (obligatoria)';
+                txtObs.placeholder = 'Registre el motivo del rechazo';
+                btnSubmit.className = 'b x';
+                btnSubmit.textContent = 'Confirmar Rechazo';
+            }
+
+            document.getElementById('dec-tipo-rechazo').value = '';
+            actualizarConfirmar(confirmarDecision, false);
+            modalDecision.show();
+        });
+    });
+
+    // Validación del formulario individual antes de enviar
+    const formDecision = document.getElementById('form-decision');
+    formDecision.addEventListener('submit', function (e) {
+        if (mensajeFaltante(confirmarDecision)) {
+            e.preventDefault();
+            actualizarConfirmar(confirmarDecision, true);
+            return;
+        }
+
+        marcarProcesando(formDecision, document.getElementById('btn-confirmar-decision'));
+    });
+
+    // Contador de caracteres para formulario individual
+    const txtObsDec = document.getElementById('dec-obs');
+    const contadorDec = document.getElementById('dec-contador');
+    txtObsDec.addEventListener('input', function () {
+        const len = this.value.length;
+        contadorDec.textContent = `${len} / 1000`;
+        if (len > 1000) {
+            contadorDec.style.color = 'var(--sistra-red)';
+            contadorDec.style.fontWeight = '600';
+        } else {
+            contadorDec.style.color = 'var(--sistra-muted)';
+            contadorDec.style.fontWeight = 'normal';
+        }
+    });
+
+    // -------------------------------------------------------------
+    // 7. Reactivación Individual (Rechazada -> En revisión)
+    // -------------------------------------------------------------
+    document.querySelectorAll('.btn-reactivar').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const idPropuesta = this.dataset.id;
+            const codigo = this.dataset.codigo;
+            const estudiante = this.dataset.estudiante;
+            const dias = this.dataset.dias || '0';
+
+            const form = document.getElementById('form-reactivar');
+            form.action = `/propuestas/aprobacion/${idPropuesta}/reactivar/`;
+            document.getElementById('rea-subtitulo').textContent = `${codigo} · ${estudiante}`;
+            document.getElementById('rea-dias').textContent = dias;
+
+            const txtMotivo = document.getElementById('rea-motivo');
+            txtMotivo.value = '';
+            txtMotivo.classList.remove('er');
+            document.getElementById('rea-error').style.display = 'none';
+            document.getElementById('rea-contador').textContent = '0 / 1000';
+
+            actualizarConfirmar(confirmarReactivar, false);
+            modalReactivar.show();
+        });
+    });
+
+    const formReactivar = document.getElementById('form-reactivar');
+    formReactivar.addEventListener('submit', function (e) {
+        if (mensajeFaltante(confirmarReactivar)) {
+            e.preventDefault();
+            actualizarConfirmar(confirmarReactivar, true);
+            return;
+        }
+
+        marcarProcesando(formReactivar, document.getElementById('btn-confirmar-reactivar'));
+    });
+
+    const txtMotivoRea = document.getElementById('rea-motivo');
+    const contadorRea = document.getElementById('rea-contador');
+    txtMotivoRea.addEventListener('input', function () {
+        const len = this.value.length;
+        contadorRea.textContent = `${len} / 1000`;
+        if (len > 1000) {
+            contadorRea.style.color = 'var(--sistra-red)';
+            contadorRea.style.fontWeight = '600';
+        } else {
+            contadorRea.style.color = 'var(--sistra-muted)';
+            contadorRea.style.fontWeight = 'normal';
+        }
+    });
+
+    // -------------------------------------------------------------
+    // 8. Acciones Masivas
+    // -------------------------------------------------------------
+    function abrirModalMasivo(accion) {
+        const seleccionadas = Array.from(chkFilas).filter(c => c.checked).map(c => c.value);
+        if (seleccionadas.length === 0) return;
+
+        const contenedorIds = document.getElementById('mas-contenedor-ids');
+        contenedorIds.innerHTML = `<input type="hidden" name="propuestas_ids" value="${seleccionadas.join(',')}">`;
+
+        document.getElementById('mas-accion').value = accion;
+        document.getElementById('mas-subtitulo').textContent = `${seleccionadas.length} propuesta${seleccionadas.length === 1 ? '' : 's'} seleccionada${seleccionadas.length === 1 ? '' : 's'}`;
+
+        const banner = document.getElementById('mas-banner');
+        const grupoTipo = document.getElementById('mas-grupo-tipo-rechazo');
+        const labelObs = document.getElementById('mas-label-obs');
+        const txtObs = document.getElementById('mas-obs');
+        const btnSubmit = document.getElementById('btn-confirmar-masivo');
+        const errorDiv = document.getElementById('mas-error');
+
+        txtObs.value = '';
+        txtObs.classList.remove('er');
+        errorDiv.style.display = 'none';
+        document.getElementById('mas-contador').textContent = '0 / 1000';
+
+        if (accion === 'aprobar') {
+            document.getElementById('mas-titulo').textContent = 'Confirmar Aprobación de Propuesta(s)';
+            banner.className = 'i iv';
+            banner.style.background = '#E6F5EA';
+            banner.style.color = '#14612F';
+            banner.style.border = '1px solid #1E7D3E';
+            banner.textContent = 'Las propuestas seleccionadas pasarán al estado Aprobado y se notificará a los estudiantes.';
+            grupoTipo.style.display = 'none';
+            labelObs.textContent = 'Observaciones (opcional)';
+            txtObs.placeholder = 'Escriba una observación general';
+            btnSubmit.className = 'b v';
+            btnSubmit.textContent = 'Confirmar Aprobación';
+        } else if (accion === 'rechazar') {
+            document.getElementById('mas-titulo').textContent = 'Confirmar Rechazo de Propuesta(s)';
+            banner.className = 'i ir';
+            banner.style.background = '#FBE3E0';
+            banner.style.color = '#8E1C12';
+            banner.style.border = '1px solid #B42318';
+            banner.textContent = 'Esta acción detendrá el semáforo para todas las propuestas seleccionadas.';
+            grupoTipo.style.display = 'block';
+            labelObs.textContent = 'Observación (obligatoria)';
+            txtObs.placeholder = 'Registre el motivo del rechazo';
+            btnSubmit.className = 'b x';
+            btnSubmit.textContent = 'Confirmar Rechazo';
+        } else if (accion === 'reactivar') {
+            document.getElementById('mas-titulo').textContent = 'Confirmar Reactivación de Propuesta(s)';
+            banner.className = 'i ib';
+            banner.style.background = '#E4EAF8';
+            banner.style.color = '#1B3A8A';
+            banner.style.border = '1px solid #1B3A8A';
+            banner.textContent = 'Las propuestas retornarán a En revisión conservando su semáforo previo.';
+            grupoTipo.style.display = 'none';
+            labelObs.textContent = 'Justificación de reactivación (obligatoria)';
+            txtObs.placeholder = 'Escriba la justificación para auditoría';
+            btnSubmit.className = 'b p';
+            btnSubmit.textContent = 'Confirmar Reactivación';
+        }
+
+        document.getElementById('mas-tipo-rechazo').value = '';
+        actualizarConfirmar(confirmarMasivo, false);
+        modalMasivo.show();
+    }
+
+    if (btnMasivoAprobar) btnMasivoAprobar.addEventListener('click', () => abrirModalMasivo('aprobar'));
+    if (btnMasivoRechazar) btnMasivoRechazar.addEventListener('click', () => abrirModalMasivo('rechazar'));
+    if (btnMasivoReactivar) btnMasivoReactivar.addEventListener('click', () => abrirModalMasivo('reactivar'));
+
+    const formMasivo = document.getElementById('form-masivo');
+    formMasivo.addEventListener('submit', function (e) {
+        if (mensajeFaltante(confirmarMasivo)) {
+            e.preventDefault();
+            actualizarConfirmar(confirmarMasivo, true);
+            return;
+        }
+
+        marcarProcesando(formMasivo, document.getElementById('btn-confirmar-masivo'));
+    });
+
+    const txtObsMas = document.getElementById('mas-obs');
+    const contadorMas = document.getElementById('mas-contador');
+    txtObsMas.addEventListener('input', function () {
+        const len = this.value.length;
+        contadorMas.textContent = `${len} / 1000`;
+        if (len > 1000) {
+            contadorMas.style.color = 'var(--sistra-red)';
+            contadorMas.style.fontWeight = '600';
+        } else {
+            contadorMas.style.color = 'var(--sistra-muted)';
+            contadorMas.style.fontWeight = 'normal';
+        }
+    });
+});
+</script>
+{% endblock %}
