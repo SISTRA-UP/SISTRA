@@ -17,7 +17,7 @@ import mimetypes
 from pathlib import Path
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse, JsonResponse
@@ -76,20 +76,8 @@ def bandeja(request: HttpRequest) -> HttpResponse:
     """Bandeja principal de propuestas asignadas a la carrera activa del Director."""
     asignacion = _carrera_activa_del_director(request.user)
     if not asignacion:
-        messages.warning(
-            request,
-            'No tienes asignada una carrera activa como Director en este momento.',
-        )
-        return render(
-            request,
-            'propuestas/aprobacion/bandeja.html',
-            {
-                'asignacion': None,
-                'propuestas_con_meta': [],
-                'form_filtro': FiltroBandejaPropuestasForm(),
-                'total_propuestas': 0,
-            },
-        )
+        # Sin carrera activa como Director no hay acceso, igual que en el detalle.
+        raise PermissionDenied
 
     form_filtro = FiltroBandejaPropuestasForm(request.GET)
     carrera = asignacion.carrera

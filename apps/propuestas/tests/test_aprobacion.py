@@ -994,15 +994,20 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn('login', response.url)
 
-    def test_bandeja_director_sin_carrera_activa_muestra_aviso(self):
-        """Si el usuario autenticado no tiene asignación activa de director, avisa sin romper."""
+    def test_bandeja_director_sin_carrera_activa_recibe_403(self):
+        """Un Director sin asignación de carrera activa no puede entrar a la bandeja (403)."""
         self.asignacion_director.activo = False
         self.asignacion_director.save()
 
         self.client.force_login(self.user_director)
         response = self.client.get(reverse('propuestas:aprobacion'))
-        self.assertEqual(response.status_code, 200)
-        self.assertIn('No tienes asignada una carrera activa', response.content.decode('utf-8'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_bandeja_estudiante_autenticado_recibe_403(self):
+        """Un estudiante autenticado no puede entrar a la bandeja del Director (403)."""
+        self.client.force_login(self.estudiante_1.usuario)
+        response = self.client.get(reverse('propuestas:aprobacion'))
+        self.assertEqual(response.status_code, 403)
 
     def test_bandeja_excluye_borradores_y_propuestas_de_otra_carrera(self):
         """La bandeja solo lista propuestas en trámite de la carrera activa (RN-02-01)."""
