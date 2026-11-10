@@ -153,11 +153,25 @@
 
     /* Tabla con Grid del Mockup */
     .tabla-contenedor {
+        position: relative;
         background: #F5F6F9;
         border: 1px solid #D5D9E2;
         border-radius: 10px;
         overflow-x: auto;
     }
+    /* Indicador mientras la tabla se recarga (BRD: estado de carga). */
+    .tabla-cargando {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: 80px;
+        gap: 10px;
+        background: rgba(245, 246, 249, .85);
+        z-index: 2;
+    }
+    .tabla-cargando.activo { display: flex; }
     .tabla-grid {
         min-width: 1290px;
     }
@@ -503,6 +517,10 @@
 
         {# Tabla principal con estructura y diseño Figma #}
         <div class="tabla-contenedor">
+            <div class="tabla-cargando" id="tbl-cargando" role="status" aria-live="polite">
+                <span class="sp" style="width: 28px; height: 28px; border-width: 3px; border-color: #C9CEDA; border-top-color: #1B3A8A;"></span>
+                <div class="s">Cargando propuestas...</div>
+            </div>
             <div class="tabla-grid" id="tbl-propuestas">
                 {# Fila de encabezado #}
                 <div class="r h">
@@ -657,17 +675,17 @@
                     <ul class="pagination pagination-sm mb-0">
                         {% if pagina_obj.has_previous %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ pagina_obj.previous_page_number }}{% if request.GET.buscar %}&buscar={{ request.GET.buscar }}{% endif %}{% if request.GET.estado %}&estado={{ request.GET.estado }}{% endif %}{% if request.GET.semaforo %}&semaforo={{ request.GET.semaforo }}{% endif %}">Anterior</a>
+                                <a class="page-link" href="?page={{ pagina_obj.previous_page_number }}{% if request.GET.buscar %}&buscar={{ request.GET.buscar|urlencode }}{% endif %}{% if request.GET.estado %}&estado={{ request.GET.estado|urlencode }}{% endif %}{% if request.GET.semaforo %}&semaforo={{ request.GET.semaforo|urlencode }}{% endif %}">Anterior</a>
                             </li>
                         {% endif %}
                         {% for num in pagina_obj.paginator.page_range %}
                             <li class="page-item {% if pagina_obj.number == num %}active{% endif %}">
-                                <a class="page-link" href="?page={{ num }}{% if request.GET.buscar %}&buscar={{ request.GET.buscar }}{% endif %}{% if request.GET.estado %}&estado={{ request.GET.estado }}{% endif %}{% if request.GET.semaforo %}&semaforo={{ request.GET.semaforo }}{% endif %}">{{ num }}</a>
+                                <a class="page-link" href="?page={{ num }}{% if request.GET.buscar %}&buscar={{ request.GET.buscar|urlencode }}{% endif %}{% if request.GET.estado %}&estado={{ request.GET.estado|urlencode }}{% endif %}{% if request.GET.semaforo %}&semaforo={{ request.GET.semaforo|urlencode }}{% endif %}">{{ num }}</a>
                             </li>
                         {% endfor %}
                         {% if pagina_obj.has_next %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ pagina_obj.next_page_number }}{% if request.GET.buscar %}&buscar={{ request.GET.buscar }}{% endif %}{% if request.GET.estado %}&estado={{ request.GET.estado }}{% endif %}{% if request.GET.semaforo %}&semaforo={{ request.GET.semaforo }}{% endif %}">Siguiente</a>
+                                <a class="page-link" href="?page={{ pagina_obj.next_page_number }}{% if request.GET.buscar %}&buscar={{ request.GET.buscar|urlencode }}{% endif %}{% if request.GET.estado %}&estado={{ request.GET.estado|urlencode }}{% endif %}{% if request.GET.semaforo %}&semaforo={{ request.GET.semaforo|urlencode }}{% endif %}">Siguiente</a>
                             </li>
                         {% endif %}
                     </ul>
@@ -881,13 +899,53 @@ document.addEventListener('DOMContentLoaded', function () {
     // -------------------------------------------------------------
     // 2. Filtros con auto-envío
     // -------------------------------------------------------------
+    const formFiltros = document.getElementById('form-filtros');
+    const indicadorTabla = document.getElementById('tbl-cargando');
+    const mostrarCargandoTabla = () => indicadorTabla.classList.add('activo');
+
     const cmbEstado = document.getElementById('cmb-est');
     const cmbDias = document.getElementById('cmb-dias');
     [cmbEstado, cmbDias].forEach(sel => {
         if (sel) {
-            sel.addEventListener('change', () => document.getElementById('form-filtros').submit());
+            sel.addEventListener('change', () => {
+                mostrarCargandoTabla();
+                formFiltros.submit();
+            });
         }
     });
+    formFiltros.addEventListener('submit', mostrarCargandoTabla);
+    document.querySelectorAll('.pagination a.page-link').forEach(a => a.addEventListener('click', mostrarCargandoTabla));
+    // Al volver con "Atrás" el navegador puede restaurar la página con el indicador visible.
+    window.addEventListener('pageshow', () => indicadorTabla.classList.remove('activo'));
+
+    // TXT-BUSQ-GEN · filtra en tiempo real: se envía al dejar de escribir.
+    const ESPERA_BUSQUEDA_MS = 500;
+    const CLAVE_FOCO_BUSQUEDA = 'sistra02.busqueda-en-vivo';
+    const txtBusqueda = document.getElementById('txt-busq-gen');
+    if (txtBusqueda) {
+        const valorInicial = txtBusqueda.value.trim();
+        let temporizadorBusqueda = null;
+        txtBusqueda.addEventListener('input', () => {
+            clearTimeout(temporizadorBusqueda);
+            temporizadorBusqueda = setTimeout(() => {
+                if (txtBusqueda.value.trim() === valorInicial) return;
+                try { sessionStorage.setItem(CLAVE_FOCO_BUSQUEDA, '1'); } catch (e) { /* sin almacenamiento */ }
+                mostrarCargandoTabla();
+                formFiltros.submit();
+            }, ESPERA_BUSQUEDA_MS);
+        });
+        // Tras recargar por la búsqueda en vivo se devuelve el foco al campo, con el cursor al final.
+        let volverAlCampo = false;
+        try {
+            volverAlCampo = sessionStorage.getItem(CLAVE_FOCO_BUSQUEDA) === '1';
+            sessionStorage.removeItem(CLAVE_FOCO_BUSQUEDA);
+        } catch (e) { /* sin almacenamiento */ }
+        if (volverAlCampo) {
+            txtBusqueda.focus();
+            const fin = txtBusqueda.value.length;
+            txtBusqueda.setSelectionRange(fin, fin);
+        }
+    }
 
     // -------------------------------------------------------------
     // 3. Selección masiva y botones de acción (Regla RN-02-03)

@@ -65,6 +65,7 @@ from apps.propuestas.forms.aprobacion import (
 )
 from apps.propuestas.forms.aprobacion_masiva import AccionMasivaForm
 from apps.propuestas.models import ActividadCronograma, EstadoTramite, Propuesta
+from apps.propuestas.views.aprobacion import ELEMENTOS_POR_PAGINA
 from apps.seguimiento.models import Auditoria, HistorialEstado, Notificacion
 from apps.usuarios.models import Estado, Permiso, Rol, RolPermiso
 
@@ -1457,6 +1458,31 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.assertNotIn('det-doc-hoja', html)
         self.assertNotIn('Pág. 1 / 1', html)
         self.assertEqual(html.count('data-procesando style="display: none;"'), 3)
+
+    def test_paginacion_conserva_busqueda_con_caracteres_especiales(self):
+        """Los enlaces de página codifican la búsqueda: 'Peña & Cía' no se corta en el '&'."""
+        for i in range(ELEMENTOS_POR_PAGINA + 1):
+            estudiante = self._crear_estudiante(f'10985000{i:02d}', f'Estudiante Página {i}', self.carrera)
+            self.crear_propuesta(estudiante, f'PROP-PAG-{i:02d}', titulo=f'Proyecto Peña & Cía {i}')
+        self.client.force_login(self.user_director)
+
+        response = self.client.get(reverse('propuestas:aprobacion'), {'buscar': 'Peña & Cía'})
+        html = response.content.decode('utf-8')
+
+        self.assertEqual(response.context['total_propuestas'], ELEMENTOS_POR_PAGINA + 1)
+        self.assertIn('buscar=Pe%C3%B1a%20%26%20C%C3%ADa', html)
+        siguiente = self.client.get(
+            reverse('propuestas:aprobacion'), {'page': 2, 'buscar': 'Peña & Cía'}
+        )
+        self.assertEqual(len(siguiente.context['propuestas_con_meta']), 1)
+
+    def test_bandeja_busqueda_en_tiempo_real_y_carga_de_tabla(self):
+        """La búsqueda se envía sola al dejar de escribir (TXT-BUSQ-GEN) y la tabla tiene su indicador de carga."""
+        self.client.force_login(self.user_director)
+        html = self.client.get(reverse('propuestas:aprobacion')).content.decode('utf-8')
+
+        self.assertIn('ESPERA_BUSQUEDA_MS', html)
+        self.assertIn('id="tbl-cargando"', html)
 
     def test_bandeja_usa_msg_02_05_para_campos_obligatorios(self):
         """El aviso de campos vacíos de las ventanas es MSG-02-05 y sale de la constante de Python."""
