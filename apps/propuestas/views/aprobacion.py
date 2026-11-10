@@ -208,6 +208,8 @@ def bandeja(request: HttpRequest) -> HttpResponse:
         'asignacion': asignacion,
         'carrera': carrera,
         'form_filtro': form_filtro,
+        # Distingue "no hay propuestas" (BRD) de "los filtros no encontraron nada".
+        'hay_filtros': form_filtro.is_valid() and any(form_filtro.cleaned_data.values()),
         'pagina_obj': pagina_obj,
         'propuestas_con_meta': propuestas_con_meta,
         'total_propuestas': total_filtradas,

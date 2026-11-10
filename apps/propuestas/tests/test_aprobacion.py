@@ -1444,6 +1444,26 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         prop.refresh_from_db()
         self.assertEqual(prop.estado, EstadoTramite.APROBADO)
 
+    def test_bandeja_vacia_muestra_mensaje_del_brd_sin_filtros(self):
+        """Sin propuestas ni filtros se muestra el estado vacío del BRD, sin 'Restablecer filtros'."""
+        self.client.force_login(self.user_director)
+        html = self.client.get(reverse('propuestas:aprobacion')).content.decode('utf-8')
+
+        self.assertIn('No tienes propuestas para revisar.', html)
+        self.assertNotIn('Restablecer filtros', html)
+
+    def test_bandeja_vacia_con_filtros_ofrece_restablecerlos(self):
+        """Si los filtros no encuentran nada se explica y se ofrece restablecerlos."""
+        self.crear_propuesta(self.estudiante_1, 'PROP-VACIA-FILTRO')
+        self.client.force_login(self.user_director)
+        html = self.client.get(
+            reverse('propuestas:aprobacion'), {'buscar': 'texto-que-no-existe'}
+        ).content.decode('utf-8')
+
+        self.assertIn('que coincidan con los criterios seleccionados', html)
+        self.assertIn('Restablecer filtros', html)
+        self.assertNotIn('No tienes propuestas para revisar.', html)
+
     def test_acciones_post_sin_carrera_activa_responden_403(self):
         """Decidir, reactivar y la acción masiva niegan el acceso (403) sin carrera activa, sin cambios."""
         prop = self.crear_propuesta(self.estudiante_1, 'PROP-403-DEC')

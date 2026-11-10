@@ -630,9 +630,13 @@
                 {% empty %}
                     <div style="padding: 60px 20px; text-align: center; color: var(--sistra-muted);">
                         <div style="width: 44px; height: 44px; border-radius: 50%; background: #E4EAF8; color: #1B3A8A; font-weight: 700; line-height: 44px; margin: 0 auto 10px; font-size: 16px;">i</div>
-                        <div style="font-size: 15px; font-weight: 600; color: var(--sistra-dark); margin-bottom: 6px;">No se encontraron propuestas de {{ carrera.nombre|default:"la carrera" }} que coincidan con los criterios seleccionados</div>
-                        <p style="font-size: 13px; margin: 0 0 14px;">Puedes ajustar los filtros de búsqueda o restablecer la vista inicial.</p>
-                        <a href="{% url 'propuestas:aprobacion' %}" class="b g">Restablecer filtros</a>
+                        {% if hay_filtros %}
+                            <div style="font-size: 15px; font-weight: 600; color: var(--sistra-dark); margin-bottom: 6px;">No se encontraron propuestas de {{ carrera.nombre|default:"la carrera" }} que coincidan con los criterios seleccionados</div>
+                            <p style="font-size: 13px; margin: 0 0 14px;">Puedes ajustar los filtros de búsqueda o restablecer la vista inicial.</p>
+                            <a href="{% url 'propuestas:aprobacion' %}" class="b g">Restablecer filtros</a>
+                        {% else %}
+                            <div style="font-size: 15px; font-weight: 600; color: var(--sistra-dark);">No tienes propuestas para revisar.</div>
+                        {% endif %}
                     </div>
                 {% endfor %}
             </div>
