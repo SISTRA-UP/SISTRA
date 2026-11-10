@@ -693,6 +693,118 @@ document.addEventListener('DOMContentLoaded', function () {
     const modalMasivo = new bootstrap.Modal(document.getElementById('modal-masivo'));
     const modalBloqueo = new bootstrap.Modal(document.getElementById('modal-bloqueo'));
 
+    // Sesión expirada: el servidor redirige al Logueo (SISTRA-13); se vuelve a esta bandeja al entrar.
+    function irAlLogin(urlLogin) {
+        const destino = new URL(urlLogin, window.location.origin);
+        destino.searchParams.set('next', window.location.pathname + window.location.search);
+        window.location.assign(destino.toString());
+    }
+
+    // -------------------------------------------------------------
+    // Visor del documento PDF (EX-06)
+    // Se descarga como blob: X-Frame-Options (DENY) impide incrustar la URL directamente,
+    // y así se detectan errores y el tiempo agotado. Solo se previsualiza si es PDF.
+    // -------------------------------------------------------------
+    const TIEMPO_MAX_PDF_MS = 20000;
+    const visorPdf = {
+        iframe: document.getElementById('det-doc-iframe'),
+        cargando: document.getElementById('det-doc-cargando'),
+        alerta: document.getElementById('det-doc-alerta'),
+        alertaMsg: document.getElementById('det-doc-alerta-msg'),
+        btnReintentar: document.getElementById('det-doc-reintentar'),
+        estado: document.getElementById('det-doc-estado'),
+        url: '',
+        urlBlob: null,
+        controlador: null,
+
+        limpiar() {
+            if (this.controlador) this.controlador.abort();
+            this.controlador = null;
+            if (this.urlBlob) URL.revokeObjectURL(this.urlBlob);
+            this.urlBlob = null;
+            this.iframe.removeAttribute('src');
+            this.iframe.style.display = 'none';
+            this.cargando.style.display = 'none';
+            this.alerta.style.display = 'none';
+        },
+
+        mostrarAlerta(mensaje, reintentable) {
+            this.limpiar();
+            this.alertaMsg.textContent = mensaje;
+            this.btnReintentar.style.display = reintentable ? 'inline-flex' : 'none';
+            this.alerta.style.display = 'block';
+            this.estado.textContent = 'No disponible';
+        },
+
+        cargar(url) {
+            this.limpiar();
+            this.url = url;
+            this.cargando.style.display = 'flex';
+            this.estado.textContent = 'Cargando...';
+
+            const controlador = new AbortController();
+            this.controlador = controlador;
+            let tiempoAgotado = false;
+            const temporizador = setTimeout(() => {
+                tiempoAgotado = true;
+                controlador.abort();
+            }, TIEMPO_MAX_PDF_MS);
+
+            fetch(url, { signal: controlador.signal })
+                .then(res => {
+                    if (res.redirected) {
+                        irAlLogin(res.url);
+                        return null;
+                    }
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return res.blob();
+                })
+                .then(blob => {
+                    if (!blob || this.controlador !== controlador) return;
+                    if (blob.type !== 'application/pdf') {
+                        this.mostrarAlerta('La vista previa solo está disponible para documentos PDF. Descárguelo directamente.', false);
+                        return;
+                    }
+                    this.cargando.style.display = 'none';
+                    this.urlBlob = URL.createObjectURL(blob);
+                    this.iframe.src = this.urlBlob;
+                    this.iframe.style.display = 'block';
+                    this.estado.textContent = 'Vista previa';
+                })
+                .catch(err => {
+                    // Un abort sin tiempo agotado es porque se cerró el modal o se abrió otra propuesta.
+                    if (err.name === 'AbortError' && !tiempoAgotado) return;
+                    this.mostrarAlerta(
+                        tiempoAgotado
+                            ? 'Tiempo agotado. La carga del documento está tardando más de lo esperado. Presione Reintentar carga o descárguelo directamente.'
+                            : 'No fue posible previsualizar el documento. Presione Reintentar carga o descárguelo directamente.',
+                        true
+                    );
+                })
+                .finally(() => clearTimeout(temporizador));
+        },
+    };
+    visorPdf.btnReintentar.addEventListener('click', () => visorPdf.cargar(visorPdf.url));
+    document.getElementById('modal-detalle').addEventListener('hidden.bs.modal', () => visorPdf.limpiar());
+
+    // -------------------------------------------------------------
+    // Procesando (EX-01): bloquea botones y cierre del modal mientras se envía.
+    // -------------------------------------------------------------
+    function marcarProcesando(form, btnSubmit) {
+        const modal = form.closest('.modal');
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = '<span class="sp"></span> Procesando...';
+        form.querySelectorAll('[data-bs-dismiss="modal"]').forEach(b => { b.disabled = true; });
+        const aviso = form.querySelector('[data-procesando]');
+        if (aviso) aviso.style.display = 'block';
+        modal.dataset.procesando = 'true';
+    }
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('hide.bs.modal', e => {
+            if (modal.dataset.procesando === 'true') e.preventDefault();
+        });
+    });
+
     // -------------------------------------------------------------
     // 2. Filtros con auto-envío
     // -------------------------------------------------------------
@@ -752,15 +864,6 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.btn-detalle').forEach(btn => {
         btn.addEventListener('click', function () {
             const idPropuesta = this.dataset.id;
-            const loading = document.getElementById('det-loading');
-            const body = document.getElementById('det-body');
-
-            loading.innerHTML = `
-                <span class="sp" style="width: 32px; height: 32px; border-width: 3px; border-color: #C9CEDA; border-top-color: #1B3A8A;"></span>
-                <div class="s">Cargando información de la propuesta...</div>
-            `;
-            loading.style.display = 'flex';
-            body.style.display = 'none';
 
             // Restablecer a la primera pestaña (Ficha y Documento)
             const tabFichaBtn = document.getElementById('tab-ficha-btn');
@@ -770,12 +873,31 @@ document.addEventListener('DOMContentLoaded', function () {
 
             modalDetalle.show();
 
+            cargarDetalle(idPropuesta);
+        });
+    });
+
+    function cargarDetalle(idPropuesta) {
+            const loading = document.getElementById('det-loading');
+            const body = document.getElementById('det-body');
+            loading.innerHTML = `
+                <span class="sp" style="width: 32px; height: 32px; border-width: 3px; border-color: #C9CEDA; border-top-color: #1B3A8A;"></span>
+                <div class="s">Cargando información de la propuesta...</div>
+            `;
+            loading.style.display = 'flex';
+            body.style.display = 'none';
+
             fetch(`/propuestas/aprobacion/${idPropuesta}/detalle/`)
                 .then(res => {
+                    if (res.redirected) {
+                        irAlLogin(res.url);
+                        return null;
+                    }
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     return res.json();
                 })
                 .then(data => {
+                    if (!data) return;
                     document.getElementById('det-subtitulo').textContent = `${data.codigo} · Última modificación ${data.fecha_envio}`;
                     
                     const badge = document.getElementById('det-badge-estado');
@@ -808,30 +930,21 @@ document.addEventListener('DOMContentLoaded', function () {
                     document.getElementById('det-fecha-inicio').value = data.fecha_inicio || (fechasCrono ? data.cronograma[0].fecha_inicio : 'No registrado');
                     document.getElementById('det-fecha-fin').value = data.fecha_fin || (fechasCrono ? data.cronograma[data.cronograma.length - 1].fecha_fin : 'No registrado');
 
-                    // Visor y descarga de documento PDF
-                    const hoja = document.getElementById('det-doc-hoja');
-                    const alerta = document.getElementById('det-doc-alerta');
+                    // Visor y descarga de documento PDF (EX-06)
                     const btnDescargar = document.getElementById('det-btn-descargar');
-                    const filenameEl = document.getElementById('det-doc-nombre');
-                    const statusTxt = document.getElementById('det-doc-estado');
-
-                    filenameEl.textContent = `propuesta_${data.codigo}.pdf`;
+                    document.getElementById('det-doc-nombre').textContent = `propuesta_${data.codigo}.pdf`;
                     if (data.tiene_documento) {
-                        hoja.style.display = 'block';
-                        alerta.style.display = 'none';
-                        statusTxt.textContent = 'Pág. 1 / 1';
                         btnDescargar.classList.remove('disabled');
                         btnDescargar.style.opacity = '1';
                         btnDescargar.style.pointerEvents = 'auto';
                         btnDescargar.href = `/propuestas/aprobacion/${data.id_propuesta}/documento/`;
+                        visorPdf.cargar(btnDescargar.href);
                     } else {
-                        hoja.style.display = 'none';
-                        alerta.style.display = 'block';
-                        statusTxt.textContent = 'No disponible';
                         btnDescargar.classList.add('disabled');
                         btnDescargar.style.opacity = '0.5';
                         btnDescargar.style.pointerEvents = 'none';
                         btnDescargar.href = '#';
+                        visorPdf.mostrarAlerta('El documento PDF adjunto no se encuentra disponible en el servidor.', false);
                     }
 
                     // 2. Contenido detallado del proyecto (Pestaña 2)
@@ -913,9 +1026,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 .catch(err => {
                     console.error('Error al cargar detalle:', err);
                     loading.innerHTML = '<div class="al"><div class="m">Error al cargar la información de la propuesta. Por favor intente nuevamente.</div></div>';
+                    const btnReintentar = document.createElement('button');
+                    btnReintentar.type = 'button';
+                    btnReintentar.className = 'b g';
+                    btnReintentar.textContent = 'Reintentar';
+                    btnReintentar.addEventListener('click', () => cargarDetalle(idPropuesta));
+                    loading.appendChild(btnReintentar);
                 });
-        });
-    });
+    }
 
     // -------------------------------------------------------------
     // 5. Botones bloqueados (MSG-14)
@@ -1040,9 +1158,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const btnSubmit = document.getElementById('btn-confirmar-decision');
-        btnSubmit.disabled = true;
-        btnSubmit.innerHTML = '<span class="sp"></span> Procesando...';
+        marcarProcesando(formDecision, document.getElementById('btn-confirmar-decision'));
     });
 
     // Contador de caracteres para formulario individual
@@ -1100,9 +1216,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const btnSubmit = document.getElementById('btn-confirmar-reactivar');
-        btnSubmit.disabled = true;
-        btnSubmit.innerHTML = '<span class="sp"></span> Procesando...';
+        marcarProcesando(formReactivar, document.getElementById('btn-confirmar-reactivar'));
     });
 
     const txtMotivoRea = document.getElementById('rea-motivo');
@@ -1226,9 +1340,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const btnSubmit = document.getElementById('btn-confirmar-masivo');
-        btnSubmit.disabled = true;
-        btnSubmit.innerHTML = '<span class="sp"></span> Procesando...';
+        marcarProcesando(formMasivo, document.getElementById('btn-confirmar-masivo'));
     });
 
     const txtObsMas = document.getElementById('mas-obs');

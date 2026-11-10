@@ -1444,6 +1444,19 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         prop.refresh_from_db()
         self.assertEqual(prop.estado, EstadoTramite.APROBADO)
 
+    def test_bandeja_incluye_visor_real_del_pdf_y_avisos_de_procesando(self):
+        """El detalle trae el visor real del PDF (sin la hoja simulada ni 'Pág. 1 / 1' fijo)
+        con su carga y reintento, y cada ventana de confirmación su aviso de procesando."""
+        self.client.force_login(self.user_director)
+        html = self.client.get(reverse('propuestas:aprobacion')).content.decode('utf-8')
+
+        self.assertIn('id="det-doc-iframe"', html)
+        self.assertIn('Cargando documento PDF...', html)
+        self.assertIn('id="det-doc-reintentar"', html)
+        self.assertNotIn('det-doc-hoja', html)
+        self.assertNotIn('Pág. 1 / 1', html)
+        self.assertEqual(html.count('data-procesando style="display: none;"'), 3)
+
     def test_bandeja_vacia_muestra_mensaje_del_brd_sin_filtros(self):
         """Sin propuestas ni filtros se muestra el estado vacío del BRD, sin 'Restablecer filtros'."""
         self.client.force_login(self.user_director)

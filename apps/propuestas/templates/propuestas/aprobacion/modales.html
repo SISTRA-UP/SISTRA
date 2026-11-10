@@ -104,20 +104,24 @@
                                 <div style="display: flex; flex-direction: column; gap: 10px;">
                                     <div style="display: flex; justify-content: space-between; font-size: 13px; color: #4B5263;">
                                         <span id="det-doc-nombre">propuesta.pdf</span>
-                                        <span id="det-doc-estado">Pág. 1 / 1</span>
+                                        <span id="det-doc-estado"></span>
                                     </div>
 
                                     {# Contenedor de visor PDF #}
                                     <div class="vw" id="det-doc-visor" style="display: flex; align-items: center; justify-content: center; height: 330px; background: #E8EAF0; border-radius: 8px; overflow: hidden;">
-                                        {# Hoja de previsualización estilizada #}
-                                        <div class="pg" id="det-doc-hoja" style="width: 240px; height: 310px; margin: 10px auto; background: #fff; box-shadow: 0 2px 8px rgba(20,24,40,.2); padding: 22px; box-sizing: border-box;">
-                                            <div style="height: 14px; width: 70%; background: #9AA3B5; border-radius: 2px; margin-bottom: 18px;"></div>
-                                            <div style="height: 230px; background: repeating-linear-gradient(#fff 0 8px, #DDE1EA 8px 10px);"></div>
+                                        {# Vista previa real del documento (se carga como blob al abrir el detalle) #}
+                                        <iframe id="det-doc-iframe" title="Vista previa del documento de la propuesta" style="display: none; width: 100%; height: 100%; border: 0;"></iframe>
+
+                                        {# Cargando documento #}
+                                        <div id="det-doc-cargando" style="display: none; flex-direction: column; align-items: center; gap: 10px;">
+                                            <span class="sp" style="width: 32px; height: 32px; border-width: 3px; border-color: #C9CEDA; border-top-color: #1B3A8A;"></span>
+                                            <div class="s">Cargando documento PDF...</div>
                                         </div>
 
-                                        {# Alerta cuando no hay documento o falla la carga #}
+                                        {# Alerta cuando no hay documento, falla la carga o se agota el tiempo (EX-06) #}
                                         <div class="al" id="det-doc-alerta" style="display: none; background: #FBE3E0; border: 1px solid #B42318; border-radius: 8px; padding: 16px; width: 300px; text-align: center;">
                                             <div class="m" id="det-doc-alerta-msg">El documento PDF adjunto no se encuentra disponible en el servidor.</div>
+                                            <button type="button" class="b g" id="det-doc-reintentar" style="display: none; margin-top: 10px;">Reintentar carga</button>
                                         </div>
                                     </div>
 
@@ -288,6 +292,11 @@
                 <div class="n" id="dec-contador">0 / 1000</div>
 
                 {# Botones Cancelar y Confirmar #}
+                {# Aviso mientras se procesa (anti doble clic, EX-01) #}
+                <div class="i ib" data-procesando style="display: none;">
+                    Procesando solicitud... Por favor espere, la transacción ya se encuentra en ejecución.
+                </div>
+
                 <div class="f">
                     <button type="button" class="b g" data-bs-dismiss="modal" id="btn-cancelar-decision">Cancelar</button>
                     <button type="submit" class="b v" id="btn-confirmar-decision">Confirmar Aprobación</button>
@@ -321,6 +330,11 @@
                 </div>
 
                 <div class="n" id="rea-contador">0 / 1000</div>
+
+                {# Aviso mientras se procesa (anti doble clic, EX-01) #}
+                <div class="i ib" data-procesando style="display: none;">
+                    Procesando solicitud... Por favor espere, la transacción ya se encuentra en ejecución.
+                </div>
 
                 <div class="f">
                     <button type="button" class="b g" data-bs-dismiss="modal">Cancelar</button>
@@ -367,6 +381,11 @@
                 <div class="m" id="mas-error" style="display: none;"></div>
 
                 <div class="n" id="mas-contador">0 / 1000</div>
+
+                {# Aviso mientras se procesa (anti doble clic, EX-01) #}
+                <div class="i ib" data-procesando style="display: none;">
+                    Procesando solicitud... Por favor espere, la transacción ya se encuentra en ejecución.
+                </div>
 
                 <div class="f">
                     <button type="button" class="b g" data-bs-dismiss="modal">Cancelar</button>
