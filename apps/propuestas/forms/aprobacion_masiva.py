@@ -35,6 +35,13 @@ class AccionMasivaForm(forms.Form):
         (ACCION_REACTIVAR, 'Reactivar masivo'),
     ]
 
+    # Acción de auditoría del intento bloqueado y estado al que se pretendía llevar el lote.
+    AUDITORIA_BLOQUEO = {
+        ACCION_APROBAR: ('APROBACION_MASIVA_BLOQUEADA', EstadoTramite.APROBADO),
+        ACCION_RECHAZAR: ('RECHAZO_MASIVO_BLOQUEADO', EstadoTramite.RECHAZADO),
+        ACCION_REACTIVAR: ('REACTIVACION_MASIVA_BLOQUEADA', EstadoTramite.EN_REVISION),
+    }
+
     accion = forms.ChoiceField(choices=ACCIONES_PERMITIDAS, required=True)
     propuestas_ids = forms.CharField(widget=forms.HiddenInput(), required=True)
     tipo_rechazo = forms.ModelChoiceField(
@@ -103,24 +110,54 @@ class AccionMasivaForm(forms.Form):
             .select_related('proceso__estudiante_carrera__estudiante__usuario')
         )
 
-        if not propuestas:
-            return 0
+        accion_auditoria, estado_destino = self.AUDITORIA_BLOQUEO[accion]
+
+        def bloquear(motivo: str, afectadas: list[Propuesta], excepcion=ValidationError, ajenos=()):
+            """Audita una fila Bloqueado por propuesta del intento (BRD: también los bloqueados)."""
+            for prop in afectadas:
+                _auditar(
+                    usuario,
+                    accion_auditoria,
+                    prop,
+                    estado_anterior=prop.estado,
+                    estado_nuevo=estado_destino,
+                    tipo_rechazo=tipo_rechazo.nombre if accion == self.ACCION_RECHAZAR and tipo_rechazo else '',
+                    observacion=observacion,
+                    detalle_extra=motivo,
+                    resultado=RESULTADO_BLOQUEADO,
+                )
+            # IDs de otra carrera: solo el ID y el motivo, sin datos del estudiante ajeno.
+            for id_ajeno in ajenos:
+                _auditar(
+                    usuario,
+                    accion_auditoria,
+                    id_registro=id_ajeno,
+                    detalle_extra=motivo,
+                    resultado=RESULTADO_BLOQUEADO,
+                )
+            raise excepcion(motivo)
+
         if len(propuestas) != len(ids):
-            raise ValidationError('Una o más propuestas seleccionadas no pertenecen a la carrera activa del Director.')
+            propias = {p.pk for p in propuestas}
+            bloquear(
+                'Una o más propuestas seleccionadas no pertenecen a la carrera activa del Director.',
+                propuestas,
+                ajenos=[i for i in ids if i not in propias],
+            )
 
         # Validar compatibilidad de estados según acción (RN-02-03)
         if accion in [self.ACCION_APROBAR, self.ACCION_RECHAZAR]:
             if any(p.estado != EstadoTramite.EN_REVISION for p in propuestas):
-                raise ValidationError("Para aprobar o rechazar de forma masiva, todas las propuestas deben estar exclusivamente en estado 'En revisión'.")
+                bloquear("Para aprobar o rechazar de forma masiva, todas las propuestas deben estar exclusivamente en estado 'En revisión'.", propuestas)
         elif accion == self.ACCION_REACTIVAR:
             if any(p.estado != EstadoTramite.RECHAZADO or p.archivada for p in propuestas):
-                raise ValidationError("Para reactivar de forma masiva, todas las propuestas deben estar en estado 'Rechazado' y no estar archivadas.")
+                bloquear("Para reactivar de forma masiva, todas las propuestas deben estar en estado 'Rechazado' y no estar archivadas.", propuestas)
 
             # Validar colisión RG-05 / EX-02 en lote (sin N+1)
             procesos_ids = [p.proceso_id for p in propuestas]
             if len(procesos_ids) != len(set(procesos_ids)):
                 nombre = propuestas[0].proceso.estudiante_carrera.estudiante.usuario.nombre
-                raise ReactivacionInvalidaError(MSG_02_06.format(nombre=nombre))
+                bloquear(MSG_02_06.format(nombre=nombre), propuestas, ReactivacionInvalidaError)
 
             otras = list(
                 Propuesta.objects.filter(proceso_id__in=procesos_ids, archivada=False)
@@ -131,10 +168,8 @@ class AccionMasivaForm(forms.Form):
             if otras:
                 colision = otras[0]
                 nombre = colision.proceso.estudiante_carrera.estudiante.usuario.nombre
-                msg_err = MSG_02_06.format(nombre=nombre)
                 prop_lote = next(p for p in propuestas if p.proceso_id == colision.proceso_id)
-                _auditar(usuario, 'REACTIVACION_MASIVA_BLOQUEADA', prop_lote, detalle_extra=msg_err, resultado=RESULTADO_BLOQUEADO)
-                raise ReactivacionInvalidaError(msg_err)
+                bloquear(MSG_02_06.format(nombre=nombre), [prop_lote], ReactivacionInvalidaError)
 
         with transaction.atomic():
             propuestas_mutar = list(

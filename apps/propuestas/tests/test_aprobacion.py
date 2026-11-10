@@ -1014,6 +1014,133 @@ class TestAccionMasivaForm(BaseAprobacionTestCase):
         self.assertIn(self.estudiante_1.usuario.nombre, str(ctx.exception))
 
 
+class TestAccionMasivaBloqueosAuditados(BaseAprobacionTestCase):
+    """Todo intento masivo bloqueado deja auditoría con resultado Bloqueado (BRD SISTRA-02)."""
+
+    def _procesar_bloqueado(self, data: dict, excepcion=ValidationError) -> None:
+        form = AccionMasivaForm(data=data)
+        self.assertTrue(form.is_valid(), form.errors)
+        with self.assertRaises(excepcion):
+            form.procesar(self.carrera, self.user_director)
+
+    def _bloqueos(self, accion: str):
+        return Auditoria.objects.filter(accion=accion, resultado=RESULTADO_BLOQUEADO)
+
+    def test_estados_mixtos_audita_una_fila_por_propuesta_del_lote(self):
+        """Aprobar en lote con estados incompatibles: una fila Bloqueado por propuesta, sin cambios."""
+        prop1 = self.crear_propuesta(self.estudiante_1, 'PROP-AUD-MIX-1')
+        prop2 = self.crear_propuesta(
+            self.estudiante_2, 'PROP-AUD-MIX-2', estado=EstadoTramite.REQUIERE_MODIFICACION
+        )
+
+        self._procesar_bloqueado(
+            {'accion': 'aprobar', 'propuestas_ids': f'{prop1.pk},{prop2.pk}', 'observacion': 'Lote mixto'}
+        )
+
+        filas = self._bloqueos('APROBACION_MASIVA_BLOQUEADA')
+        self.assertEqual(
+            sorted(filas.values_list('id_registro_afectado', flat=True)), sorted([prop1.pk, prop2.pk])
+        )
+        detalle = filas.get(id_registro_afectado=prop2.pk).detalle
+        self.assertIn(self.estudiante_2.usuario.cedula, detalle)
+        self.assertIn('Requiere modificación -> Aprobado', detalle)
+        self.assertIn("exclusivamente en estado 'En revisión'", detalle)
+        self.assertTrue(all(f.usuario_id == self.user_director.pk for f in filas))
+        prop1.refresh_from_db()
+        self.assertEqual(prop1.estado, EstadoTramite.EN_REVISION)
+
+    def test_propuestas_de_otra_carrera_auditan_sin_datos_del_estudiante_ajeno(self):
+        """IDs ajenos: se bloquea y se audita cada ID sin exponer cédula ni nombre del estudiante."""
+        prop_propia = self.crear_propuesta(self.estudiante_1, 'PROP-AUD-PROPIA')
+        prop_ajena = self.crear_propuesta(self.estudiante_ajeno, 'PROP-AUD-AJENA')
+
+        self._procesar_bloqueado(
+            {'accion': 'aprobar', 'propuestas_ids': f'{prop_propia.pk},{prop_ajena.pk}'}
+        )
+
+        fila = self._bloqueos('APROBACION_MASIVA_BLOQUEADA').get(id_registro_afectado=prop_ajena.pk)
+        self.assertIn('carrera activa del Director', fila.detalle)
+        self.assertNotIn(self.estudiante_ajeno.usuario.cedula, fila.detalle)
+        self.assertNotIn(self.estudiante_ajeno.usuario.nombre, fila.detalle)
+        prop_propia.refresh_from_db()
+        self.assertEqual(prop_propia.estado, EstadoTramite.EN_REVISION)
+
+    def test_lote_solo_con_propuestas_ajenas_se_bloquea_en_vez_de_procesar_cero(self):
+        """Antes devolvía 0 en silencio; ahora es un intento bloqueado y auditado."""
+        prop_ajena = self.crear_propuesta(self.estudiante_ajeno, 'PROP-AUD-SOLO-AJENA')
+
+        self._procesar_bloqueado({'accion': 'aprobar', 'propuestas_ids': f'{prop_ajena.pk}'})
+
+        self.assertEqual(self._bloqueos('APROBACION_MASIVA_BLOQUEADA').count(), 1)
+
+    def test_rechazo_masivo_bloqueado_registra_causal_y_observacion(self):
+        """El rechazo masivo bloqueado guarda la causal y la observación del intento."""
+        prop1 = self.crear_propuesta(
+            self.estudiante_1, 'PROP-AUD-REC-1', estado=EstadoTramite.APROBADO
+        )
+
+        self._procesar_bloqueado(
+            {
+                'accion': 'rechazar',
+                'propuestas_ids': f'{prop1.pk}',
+                'tipo_rechazo': self.tipo_rechazo_activo.pk,
+                'observacion': 'Rechazo en lote no permitido.',
+            }
+        )
+
+        detalle = self._bloqueos('RECHAZO_MASIVO_BLOQUEADO').get().detalle
+        self.assertIn(f'Causal: {self.tipo_rechazo_activo.nombre}', detalle)
+        self.assertIn('Rechazo en lote no permitido.', detalle)
+
+    def test_reactivacion_masiva_de_archivada_audita_bloqueo(self):
+        """Reactivar en lote una propuesta archivada deja una fila Bloqueado."""
+        prop = self.crear_propuesta(
+            self.estudiante_1, 'PROP-AUD-ARCH', estado=EstadoTramite.RECHAZADO
+        )
+        Propuesta.objects.filter(pk=prop.pk).update(archivada=True, fecha_archivado=timezone.now())
+
+        self._procesar_bloqueado(
+            {'accion': 'reactivar', 'propuestas_ids': f'{prop.pk}', 'observacion': 'Reactivar archivada.'}
+        )
+
+        fila = self._bloqueos('REACTIVACION_MASIVA_BLOQUEADA').get()
+        self.assertEqual(fila.id_registro_afectado, prop.pk)
+        self.assertIn('Rechazado -> En revisión', fila.detalle)
+        self.assertIn('Reactivar archivada.', fila.detalle)
+
+    def test_reactivacion_masiva_colision_en_lote_audita_cada_propuesta(self):
+        """Dos propuestas del mismo estudiante en el lote (RG-05): una fila por propuesta."""
+        prop1 = self.crear_propuesta(self.estudiante_1, 'PROP-AUD-DUP-1', estado=EstadoTramite.RECHAZADO)
+        prop2 = self.crear_propuesta(self.estudiante_1, 'PROP-AUD-DUP-2', estado=EstadoTramite.RECHAZADO)
+
+        self._procesar_bloqueado(
+            {
+                'accion': 'reactivar',
+                'propuestas_ids': f'{prop1.pk},{prop2.pk}',
+                'observacion': 'Reactivar duplicadas.',
+            },
+            excepcion=ReactivacionInvalidaError,
+        )
+
+        filas = self._bloqueos('REACTIVACION_MASIVA_BLOQUEADA')
+        self.assertEqual(filas.count(), 2)
+        self.assertIn(self.estudiante_1.usuario.nombre, filas.first().detalle)
+
+    def test_reactivacion_masiva_colision_con_bd_conserva_una_fila_con_transicion(self):
+        """La colisión RG-05 contra una propuesta activa en BD sigue auditando, ahora con transición."""
+        prop = self.crear_propuesta(self.estudiante_1, 'PROP-AUD-BD-REC', estado=EstadoTramite.RECHAZADO)
+        self.crear_propuesta(self.estudiante_1, 'PROP-AUD-BD-ACT')
+
+        self._procesar_bloqueado(
+            {'accion': 'reactivar', 'propuestas_ids': f'{prop.pk}', 'observacion': 'Reactivar con colisión.'},
+            excepcion=ReactivacionInvalidaError,
+        )
+
+        fila = self._bloqueos('REACTIVACION_MASIVA_BLOQUEADA').get()
+        self.assertIn('Rechazado -> En revisión', fila.detalle)
+        self.assertIn('Reactivar con colisión.', fila.detalle)
+
+
 class TestSemaforoDetenidoYReactivacion(BaseAprobacionTestCase):
     """El semáforo se detiene al decidir y conserva sus días al reactivar (RG-07)."""
 
