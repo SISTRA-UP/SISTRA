@@ -1444,6 +1444,34 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         prop.refresh_from_db()
         self.assertEqual(prop.estado, EstadoTramite.APROBADO)
 
+    def test_errores_de_formulario_se_muestran_como_texto_plano(self):
+        """Los errores del formulario llegan al Director como texto, sin <ul> ni corchetes."""
+        prop = self.crear_propuesta(self.estudiante_1, 'PROP-MSG-TXT')
+        rechazada = self.crear_propuesta(
+            self.estudiante_2, 'PROP-MSG-REA', estado=EstadoTramite.RECHAZADO
+        )
+        self.client.force_login(self.user_director)
+
+        casos = [
+            (
+                reverse('propuestas:cambiar_estado', args=[prop.pk]),
+                {'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION, 'observacion': 'corto'},
+            ),
+            (
+                reverse('propuestas:reactivar_propuesta', args=[rechazada.pk]),
+                {'motivo_reactivacion': 'corto'},
+            ),
+            (reverse('propuestas:accion_masiva'), {'accion': 'aprobar', 'propuestas_ids': ''}),
+        ]
+        for url, datos in casos:
+            with self.subTest(url=url):
+                response = self.client.post(url, datos, follow=True)
+                mensajes = [str(m) for m in response.context['messages']]
+                self.assertTrue(mensajes)
+                for texto in mensajes:
+                    self.assertNotIn('<', texto)
+                    self.assertFalse(texto.startswith('['))
+
     def test_cambiar_estado_post_modificar_exito(self):
         """Endpoint POST para solicitar correcciones individuales."""
         prop = self.crear_propuesta(self.estudiante_1, 'PROP-POST-MOD')

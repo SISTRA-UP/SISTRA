@@ -67,6 +67,13 @@ MSG_BLOQUEO_REQUIERE_MODIFICACION = (
 LONGITUD_MAXIMA_ESTADO = 50
 
 
+def _mostrar_errores(request: HttpRequest, form) -> None:
+    """Muestra cada error del formulario como texto plano (sin la lista HTML de Django)."""
+    for errores in form.errors.values():
+        for texto in errores:
+            messages.error(request, texto)
+
+
 def _carrera_activa_del_director(usuario) -> DirectorCarrera | None:
     """Obtiene la asignación de carrera activa del Director autenticado (RN-10-04).
 
@@ -388,8 +395,7 @@ def cambiar_estado(request: HttpRequest, id_propuesta: int) -> HttpResponse:
         if nuevo_estado == EstadoTramite.APROBADO:
             form = AprobacionPropuestaForm(request.POST)
             if not form.is_valid():
-                for error in form.errors.values():
-                    messages.error(request, error)
+                _mostrar_errores(request, form)
                 return redirect('propuestas:aprobacion')
             form.procesar(propuesta, request.user)
             messages.success(request, MSG_02_01)
@@ -397,8 +403,7 @@ def cambiar_estado(request: HttpRequest, id_propuesta: int) -> HttpResponse:
         elif nuevo_estado == EstadoTramite.REQUIERE_MODIFICACION:
             form = ModificacionPropuestaForm(request.POST)
             if not form.is_valid():
-                for error in form.errors.values():
-                    messages.error(request, error)
+                _mostrar_errores(request, form)
                 return redirect('propuestas:aprobacion')
             form.procesar(propuesta, request.user)
             messages.success(request, MSG_02_02)
@@ -406,8 +411,7 @@ def cambiar_estado(request: HttpRequest, id_propuesta: int) -> HttpResponse:
         elif nuevo_estado == EstadoTramite.RECHAZADO:
             form = RechazoPropuestaForm(request.POST)
             if not form.is_valid():
-                for error in form.errors.values():
-                    messages.error(request, error)
+                _mostrar_errores(request, form)
                 return redirect('propuestas:aprobacion')
             form.procesar(propuesta, request.user)
             messages.success(request, MSG_02_03)
@@ -418,7 +422,7 @@ def cambiar_estado(request: HttpRequest, id_propuesta: int) -> HttpResponse:
     except PropuestaBloqueadaError as e:
         messages.error(request, str(e))
     except ValidationError as e:
-        messages.error(request, e.message if hasattr(e, 'message') else str(e))
+        messages.error(request, e.messages[0])
     except Exception:
         messages.error(
             request,
@@ -447,8 +451,7 @@ def reactivar_propuesta(request: HttpRequest, id_propuesta: int) -> HttpResponse
 
     form = ReactivacionPropuestaForm(request.POST)
     if not form.is_valid():
-        for error in form.errors.values():
-            messages.error(request, error)
+        _mostrar_errores(request, form)
         return redirect('propuestas:aprobacion')
 
     try:
@@ -457,7 +460,7 @@ def reactivar_propuesta(request: HttpRequest, id_propuesta: int) -> HttpResponse
     except ReactivacionInvalidaError as e:
         messages.error(request, str(e))
     except ValidationError as e:
-        messages.error(request, e.message if hasattr(e, 'message') else str(e))
+        messages.error(request, e.messages[0])
     except Exception:
         messages.error(
             request,
@@ -478,8 +481,7 @@ def accion_masiva(request: HttpRequest) -> HttpResponse:
 
     form = AccionMasivaForm(request.POST)
     if not form.is_valid():
-        for error in form.errors.values():
-            messages.error(request, error)
+        _mostrar_errores(request, form)
         return redirect('propuestas:aprobacion')
 
     try:
