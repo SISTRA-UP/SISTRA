@@ -18,7 +18,11 @@
     {% else %}
     <a class="sis-nav-item" href="{% url 'parametrizacion:alertas' %}">Alertas y plazos</a>
     {% endif %}
-    <span class="sis-nav-item is-off">Estados del proceso <span class="sis-soon">Próximamente</span></span>
+    {% if seccion == 'estados' %}
+    <a class="sis-nav-item is-active" href="{% url 'parametrizacion:estados' %}" aria-current="page">Estados del proceso</a>
+    {% else %}
+    <a class="sis-nav-item" href="{% url 'parametrizacion:estados' %}">Estados del proceso</a>
+    {% endif %}
     {% if seccion == 'directores' %}
     <a class="sis-nav-item is-active" href="{% url 'parametrizacion:directores' %}" aria-current="page">Directores</a>
     {% else %}

@@ -1,0 +1,214 @@
+{% extends 'parametrizacion/parametrizacion/_pagina.html' %}
+
+{% block titulo %}Estados del proceso · Parametrización · SISTRA-UP{% endblock %}
+
+{% block principal %}
+<p class="sis-eyebrow">Parametrización · SISTRA-11</p>
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h1 class="sis-titulo">Estados del proceso</h1>
+        <p class="sis-sub mb-0">Catálogo de etapas generales de Trabajo Social y motivos de rechazo para revisiones.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevaActividad">
+            + Nueva etapa
+        </button>
+        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoRechazo">
+            + Nuevo tipo de rechazo
+        </button>
+    </div>
+</div>
+
+<!-- Sección 1: Etapas del Proceso (Actividades) -->
+<section class="sis-card mb-4" aria-labelledby="titulo-etapas">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 id="titulo-etapas" class="h5 mb-1">Etapas generales (Actividades)</h2>
+            <p class="text-muted small mb-0">Secuencia y obligatoriedad de las etapas en el proceso de Trabajo Social.</p>
+        </div>
+        <span class="badge bg-light text-dark border">{{ actividades|length }} etapas registradas</span>
+    </div>
+
+    {% if actividades %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th scope="col" style="width: 80px;">Orden</th>
+                    <th scope="col">Nombre de la etapa</th>
+                    <th scope="col">Descripción</th>
+                    <th scope="col">Obligatoria</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col" class="text-end"><span class="visually-hidden">Acciones</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for actividad in actividades %}
+                <tr>
+                    <td class="fw-bold text-center">
+                        <span class="badge bg-secondary rounded-pill">{{ actividad.orden }}</span>
+                    </td>
+                    <td class="fw-semibold">{{ actividad.nombre }}</td>
+                    <td class="text-muted small">{{ actividad.descripcion|default:"—" }}</td>
+                    <td>
+                        {% if actividad.obligatoria %}
+                        <span class="badge bg-primary">Obligatoria</span>
+                        {% else %}
+                        <span class="badge bg-info text-dark">Opcional</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if actividad.estado == 'Activo' %}
+                        <span class="badge bg-success">Activo</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Inactivo</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-secondary"
+                           href="{% url 'parametrizacion:actividad_editar' actividad.pk %}">
+                            Editar
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-light border mb-0 text-center py-4">
+        <p class="text-muted mb-2">No hay etapas registradas aún.</p>
+        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevaActividad">
+            Registrar la primera etapa
+        </button>
+    </div>
+    {% endif %}
+</section>
+
+<!-- Sección 2: Tipos de Rechazo -->
+<section class="sis-card" aria-labelledby="titulo-rechazos">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 id="titulo-rechazos" class="h5 mb-1">Tipos de rechazo</h2>
+            <p class="text-muted small mb-0">Causales estandarizadas para el rechazo de propuestas e informes finales.</p>
+        </div>
+        <span class="badge bg-light text-dark border">{{ tipos_rechazo|length }} tipos registrados</span>
+    </div>
+
+    {% if tipos_rechazo %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th scope="col">Motivo o causal</th>
+                    <th scope="col">Descripción</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col" class="text-end"><span class="visually-hidden">Acciones</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tipo in tipos_rechazo %}
+                <tr>
+                    <td class="fw-semibold">{{ tipo.nombre }}</td>
+                    <td class="text-muted small">{{ tipo.descripcion|default:"—" }}</td>
+                    <td>
+                        {% if tipo.estado == 'Activo' %}
+                        <span class="badge bg-success">Activo</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Inactivo</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-secondary"
+                           href="{% url 'parametrizacion:rechazo_editar' tipo.pk %}">
+                            Editar
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-light border mb-0 text-center py-4">
+        <p class="text-muted mb-2">No hay tipos de rechazo configurados.</p>
+        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoRechazo">
+            Registrar motivo de rechazo
+        </button>
+    </div>
+    {% endif %}
+</section>
+
+<!-- Modal: Nueva Etapa (Actividad) -->
+<div class="modal fade" id="modalNuevaActividad" tabindex="-1" aria-labelledby="tituloModalActividad" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="post" action="{% url 'parametrizacion:actividad_nueva' %}" class="modal-content">
+            {% csrf_token %}
+            <div class="modal-header">
+                <h5 class="modal-title" id="tituloModalActividad">Nueva etapa del proceso</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label" for="{{ form_actividad.nombre.id_for_label }}">{{ form_actividad.nombre.label }} *</label>
+                    {{ form_actividad.nombre }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="{{ form_actividad.orden.id_for_label }}">{{ form_actividad.orden.label }} *</label>
+                    {{ form_actividad.orden }}
+                    <div class="form-text">Número correlativo que indica la secuencia cronológica de la etapa.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="{{ form_actividad.descripcion.id_for_label }}">{{ form_actividad.descripcion.label }}</label>
+                    {{ form_actividad.descripcion }}
+                </div>
+                <div class="mb-3 form-check">
+                    {{ form_actividad.obligatoria }}
+                    <label class="form-check-label" for="{{ form_actividad.obligatoria.id_for_label }}">
+                        {{ form_actividad.obligatoria.label }}
+                    </label>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="{{ form_actividad.estado.id_for_label }}">{{ form_actividad.estado.label }}</label>
+                    {{ form_actividad.estado }}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Crear etapa</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Nuevo Tipo de Rechazo -->
+<div class="modal fade" id="modalNuevoRechazo" tabindex="-1" aria-labelledby="tituloModalRechazo" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="post" action="{% url 'parametrizacion:rechazo_nuevo' %}" class="modal-content">
+            {% csrf_token %}
+            <div class="modal-header">
+                <h5 class="modal-title" id="tituloModalRechazo">Nuevo tipo de rechazo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label" for="{{ form_rechazo.nombre.id_for_label }}">{{ form_rechazo.nombre.label }} *</label>
+                    {{ form_rechazo.nombre }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="{{ form_rechazo.descripcion.id_for_label }}">{{ form_rechazo.descripcion.label }}</label>
+                    {{ form_rechazo.descripcion }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="{{ form_rechazo.estado.id_for_label }}">{{ form_rechazo.estado.label }}</label>
+                    {{ form_rechazo.estado }}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Crear tipo de rechazo</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

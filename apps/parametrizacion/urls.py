@@ -2,7 +2,7 @@ from django.conf import settings
 from django.contrib.auth.views import LoginView, LogoutView
 from django.urls import path
 
-from .views import alertas, documentos, parametrizacion, periodos
+from .views import alertas, documentos, estados, parametrizacion, periodos
 
 app_name = 'parametrizacion'
 
@@ -13,6 +13,11 @@ urlpatterns = [
     path('periodos/nuevo/', periodos.PeriodoFormView.as_view(), name='periodo_nuevo'),
     path('periodos/<int:pk>/editar/', periodos.PeriodoFormView.as_view(), name='periodo_editar'),
     path('alertas/', alertas.AlertasView.as_view(), name='alertas'),
+    path('estados/', estados.EstadosView.as_view(), name='estados'),
+    path('estados/actividades/nueva/', estados.CrearActividadView.as_view(), name='actividad_nueva'),
+    path('estados/actividades/<int:pk>/editar/', estados.EditarActividadView.as_view(), name='actividad_editar'),
+    path('estados/rechazos/nuevo/', estados.CrearTipoRechazoView.as_view(), name='rechazo_nuevo'),
+    path('estados/rechazos/<int:pk>/editar/', estados.EditarTipoRechazoView.as_view(), name='rechazo_editar'),
     path('usuarios/', parametrizacion.UsuariosView.as_view(), name='usuarios'),
     path('usuarios/plantilla-csv/', parametrizacion.PlantillaCsvView.as_view(), name='usuarios_plantilla'),
     path('usuarios/carga-masiva/', parametrizacion.CargaMasivaView.as_view(), name='usuarios_carga'),

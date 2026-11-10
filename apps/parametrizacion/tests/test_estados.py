@@ -1,0 +1,156 @@
+"""SISTRA-11 · Parametrización: pruebas de estados del proceso (actividades y tipos de rechazo).
+
+Se ejecutan con:
+    uv run python manage.py test apps.parametrizacion.tests.test_estados
+"""
+
+from django.test import TestCase
+from django.urls import reverse
+
+from apps.parametrizacion.models import Actividad, TipoRechazo
+from apps.seguimiento.models import Auditoria
+from apps.usuarios.models import Estado, Rol, Usuario
+
+
+def _crear_admin():
+    rol, _ = Rol.objects.get_or_create(nombre='Administrador', defaults={'estado': Estado.ACTIVO})
+    return Usuario.objects.create_user(
+        correo_institucional='admin.estados@unipamplona.edu.co',
+        password='Admin1234',
+        nombre='Admin Estados',
+        cedula='999000008',
+        nombre_usuario='admin.estados',
+        rol=rol,
+        requiere_cambio_contrasena=False,
+        estado=Estado.ACTIVO,
+    )
+
+
+def _crear_director():
+    rol, _ = Rol.objects.get_or_create(nombre='Director', defaults={'estado': Estado.ACTIVO})
+    return Usuario.objects.create_user(
+        correo_institucional='director.estados@unipamplona.edu.co',
+        password='Dir1234',
+        nombre='Director Estados',
+        cedula='999000009',
+        nombre_usuario='director.estados',
+        rol=rol,
+        requiere_cambio_contrasena=False,
+        estado=Estado.ACTIVO,
+    )
+
+
+class EstadosViewTests(TestCase):
+
+    def setUp(self):
+        self.admin = _crear_admin()
+        self.director = _crear_director()
+        self.client.force_login(self.admin)
+
+    def test_sin_sesion_redirige(self):
+        self.client.logout()
+        resp = self.client.get(reverse('parametrizacion:estados'))
+        self.assertEqual(resp.status_code, 302)
+
+    def test_director_no_tiene_acceso(self):
+        self.client.force_login(self.director)
+        resp = self.client.get(reverse('parametrizacion:estados'))
+        self.assertEqual(resp.status_code, 403)
+
+    def test_admin_ve_lista_estados(self):
+        Actividad.objects.create(
+            nombre='Propuesta de Trabajo Social',
+            descripcion='Presentación inicial',
+            orden=1,
+            obligatoria=True,
+            estado='Activo',
+        )
+        TipoRechazo.objects.create(
+            nombre='Documentación incompleta',
+            descripcion='Falta soporte institucional',
+            estado='Activo',
+        )
+        resp = self.client.get(reverse('parametrizacion:estados'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Estados del proceso')
+        self.assertContains(resp, 'Propuesta de Trabajo Social')
+        self.assertContains(resp, 'Documentación incompleta')
+
+    def test_crear_actividad_exitosa(self):
+        resp = self.client.post(reverse('parametrizacion:actividad_nueva'), {
+            'nombre': 'Informe Final',
+            'descripcion': 'Entrega de informe al finalizar horas',
+            'orden': 2,
+            'obligatoria': True,
+            'estado': 'Activo',
+        })
+        self.assertRedirects(resp, reverse('parametrizacion:estados'))
+        self.assertTrue(Actividad.objects.filter(nombre='Informe Final', orden=2).exists())
+        self.assertTrue(Auditoria.objects.filter(accion='Crear etapa del proceso').exists())
+
+    def test_crear_actividad_orden_duplicado_falla(self):
+        Actividad.objects.create(
+            nombre='Etapa 1', descripcion='', orden=1, obligatoria=True, estado='Activo'
+        )
+        resp = self.client.post(reverse('parametrizacion:actividad_nueva'), {
+            'nombre': 'Otra etapa con orden 1',
+            'descripcion': '',
+            'orden': 1,
+            'obligatoria': False,
+            'estado': 'Activo',
+        }, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Ya existe una etapa con el orden 1')
+
+    def test_editar_actividad(self):
+        actividad = Actividad.objects.create(
+            nombre='Etapa Inicial', descripcion='', orden=3, obligatoria=True, estado='Activo'
+        )
+        resp = self.client.post(reverse('parametrizacion:actividad_editar', args=[actividad.pk]), {
+            'nombre': 'Etapa Inicial Modificada',
+            'descripcion': 'Nueva descripción',
+            'orden': 3,
+            'obligatoria': False,
+            'estado': 'Inactivo',
+        })
+        self.assertRedirects(resp, reverse('parametrizacion:estados'))
+        actividad.refresh_from_db()
+        self.assertEqual(actividad.nombre, 'Etapa Inicial Modificada')
+        self.assertEqual(actividad.estado, 'Inactivo')
+        self.assertFalse(actividad.obligatoria)
+        self.assertTrue(Auditoria.objects.filter(accion='Editar etapa del proceso').exists())
+
+    def test_crear_tipo_rechazo_exitoso(self):
+        resp = self.client.post(reverse('parametrizacion:rechazo_nuevo'), {
+            'nombre': 'Tema no pertinente',
+            'descripcion': 'El proyecto no cumple las líneas de acción',
+            'estado': 'Activo',
+        })
+        self.assertRedirects(resp, reverse('parametrizacion:estados'))
+        self.assertTrue(TipoRechazo.objects.filter(nombre='Tema no pertinente').exists())
+        self.assertTrue(Auditoria.objects.filter(accion='Crear tipo de rechazo').exists())
+
+    def test_crear_tipo_rechazo_nombre_duplicado_falla(self):
+        TipoRechazo.objects.create(nombre='Plagio', descripcion='', estado='Activo')
+        resp = self.client.post(reverse('parametrizacion:rechazo_nuevo'), {
+            'nombre': 'Plagio',
+            'descripcion': 'Copia sin citar',
+            'estado': 'Activo',
+        }, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Ya existe un tipo de rechazo con el nombre')
+
+    def test_editar_tipo_rechazo(self):
+        tipo = TipoRechazo.objects.create(
+            nombre='Falta firma', descripcion='', estado='Activo'
+        )
+        resp = self.client.post(reverse('parametrizacion:rechazo_editar', args=[tipo.pk]), {
+            'nombre': 'Falta firma del director de proyecto',
+            'descripcion': 'Requiere visto bueno',
+            'estado': 'Inactivo',
+        })
+        self.assertRedirects(resp, reverse('parametrizacion:estados'))
+        tipo.refresh_from_db()
+        self.assertEqual(tipo.nombre, 'Falta firma del director de proyecto')
+        self.assertEqual(tipo.estado, 'Inactivo')
+        self.assertTrue(Auditoria.objects.filter(accion='Editar tipo de rechazo').exists())
