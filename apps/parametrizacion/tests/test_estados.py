@@ -73,8 +73,10 @@ class EstadosViewTests(TestCase):
         resp = self.client.get(reverse('parametrizacion:estados'))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'Estados del proceso')
+        self.assertContains(resp, 'Estados del trámite')
         self.assertContains(resp, 'Propuesta de Trabajo Social')
         self.assertContains(resp, 'Documentación incompleta')
+        self.assertIn('estados_tramite', resp.context)
 
     def test_crear_actividad_exitosa(self):
         resp = self.client.post(reverse('parametrizacion:actividad_nueva'), {

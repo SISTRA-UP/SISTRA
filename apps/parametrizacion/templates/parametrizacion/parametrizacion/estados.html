@@ -19,6 +19,40 @@
     </div>
 </div>
 
+<!-- Sección: Estados del Trámite (Flujo oficial acordado en el BRD) -->
+<section class="sis-card mb-4" aria-labelledby="titulo-tramite">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 id="titulo-tramite" class="h5 mb-1">Estados del trámite (Propuestas e Informes)</h2>
+            <p class="text-muted small mb-0">Flujo de estados predefinidos por el sistema para el ciclo de vida de propuestas e informes.</p>
+        </div>
+        <span class="badge bg-light text-dark border">7 estados base</span>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th scope="col" style="width: 220px;">Estado</th>
+                    <th scope="col" style="width: 180px;">Actor responsable</th>
+                    <th scope="col">Descripción y comportamiento en el sistema</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in estados_tramite %}
+                <tr>
+                    <td>
+                        <span class="badge bg-{{ item.badge }} px-2 py-1">{{ item.estado }}</span>
+                    </td>
+                    <td class="fw-semibold small text-secondary">{{ item.actor }}</td>
+                    <td class="small text-muted">{{ item.descripcion }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
 <!-- Sección 1: Etapas del Proceso (Actividades) -->
 <section class="sis-card mb-4" aria-labelledby="titulo-etapas">
     <div class="d-flex justify-content-between align-items-center mb-3">
