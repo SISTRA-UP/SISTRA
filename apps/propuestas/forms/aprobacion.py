@@ -440,29 +440,30 @@ class ReactivacionPropuestaForm(forms.Form):
 
     def procesar(self, propuesta: Propuesta, usuario) -> None:
         """Aplica la reactivación retornando la propuesta a En revisión."""
-        if propuesta.estado != EstadoTramite.RECHAZADO:
-            return
-        if propuesta.archivada:
-            raise ReactivacionInvalidaError('Esta propuesta ya fue archivada y no puede ser reactivada por políticas de conservación.')
-
-        u_est = propuesta.proceso.estudiante_carrera.estudiante.usuario
-        if Propuesta.objects.filter(proceso=propuesta.proceso, archivada=False).exclude(estado=EstadoTramite.RECHAZADO).exclude(pk=propuesta.pk).exists():
-            msg_err = MSG_02_06.format(nombre=u_est.nombre)
+        motivo = self.cleaned_data['motivo_reactivacion']
+        lock = propuesta
+        try:
+            # Todas las reglas se comprueban con la fila bloqueada: si otro proceso cambió la
+            # propuesta entre medias, el intento se bloquea en vez de aparentar éxito.
+            with transaction.atomic():
+                lock = Propuesta.objects.select_for_update().select_related('proceso__estudiante_carrera__estudiante__usuario').get(pk=propuesta.pk)
+                if lock.estado != EstadoTramite.RECHAZADO:
+                    raise ReactivacionInvalidaError(f"Solo se puede reactivar una propuesta en estado 'Rechazado' (estado actual: {lock.estado}).")
+                if lock.archivada:
+                    raise ReactivacionInvalidaError('Esta propuesta ya fue archivada y no puede ser reactivada por políticas de conservación.')
+                if Propuesta.objects.filter(proceso=lock.proceso, archivada=False).exclude(estado=EstadoTramite.RECHAZADO).exclude(pk=lock.pk).exists():
+                    raise ReactivacionInvalidaError(MSG_02_06.format(nombre=lock.proceso.estudiante_carrera.estudiante.usuario.nombre))
+                aplicar_transicion(lock, usuario, EstadoTramite.EN_REVISION, 'Reactivación', 'REACTIVAR_PROPUESTA', motivo_reactivacion=motivo, mensaje_notif=f'Tu propuesta fue reactivada y pasó a En revisión. Motivo del Director: {motivo}')
+        except ReactivacionInvalidaError as e:
+            # Se audita fuera del bloque atómico para que el rollback no borre la fila del intento.
             _auditar(
                 usuario,
                 'REACTIVAR_PROPUESTA_BLOQUEADA',
-                propuesta,
-                estado_anterior=propuesta.estado,
+                lock,
+                estado_anterior=lock.estado,
                 estado_nuevo=EstadoTramite.EN_REVISION,
-                motivo_reactivacion=self.cleaned_data['motivo_reactivacion'],
-                detalle_extra=msg_err,
+                motivo_reactivacion=motivo,
+                detalle_extra=str(e),
                 resultado=RESULTADO_BLOQUEADO,
             )
-            raise ReactivacionInvalidaError(msg_err)
-
-        with transaction.atomic():
-            lock = Propuesta.objects.select_for_update().select_related('proceso__estudiante_carrera__estudiante__usuario').get(pk=propuesta.pk)
-            if lock.estado != EstadoTramite.RECHAZADO:
-                return
-            motivo = self.cleaned_data['motivo_reactivacion']
-            aplicar_transicion(lock, usuario, EstadoTramite.EN_REVISION, 'Reactivación', 'REACTIVAR_PROPUESTA', motivo_reactivacion=motivo, mensaje_notif=f'Tu propuesta fue reactivada y pasó a En revisión. Motivo del Director: {motivo}')
+            raise

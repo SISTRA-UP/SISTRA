@@ -47,6 +47,7 @@ from apps.propuestas.forms.aprobacion import (
     MSG_02_04,
     MSG_02_06,
     MSG_02_07,
+    RESULTADO_BLOQUEADO,
     AprobacionPropuestaForm,
     FiltroBandejaPropuestasForm,
     ModificacionPropuestaForm,
@@ -720,6 +721,13 @@ class TestReactivacionPropuestaForm(BaseAprobacionTestCase):
             form.procesar(prop, self.user_director)
         self.assertIn('archivada', str(ctx.exception))
 
+        # Intento registrado una sola vez en auditoría como Bloqueado, con el motivo
+        audit = Auditoria.objects.get(id_registro_afectado=prop.pk)
+        self.assertEqual(audit.accion, 'REACTIVAR_PROPUESTA_BLOQUEADA')
+        self.assertEqual(audit.resultado, 'Bloqueado')
+        self.assertIn('archivada', audit.detalle)
+        self.assertIn('Justificación válida de reactivación.', audit.detalle)
+
     def test_reactivar_falla_si_estudiante_ya_tiene_otra_propuesta_activa_rg05(self):
         """Regla RG-05 / EX-02: Bloquea reactivación si el estudiante ya tiene una propuesta activa."""
         # 1. Propuesta rechazada que se pretende reactivar
@@ -742,10 +750,10 @@ class TestReactivacionPropuestaForm(BaseAprobacionTestCase):
         self.assertIn(self.estudiante_1.usuario.nombre, str(ctx.exception))
 
         # Intento registrado en auditoría como Bloqueado
-        audit = Auditoria.objects.filter(
-            id_registro_afectado=prop_rechazada.pk, accion='REACTIVAR_PROPUESTA_BLOQUEADA'
-        ).latest('id_auditoria')
+        audit = Auditoria.objects.get(id_registro_afectado=prop_rechazada.pk)
+        self.assertEqual(audit.accion, 'REACTIVAR_PROPUESTA_BLOQUEADA')
         self.assertEqual(audit.resultado, 'Bloqueado')
+        self.assertIn(self.estudiante_1.usuario.nombre, audit.detalle)
 
     def test_reactivar_falla_justificacion_invalida(self):
         """Falla si el motivo de reactivación tiene menos de 10 o más de 1000 caracteres."""
@@ -760,8 +768,8 @@ class TestReactivacionPropuestaForm(BaseAprobacionTestCase):
         )
         self.assertFalse(form_larga.is_valid())
 
-    def test_reactivar_ignora_propuestas_que_no_estan_en_rechazado(self):
-        """Si la propuesta no está en Rechazado, no ejecuta cambios."""
+    def test_reactivar_bloquea_propuestas_que_no_estan_en_rechazado(self):
+        """Si la propuesta no está en Rechazado, se bloquea, no cambia nada y queda auditado."""
         prop = self.crear_propuesta(
             self.estudiante_1, 'PROP-REA-IGN', estado=EstadoTramite.EN_REVISION
         )
@@ -770,8 +778,28 @@ class TestReactivacionPropuestaForm(BaseAprobacionTestCase):
             data={'motivo_reactivacion': 'Justificación para propuesta no rechazada.'}
         )
         self.assertTrue(form.is_valid())
-        form.procesar(prop, self.user_director)
+        with self.assertRaises(ReactivacionInvalidaError):
+            form.procesar(prop, self.user_director)
         self.assertEqual(HistorialEstado.objects.filter(propuesta=prop).count(), total_hist_antes)
+        audit = Auditoria.objects.get(id_registro_afectado=prop.pk)
+        self.assertEqual(audit.resultado, 'Bloqueado')
+        self.assertIn('Transición: En revisión -> En revisión', audit.detalle)
+
+    def test_reactivar_bloquea_si_otro_proceso_ya_cambio_el_estado(self):
+        """Usa el estado real de la BD: una instancia desactualizada no aparenta éxito."""
+        prop = self.crear_propuesta(
+            self.estudiante_1, 'PROP-REA-CARRERA', estado=EstadoTramite.RECHAZADO
+        )
+        Propuesta.objects.filter(pk=prop.pk).update(estado=EstadoTramite.EN_REVISION)
+        form = ReactivacionPropuestaForm(
+            data={'motivo_reactivacion': 'Justificación con instancia desactualizada.'}
+        )
+        self.assertTrue(form.is_valid())
+        with self.assertRaises(ReactivacionInvalidaError):
+            form.procesar(prop, self.user_director)
+        audit = Auditoria.objects.get(id_registro_afectado=prop.pk)
+        self.assertEqual(audit.resultado, 'Bloqueado')
+        self.assertIn('Transición: En revisión -> En revisión', audit.detalle)
 
 
 # ==============================================================================
@@ -989,6 +1017,21 @@ class TestAccionMasivaForm(BaseAprobacionTestCase):
 class TestVistasAprobacion(BaseAprobacionTestCase):
     """Pruebas de endpoints HTTP, autenticación, control de acceso y respuestas JSON."""
 
+    def _assert_un_intento_bloqueado(
+        self, prop: Propuesta, motivo: str = '', accion: str = 'CAMBIAR_ESTADO_BLOQUEADO'
+    ) -> Auditoria:
+        """Verifica que el intento dejó exactamente una fila Bloqueado en auditoría (BRD §5.3.1)."""
+        audits = Auditoria.objects.filter(id_registro_afectado=prop.pk)
+        self.assertEqual(audits.count(), 1)
+        audit = audits.get()
+        self.assertEqual(audit.resultado, RESULTADO_BLOQUEADO)
+        self.assertEqual(audit.usuario, self.user_director)
+        self.assertEqual(audit.accion, accion)
+        self.assertIn(prop.proceso.estudiante_carrera.estudiante.usuario.cedula, audit.detalle)
+        self.assertIn(f'Transición: {prop.estado} -> ', audit.detalle)
+        self.assertIn(motivo, audit.detalle)
+        return audit
+
     def test_bandeja_requiere_login(self):
         """La bandeja redirige al login si el usuario no está autenticado."""
         url = reverse('propuestas:aprobacion')
@@ -1119,6 +1162,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
 
         prop.refresh_from_db()
         self.assertEqual(prop.estado, EstadoTramite.RECHAZADO)
+        self._assert_un_intento_bloqueado(prop, 'solo puede ser reactivada')
 
     def test_cambiar_estado_post_bloqueado_desde_borrador(self):
         """Bloquea cambiar estado si la propuesta se encuentra en BORRADOR."""
@@ -1133,6 +1177,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
 
         prop.refresh_from_db()
         self.assertEqual(prop.estado, EstadoTramite.BORRADOR)
+        self._assert_un_intento_bloqueado(prop, 'estado actual: Borrador')
 
     def test_cambiar_estado_post_bloqueado_desde_requiere_modificacion(self):
         """Bloquea cambiar estado si la propuesta se encuentra en REQUIERE_MODIFICACION."""
@@ -1147,6 +1192,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
 
         prop.refresh_from_db()
         self.assertEqual(prop.estado, EstadoTramite.REQUIERE_MODIFICACION)
+        self._assert_un_intento_bloqueado(prop, 'estado actual: Requiere modificación')
 
     def test_cambiar_estado_post_bloqueado_desde_aprobado_si_tiene_cargue_up(self):
         """Bloquea cambiar estado desde APROBADO si ya tiene cargue UP registrado (RN-02-04)."""
@@ -1171,6 +1217,63 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
 
         prop.refresh_from_db()
         self.assertEqual(prop.estado, EstadoTramite.APROBADO)
+        audit = self._assert_un_intento_bloqueado(prop, MSG_02_07)
+        self.assertIn('Ajuste posterior al cargue oficial', audit.detalle)
+
+    def test_cambiar_estado_post_rechazo_bloqueado_desde_aprobado_audita_causal(self):
+        """Rechazar un Aprobado con cargue en UP se bloquea y audita una sola vez con la causal."""
+        prop = self.crear_propuesta(
+            self.estudiante_1, 'PROP-BLOQ-CARGUE-REC', estado=EstadoTramite.APROBADO
+        )
+        CargueUp.objects.create(
+            propuesta=prop,
+            estado_verificacion=EstadoVerificacion.PENDIENTE,
+        )
+        self.client.force_login(self.user_director)
+
+        url = reverse('propuestas:cambiar_estado', args=[prop.pk])
+        response = self.client.post(
+            url,
+            {
+                'nuevo_estado': EstadoTramite.RECHAZADO,
+                'tipo_rechazo': self.tipo_rechazo_activo.pk,
+                'observacion': 'x' * 5000,
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        prop.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.APROBADO)
+        audit = self._assert_un_intento_bloqueado(prop, MSG_02_07)
+        self.assertIn(f'-> {EstadoTramite.RECHAZADO}', audit.detalle)
+        self.assertIn(f'Causal: {self.tipo_rechazo_activo.nombre}', audit.detalle)
+        # La observación del POST crudo se recorta antes de guardarse.
+        self.assertIn('x' * 1000, audit.detalle)
+        self.assertNotIn('x' * 1001, audit.detalle)
+
+    def test_cambiar_estado_post_desde_aprobado_sin_bloqueo_no_audita_bloqueo(self):
+        """Revertir un Aprobado sin cargue ni informe sigue permitido y no deja fila Bloqueado."""
+        prop = self.crear_propuesta(
+            self.estudiante_1, 'PROP-APR-LIBRE', estado=EstadoTramite.APROBADO
+        )
+        self.client.force_login(self.user_director)
+
+        url = reverse('propuestas:cambiar_estado', args=[prop.pk])
+        self.client.post(
+            url,
+            {
+                'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION,
+                'observacion': 'Ajustar el cronograma propuesto',
+            },
+        )
+
+        prop.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.REQUIERE_MODIFICACION)
+        self.assertFalse(
+            Auditoria.objects.filter(
+                id_registro_afectado=prop.pk, resultado=RESULTADO_BLOQUEADO
+            ).exists()
+        )
 
     def test_bandeja_filtro_semaforo_limites_dinamicos_desde_bd(self):
         """El filtrado por semáforo en bandeja obedece los límites dinámicos de Parametro."""
@@ -1217,6 +1320,67 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.assertEqual(response.status_code, 302)
         prop.refresh_from_db()
         self.assertEqual(prop.estado, EstadoTramite.EN_REVISION)
+
+    def _post_reactivar(self, prop: Propuesta, motivo: str) -> list[str]:
+        """Envía la reactivación como Director y devuelve los mensajes mostrados."""
+        self.client.force_login(self.user_director)
+        url = reverse('propuestas:reactivar_propuesta', args=[prop.pk])
+        response = self.client.post(url, {'motivo_reactivacion': motivo}, follow=True)
+        return [str(m) for m in response.context['messages']]
+
+    def test_reactivar_propuesta_post_bloqueado_si_no_esta_rechazada(self):
+        """Reactivar una propuesta no Rechazada muestra error (no éxito) y audita un Bloqueado."""
+        prop = self.crear_propuesta(
+            self.estudiante_1, 'PROP-POST-REA-NOREC', estado=EstadoTramite.APROBADO
+        )
+        mensajes = self._post_reactivar(prop, 'Intento de reactivar una aprobada.')
+
+        prop.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.APROBADO)
+        self.assertNotIn(MSG_02_04, mensajes)
+        self.assertTrue(any('estado actual: Aprobado' in m for m in mensajes))
+        audit = self._assert_un_intento_bloqueado(
+            prop, 'estado actual: Aprobado', accion='REACTIVAR_PROPUESTA_BLOQUEADA'
+        )
+        self.assertIn(f'-> {EstadoTramite.EN_REVISION}', audit.detalle)
+        self.assertIn('Intento de reactivar una aprobada.', audit.detalle)
+
+    def test_reactivar_propuesta_post_bloqueado_si_esta_archivada(self):
+        """Reactivar una propuesta archivada se bloquea y audita un único Bloqueado con el motivo."""
+        prop = self.crear_propuesta(
+            self.estudiante_1, 'PROP-POST-REA-ARCH', estado=EstadoTramite.RECHAZADO, archivada=True
+        )
+        mensajes = self._post_reactivar(prop, 'Intento de reactivar una archivada.')
+
+        prop.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.RECHAZADO)
+        self.assertNotIn(MSG_02_04, mensajes)
+        self._assert_un_intento_bloqueado(
+            prop, 'archivada', accion='REACTIVAR_PROPUESTA_BLOQUEADA'
+        )
+
+    def test_reactivar_propuesta_post_bloqueado_rg05_audita_una_sola_vez(self):
+        """La colisión RG-05 vía vista deja exactamente una fila Bloqueado."""
+        prop = self.crear_propuesta(
+            self.estudiante_1, 'PROP-POST-REA-COL1', estado=EstadoTramite.RECHAZADO
+        )
+        self.crear_propuesta(self.estudiante_1, 'PROP-POST-REA-COL2', estado=EstadoTramite.EN_REVISION)
+        mensajes = self._post_reactivar(prop, 'Intento con otra propuesta activa.')
+
+        prop.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.RECHAZADO)
+        self.assertNotIn(MSG_02_04, mensajes)
+        self._assert_un_intento_bloqueado(
+            prop, self.estudiante_1.usuario.nombre, accion='REACTIVAR_PROPUESTA_BLOQUEADA'
+        )
+
+    def test_reactivar_propuesta_post_motivo_invalido_no_audita(self):
+        """Un motivo demasiado corto es error de validación, no intento bloqueado."""
+        prop = self.crear_propuesta(
+            self.estudiante_1, 'PROP-POST-REA-CORTO', estado=EstadoTramite.APROBADO
+        )
+        self._post_reactivar(prop, 'corto')
+        self.assertFalse(Auditoria.objects.filter(id_registro_afectado=prop.pk).exists())
 
     def test_accion_masiva_post_exito(self):
         """Endpoint POST de acciones masivas procesa el lote."""

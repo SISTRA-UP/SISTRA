@@ -31,11 +31,13 @@ from apps.informes.models import Informe
 from apps.parametrizacion.models import TipoRechazo
 from apps.personas.models import DirectorCarrera
 from apps.propuestas.forms.aprobacion import (
+    LONGITUD_MAXIMA_TEXTO,
     MSG_02_01,
     MSG_02_02,
     MSG_02_03,
     MSG_02_04,
     MSG_02_07,
+    RESULTADO_BLOQUEADO,
     AprobacionPropuestaForm,
     FiltroBandejaPropuestasForm,
     ModificacionPropuestaForm,
@@ -43,9 +45,11 @@ from apps.propuestas.forms.aprobacion import (
     ReactivacionInvalidaError,
     ReactivacionPropuestaForm,
     RechazoPropuestaForm,
+    _auditar,
     calcular_semaforo,
     obtener_limites_semaforo,
     puede_revertir_aprobacion,
+    sanitizar_texto,
 )
 from apps.propuestas.forms.aprobacion_masiva import AccionMasivaForm
 from apps.propuestas.models import EstadoTramite, Propuesta
@@ -53,6 +57,8 @@ from apps.seguimiento.models import HistorialEstado
 from apps.usuarios.models import Estado
 
 ELEMENTOS_POR_PAGINA = 10
+# Tope del estado solicitado que se copia a la auditoría de intentos bloqueados.
+LONGITUD_MAXIMA_ESTADO = 50
 
 
 def _carrera_activa_del_director(usuario) -> DirectorCarrera | None:
@@ -332,26 +338,38 @@ def cambiar_estado(request: HttpRequest, id_propuesta: int) -> HttpResponse:
         proceso__estudiante_carrera__carrera=asignacion.carrera,
     )
 
-    if propuesta.estado not in [EstadoTramite.EN_REVISION, EstadoTramite.APROBADO]:
-        if propuesta.estado == EstadoTramite.RECHAZADO:
-            messages.error(
-                request,
-                'Una propuesta rechazada solo puede ser reactivada mediante el modal de reactivación justificando el motivo.',
-            )
-        else:
-            messages.error(
-                request,
-                f"Solo se puede decidir sobre propuestas en estado 'En revisión' o 'Aprobado' (estado actual: {propuesta.estado}).",
-            )
+    # Se quitan los NUL: PostgreSQL los rechaza al guardar el intento en auditoría.
+    nuevo_estado = request.POST.get('nuevo_estado', '').replace('\x00', '').strip()
+
+    motivo_bloqueo = ''
+    if propuesta.estado == EstadoTramite.RECHAZADO:
+        motivo_bloqueo = 'Una propuesta rechazada solo puede ser reactivada mediante el modal de reactivación justificando el motivo.'
+    elif propuesta.estado != EstadoTramite.EN_REVISION:
+        # Aprobado solo se bloquea si ya hay cargue en UP o informe (RN-02-04).
+        motivo_bloqueo = (
+            puede_revertir_aprobacion(propuesta)[1]
+            if propuesta.estado == EstadoTramite.APROBADO
+            else f"Solo se puede decidir sobre propuestas en estado 'En revisión' o 'Aprobado' (estado actual: {propuesta.estado})."
+        )
+
+    if motivo_bloqueo:
+        # El BRD exige auditar también los intentos bloqueados. El POST llega sin validar:
+        # se recorta antes de guardarlo y la causal solo se registra si existe.
+        id_causal = request.POST.get('tipo_rechazo', '')
+        causal = TipoRechazo.objects.filter(pk=id_causal).first() if id_causal.isdigit() else None
+        _auditar(
+            request.user,
+            'CAMBIAR_ESTADO_BLOQUEADO',
+            propuesta,
+            estado_anterior=propuesta.estado,
+            estado_nuevo=nuevo_estado[:LONGITUD_MAXIMA_ESTADO],
+            tipo_rechazo=causal.nombre if causal else '',
+            observacion=sanitizar_texto(request.POST.get('observacion', '').replace('\x00', ''))[:LONGITUD_MAXIMA_TEXTO],
+            detalle_extra=motivo_bloqueo,
+            resultado=RESULTADO_BLOQUEADO,
+        )
+        messages.error(request, motivo_bloqueo)
         return redirect('propuestas:aprobacion')
-
-    if propuesta.estado == EstadoTramite.APROBADO:
-        puede, motivo = puede_revertir_aprobacion(propuesta)
-        if not puede:
-            messages.error(request, motivo)
-            return redirect('propuestas:aprobacion')
-
-    nuevo_estado = request.POST.get('nuevo_estado', '').strip()
 
     try:
         if nuevo_estado == EstadoTramite.APROBADO:
