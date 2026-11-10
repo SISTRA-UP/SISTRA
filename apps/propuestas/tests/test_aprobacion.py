@@ -65,7 +65,7 @@ from apps.propuestas.forms.aprobacion import (
 from apps.propuestas.forms.aprobacion_masiva import AccionMasivaForm
 from apps.propuestas.models import ActividadCronograma, EstadoTramite, Propuesta
 from apps.seguimiento.models import Auditoria, HistorialEstado, Notificacion
-from apps.usuarios.models import Estado, Rol
+from apps.usuarios.models import Estado, Permiso, Rol, RolPermiso
 
 Usuario = get_user_model()
 
@@ -1998,3 +1998,95 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
 
         response = self.client.get(reverse('propuestas:descargar_documento', args=[prop.pk]))
         self.assertEqual(response.status_code, 403)
+
+
+class TestPermisoAprobacion(BaseAprobacionTestCase):
+    """El acceso exige el permiso propuesta.aprobar además de la carrera activa (BRD Tabla 32)."""
+
+    PERMISO = 'propuesta.aprobar'
+
+    def _quitar_permiso_al_director(self):
+        RolPermiso.objects.filter(rol=self.rol_director, permiso__nombre=self.PERMISO).delete()
+
+    def test_la_migracion_asigna_el_permiso_solo_al_director(self):
+        """Sembrado por migración: lo tiene el Director; ni el Administrador ni el Estudiante."""
+        roles = set(
+            RolPermiso.objects.filter(permiso__nombre=self.PERMISO).values_list('rol__nombre', flat=True)
+        )
+        self.assertEqual(roles, {'Director'})
+        self.assertTrue(self.user_director.has_perm(self.PERMISO))
+
+    def test_director_sin_permiso_recibe_403_en_todas_las_vistas(self):
+        """Si el ADMO le quita el permiso al rol, el Director pierde el acceso aunque tenga carrera."""
+        prop = self.crear_propuesta(self.estudiante_1, 'PROP-PERM-1')
+        rechazada = self.crear_propuesta(
+            self.estudiante_2, 'PROP-PERM-2', estado=EstadoTramite.RECHAZADO
+        )
+        self._quitar_permiso_al_director()
+        self.client.force_login(self.user_director)
+
+        peticiones = [
+            ('get', reverse('propuestas:aprobacion'), {}),
+            ('get', reverse('propuestas:detalle_propuesta', args=[prop.pk]), {}),
+            ('get', reverse('propuestas:descargar_documento', args=[prop.pk]), {}),
+            ('post', reverse('propuestas:cambiar_estado', args=[prop.pk]), {'nuevo_estado': EstadoTramite.APROBADO}),
+            (
+                'post',
+                reverse('propuestas:reactivar_propuesta', args=[rechazada.pk]),
+                {'motivo_reactivacion': 'Reactivación sin permiso.'},
+            ),
+            ('post', reverse('propuestas:accion_masiva'), {'accion': 'aprobar', 'propuestas_ids': f'{prop.pk}'}),
+        ]
+        for metodo, url, datos in peticiones:
+            with self.subTest(url=url):
+                self.assertEqual(getattr(self.client, metodo)(url, datos).status_code, 403)
+
+        prop.refresh_from_db()
+        rechazada.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.EN_REVISION)
+        self.assertEqual(rechazada.estado, EstadoTramite.RECHAZADO)
+
+    def test_anonimo_sigue_yendo_al_login(self):
+        """Sin sesión no hay 403: se redirige al Logueo (SISTRA-13)."""
+        response = self.client.get(reverse('propuestas:aprobacion'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('login', response.url)
+
+    def test_administrador_no_puede_decidir(self):
+        """El ADMO consulta según sus permisos, sin decidir: no tiene propuesta.aprobar."""
+        admo = Usuario.objects.create_user(
+            correo_institucional='admo@unipamplona.edu.co',
+            password='Password123!',
+            nombre='Administrador',
+            cedula='1098000099',
+            nombre_usuario='admo',
+            rol=Rol.objects.get(nombre='Administrador'),
+        )
+        self.client.force_login(admo)
+        self.assertEqual(self.client.get(reverse('propuestas:aprobacion')).status_code, 403)
+
+    def test_rol_nuevo_con_permiso_y_carrera_activa_puede_entrar(self):
+        """No depende del nombre del rol: un rol creado por el ADMO con el permiso y carrera entra."""
+        rol = Rol.objects.create(nombre='Coordinador', estado=Estado.ACTIVO)
+        RolPermiso.objects.create(rol=rol, permiso=Permiso.objects.get(nombre=self.PERMISO))
+        coordinador = Usuario.objects.create_user(
+            correo_institucional='coordinador@unipamplona.edu.co',
+            password='Password123!',
+            nombre='Coordinadora Electrónica',
+            cedula='1098000077',
+            nombre_usuario='coordinador',
+            rol=rol,
+        )
+        DirectorCarrera.objects.create(
+            director=Director.objects.create(usuario=coordinador),
+            carrera=self.otra_carrera,
+            fecha_inicio=timezone.localdate(),
+            activo=True,
+        )
+        prop = self.crear_propuesta(self.estudiante_ajeno, 'PROP-PERM-COORD')
+
+        self.client.force_login(coordinador)
+        response = self.client.get(reverse('propuestas:aprobacion'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(prop.pk, [m['propuesta'].pk for m in response.context['propuestas_con_meta']])

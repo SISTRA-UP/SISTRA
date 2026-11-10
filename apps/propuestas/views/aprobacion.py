@@ -17,7 +17,7 @@ import mimetypes
 from pathlib import Path
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, permission_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Q
@@ -58,6 +58,8 @@ from apps.seguimiento.models import HistorialEstado
 from apps.usuarios.models import Estado
 
 ELEMENTOS_POR_PAGINA = 10
+# Permiso del rol que decide sobre las propuestas (BRD Tabla 32); lo siembra propuestas/0002.
+PERMISO_APROBAR = 'propuesta.aprobar'
 # Estados posteriores al cargue en UP: el Director ya no puede cambiar la decisión (RN-02-04).
 ESTADOS_EN_UP = (EstadoTramite.SUBIDO_EN_UP, EstadoTramite.APROBADO_EN_UP)
 MSG_BLOQUEO_REQUIERE_MODIFICACION = (
@@ -91,6 +93,7 @@ def _carrera_activa_del_director(usuario) -> DirectorCarrera | None:
 
 
 @login_required
+@permission_required(PERMISO_APROBAR, raise_exception=True)
 @require_GET
 def bandeja(request: HttpRequest) -> HttpResponse:
     """Bandeja principal de propuestas asignadas a la carrera activa del Director."""
@@ -228,6 +231,7 @@ def bandeja(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@permission_required(PERMISO_APROBAR, raise_exception=True)
 @require_GET
 def detalle_propuesta(request: HttpRequest, id_propuesta: int) -> JsonResponse:
     """Endpoint JSON lazy para cargar la información detallada e historial de una propuesta."""
@@ -344,6 +348,7 @@ def detalle_propuesta(request: HttpRequest, id_propuesta: int) -> JsonResponse:
 
 
 @login_required
+@permission_required(PERMISO_APROBAR, raise_exception=True)
 @require_POST
 def cambiar_estado(request: HttpRequest, id_propuesta: int) -> HttpResponse:
     """Aplica una decisión individual: Aprobar, Requiere modificación o Rechazar."""
@@ -434,6 +439,7 @@ def cambiar_estado(request: HttpRequest, id_propuesta: int) -> HttpResponse:
 
 
 @login_required
+@permission_required(PERMISO_APROBAR, raise_exception=True)
 @require_POST
 def reactivar_propuesta(request: HttpRequest, id_propuesta: int) -> HttpResponse:
     """Aplica la reactivación de una propuesta rechazada por error (RG-04 / EX-02)."""
@@ -471,6 +477,7 @@ def reactivar_propuesta(request: HttpRequest, id_propuesta: int) -> HttpResponse
 
 
 @login_required
+@permission_required(PERMISO_APROBAR, raise_exception=True)
 @require_POST
 def accion_masiva(request: HttpRequest) -> HttpResponse:
     """Aplica la acción en lote (Aprobar, Rechazar o Reactivar masivo)."""
@@ -504,6 +511,7 @@ def accion_masiva(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@permission_required(PERMISO_APROBAR, raise_exception=True)
 @require_GET
 def descargar_documento(request: HttpRequest, id_propuesta: int) -> HttpResponse:
     """Permite previsualizar o descargar el documento adjunto de la propuesta."""
