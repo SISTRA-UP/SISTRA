@@ -488,8 +488,11 @@ def accion_masiva(request: HttpRequest) -> HttpResponse:
             request,
             f'Se procesaron exitosamente {procesadas} propuesta(s) de forma masiva.',
         )
-    except (ReactivacionInvalidaError, ValidationError) as e:
+    except ReactivacionInvalidaError as e:
         messages.error(request, str(e))
+    except ValidationError as e:
+        # str() de un ValidationError devuelve la lista ['...']; se muestra solo el texto.
+        messages.error(request, e.messages[0])
     except Exception:
         messages.error(
             request,

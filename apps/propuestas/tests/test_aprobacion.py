@@ -1606,6 +1606,28 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.assertEqual(p1.estado, EstadoTramite.APROBADO)
         self.assertEqual(p2.estado, EstadoTramite.APROBADO)
 
+    def test_accion_masiva_post_estados_mixtos_muestra_mensaje_sin_corchetes(self):
+        """El error de validación del lote se muestra como texto, no como lista ['...']."""
+        p1 = self.crear_propuesta(self.estudiante_1, 'PROP-MAS-MIX-1')
+        p2 = self.crear_propuesta(
+            self.estudiante_2, 'PROP-MAS-MIX-2', estado=EstadoTramite.APROBADO
+        )
+        self.client.force_login(self.user_director)
+
+        response = self.client.post(
+            reverse('propuestas:accion_masiva'),
+            {'accion': 'aprobar', 'propuestas_ids': f'{p1.pk},{p2.pk}'},
+            follow=True,
+        )
+        mensajes = [str(m) for m in response.context['messages']]
+
+        self.assertEqual(
+            mensajes,
+            ["Para aprobar o rechazar de forma masiva, todas las propuestas deben estar exclusivamente en estado 'En revisión'."],
+        )
+        p1.refresh_from_db()
+        self.assertEqual(p1.estado, EstadoTramite.EN_REVISION)
+
     def test_detalle_propuesta_lazy_json(self):
         """Endpoint JSON lazy de detalle responde estructura completa (SISTRA-01 + historial)."""
         prop = self.crear_propuesta(self.estudiante_1, 'PROP-JSON-DET', dias_envio=3)
