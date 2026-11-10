@@ -36,6 +36,7 @@ from apps.propuestas.forms.aprobacion import (
     MSG_02_02,
     MSG_02_03,
     MSG_02_04,
+    MSG_02_05,
     MSG_02_07,
     RESULTADO_BLOQUEADO,
     AprobacionPropuestaForm,
@@ -214,6 +215,7 @@ def bandeja(request: HttpRequest) -> HttpResponse:
         'carrera': carrera,
         'form_filtro': form_filtro,
         # Distingue "no hay propuestas" (BRD) de "los filtros no encontraron nada".
+        'msg_02_05': MSG_02_05,
         'hay_filtros': form_filtro.is_valid() and any(form_filtro.cleaned_data.values()),
         'pagina_obj': pagina_obj,
         'propuestas_con_meta': propuestas_con_meta,

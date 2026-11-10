@@ -806,6 +806,79 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // -------------------------------------------------------------
+    // EX-03 / MSG-02-05: Confirmar queda deshabilitado mientras falten obligatorios.
+    // -------------------------------------------------------------
+    const MSG_02_05 = '{{ msg_02_05|escapejs }}';
+    const MIN_OBS = 10;
+    const MAX_OBS = 1000;
+
+    function mensajeFaltante(cfg) {
+        const { obs: obsObligatoria, tipo: tipoObligatorio } = cfg.requisitos();
+        const largo = cfg.obs.value.trim().length;
+        if (cfg.obs.value.length > MAX_OBS) {
+            return 'El texto ingresado supera el límite máximo permitido de 1000 caracteres.';
+        }
+        const faltaTipo = tipoObligatorio && !cfg.tipo.value;
+        const faltaObs = obsObligatoria && largo < MIN_OBS;
+        if (!faltaTipo && !faltaObs) return '';
+        return faltaObs && largo > 0
+            ? `${MSG_02_05} La observación debe tener al menos ${MIN_OBS} caracteres.`
+            : MSG_02_05;
+    }
+
+    // mostrar=false al abrir: el botón se deshabilita sin pintar errores todavía.
+    function actualizarConfirmar(cfg, mostrar) {
+        const mensaje = mensajeFaltante(cfg);
+        cfg.btn.disabled = Boolean(mensaje);
+        cfg.btn.title = mensaje;
+        if (mostrar) {
+            cfg.errorDiv.textContent = mensaje;
+            cfg.errorDiv.style.display = mensaje ? 'flex' : 'none';
+            const { obs: obsObligatoria, tipo: tipoObligatorio } = cfg.requisitos();
+            cfg.obs.classList.toggle('er', Boolean(mensaje) && (obsObligatoria || cfg.obs.value.length > MAX_OBS));
+            if (cfg.tipo) cfg.tipo.classList.toggle('er', tipoObligatorio && !cfg.tipo.value);
+        } else {
+            cfg.errorDiv.style.display = 'none';
+            cfg.obs.classList.remove('er');
+            if (cfg.tipo) cfg.tipo.classList.remove('er');
+        }
+    }
+
+    function vigilarConfirmar(cfg) {
+        cfg.obs.addEventListener('input', () => actualizarConfirmar(cfg, true));
+        if (cfg.tipo) cfg.tipo.addEventListener('change', () => actualizarConfirmar(cfg, true));
+        return cfg;
+    }
+
+    const confirmarDecision = vigilarConfirmar({
+        btn: document.getElementById('btn-confirmar-decision'),
+        obs: document.getElementById('dec-obs'),
+        tipo: document.getElementById('dec-tipo-rechazo'),
+        errorDiv: document.getElementById('dec-error'),
+        requisitos: () => {
+            const estado = document.getElementById('dec-nuevo-estado').value;
+            return { obs: estado !== 'Aprobado', tipo: estado === 'Rechazado' };
+        },
+    });
+    const confirmarReactivar = vigilarConfirmar({
+        btn: document.getElementById('btn-confirmar-reactivar'),
+        obs: document.getElementById('rea-motivo'),
+        tipo: null,
+        errorDiv: document.getElementById('rea-error'),
+        requisitos: () => ({ obs: true, tipo: false }),
+    });
+    const confirmarMasivo = vigilarConfirmar({
+        btn: document.getElementById('btn-confirmar-masivo'),
+        obs: document.getElementById('mas-obs'),
+        tipo: document.getElementById('mas-tipo-rechazo'),
+        errorDiv: document.getElementById('mas-error'),
+        requisitos: () => {
+            const accion = document.getElementById('mas-accion').value;
+            return { obs: accion !== 'aprobar', tipo: accion === 'rechazar' };
+        },
+    });
+
+    // -------------------------------------------------------------
     // 2. Filtros con auto-envío
     // -------------------------------------------------------------
     const cmbEstado = document.getElementById('cmb-est');
@@ -1118,6 +1191,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 btnSubmit.textContent = 'Confirmar Rechazo';
             }
 
+            document.getElementById('dec-tipo-rechazo').value = '';
+            actualizarConfirmar(confirmarDecision, false);
             modalDecision.show();
         });
     });
@@ -1125,36 +1200,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Validación del formulario individual antes de enviar
     const formDecision = document.getElementById('form-decision');
     formDecision.addEventListener('submit', function (e) {
-        const nuevoEstado = document.getElementById('dec-nuevo-estado').value;
-        const txtObs = document.getElementById('dec-obs');
-        const selTipo = document.getElementById('dec-tipo-rechazo');
-        const errorDiv = document.getElementById('dec-error');
-        const obsVal = txtObs.value.trim();
-
-        if (nuevoEstado === 'Requiere modificación' && obsVal.length < 10) {
+        if (mensajeFaltante(confirmarDecision)) {
             e.preventDefault();
-            txtObs.classList.add('er');
-            errorDiv.style.display = 'flex';
-            errorDiv.textContent = 'Debe ingresar obligatoriamente una observación en el campo de texto detallando las correcciones que debe realizar el estudiante o el motivo por el cual revierte la aprobación (mínimo 10 caracteres).';
-            return;
-        }
-
-        if (nuevoEstado === 'Rechazado') {
-            if (!selTipo.value || obsVal.length < 10) {
-                e.preventDefault();
-                if (!selTipo.value) selTipo.classList.add('er');
-                if (obsVal.length < 10) txtObs.classList.add('er');
-                errorDiv.style.display = 'flex';
-                errorDiv.textContent = "Es obligatorio seleccionar una opción en el campo 'Tipo de Rechazo' y registrar en el campo de texto 'Observación' el detalle del rechazo (mínimo 10 caracteres).";
-                return;
-            }
-        }
-
-        if (obsVal.length > 1000) {
-            e.preventDefault();
-            txtObs.classList.add('er');
-            errorDiv.style.display = 'flex';
-            errorDiv.textContent = 'El texto ingresado supera el límite máximo permitido de 1000 caracteres.';
+            actualizarConfirmar(confirmarDecision, true);
             return;
         }
 
@@ -1168,11 +1216,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const len = this.value.length;
         contadorDec.textContent = `${len} / 1000`;
         if (len > 1000) {
-            this.classList.add('er');
             contadorDec.style.color = 'var(--sistra-red)';
             contadorDec.style.fontWeight = '600';
         } else {
-            this.classList.remove('er');
             contadorDec.style.color = 'var(--sistra-muted)';
             contadorDec.style.fontWeight = 'normal';
         }
@@ -1199,20 +1245,16 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('rea-error').style.display = 'none';
             document.getElementById('rea-contador').textContent = '0 / 1000';
 
+            actualizarConfirmar(confirmarReactivar, false);
             modalReactivar.show();
         });
     });
 
     const formReactivar = document.getElementById('form-reactivar');
     formReactivar.addEventListener('submit', function (e) {
-        const txtMotivo = document.getElementById('rea-motivo');
-        const errorDiv = document.getElementById('rea-error');
-        const val = txtMotivo.value.trim();
-
-        if (val.length < 10) {
+        if (mensajeFaltante(confirmarReactivar)) {
             e.preventDefault();
-            txtMotivo.classList.add('er');
-            errorDiv.style.display = 'flex';
+            actualizarConfirmar(confirmarReactivar, true);
             return;
         }
 
@@ -1225,11 +1267,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const len = this.value.length;
         contadorRea.textContent = `${len} / 1000`;
         if (len > 1000) {
-            this.classList.add('er');
             contadorRea.style.color = 'var(--sistra-red)';
             contadorRea.style.fontWeight = '600';
         } else {
-            this.classList.remove('er');
             contadorRea.style.color = 'var(--sistra-muted)';
             contadorRea.style.fontWeight = 'normal';
         }
@@ -1298,6 +1338,8 @@ document.addEventListener('DOMContentLoaded', function () {
             btnSubmit.textContent = 'Confirmar Reactivación';
         }
 
+        document.getElementById('mas-tipo-rechazo').value = '';
+        actualizarConfirmar(confirmarMasivo, false);
         modalMasivo.show();
     }
 
@@ -1307,36 +1349,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const formMasivo = document.getElementById('form-masivo');
     formMasivo.addEventListener('submit', function (e) {
-        const accion = document.getElementById('mas-accion').value;
-        const txtObs = document.getElementById('mas-obs');
-        const selTipo = document.getElementById('mas-tipo-rechazo');
-        const errorDiv = document.getElementById('mas-error');
-        const obsVal = txtObs.value.trim();
-
-        if (accion === 'rechazar') {
-            if (!selTipo.value || obsVal.length < 10) {
-                e.preventDefault();
-                if (!selTipo.value) selTipo.classList.add('er');
-                if (obsVal.length < 10) txtObs.classList.add('er');
-                errorDiv.style.display = 'flex';
-                errorDiv.textContent = "Es obligatorio seleccionar una opción en el campo 'Tipo de Rechazo' y registrar en el campo de texto 'Observación' el detalle del rechazo (mínimo 10 caracteres).";
-                return;
-            }
-        }
-
-        if (accion === 'reactivar' && obsVal.length < 10) {
+        if (mensajeFaltante(confirmarMasivo)) {
             e.preventDefault();
-            txtObs.classList.add('er');
-            errorDiv.style.display = 'flex';
-            errorDiv.textContent = 'Por políticas de auditoría, es estrictamente obligatorio registrar en el campo de texto la justificación por la cual se reactiva esta propuesta (mínimo 10 caracteres).';
-            return;
-        }
-
-        if (obsVal.length > 1000) {
-            e.preventDefault();
-            txtObs.classList.add('er');
-            errorDiv.style.display = 'flex';
-            errorDiv.textContent = 'El texto ingresado supera el límite máximo permitido de 1000 caracteres.';
+            actualizarConfirmar(confirmarMasivo, true);
             return;
         }
 
@@ -1349,11 +1364,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const len = this.value.length;
         contadorMas.textContent = `${len} / 1000`;
         if (len > 1000) {
-            this.classList.add('er');
             contadorMas.style.color = 'var(--sistra-red)';
             contadorMas.style.fontWeight = '600';
         } else {
-            this.classList.remove('er');
             contadorMas.style.color = 'var(--sistra-muted)';
             contadorMas.style.fontWeight = 'normal';
         }

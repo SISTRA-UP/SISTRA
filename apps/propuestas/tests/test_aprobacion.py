@@ -47,6 +47,7 @@ from apps.propuestas.forms.aprobacion import (
     MSG_02_02,
     MSG_02_03,
     MSG_02_04,
+    MSG_02_05,
     MSG_02_06,
     MSG_02_07,
     RESULTADO_BLOQUEADO,
@@ -1456,6 +1457,13 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.assertNotIn('det-doc-hoja', html)
         self.assertNotIn('Pág. 1 / 1', html)
         self.assertEqual(html.count('data-procesando style="display: none;"'), 3)
+
+    def test_bandeja_usa_msg_02_05_para_campos_obligatorios(self):
+        """El aviso de campos vacíos de las ventanas es MSG-02-05 y sale de la constante de Python."""
+        self.client.force_login(self.user_director)
+        html = self.client.get(reverse('propuestas:aprobacion')).content.decode('utf-8')
+
+        self.assertIn(f"const MSG_02_05 = '{MSG_02_05}';", html)
 
     def test_bandeja_vacia_muestra_mensaje_del_brd_sin_filtros(self):
         """Sin propuestas ni filtros se muestra el estado vacío del BRD, sin 'Restablecer filtros'."""
