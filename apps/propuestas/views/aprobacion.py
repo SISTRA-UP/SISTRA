@@ -58,6 +58,11 @@ from apps.seguimiento.models import HistorialEstado
 from apps.usuarios.models import Estado
 
 ELEMENTOS_POR_PAGINA = 10
+# Estados posteriores al cargue en UP: el Director ya no puede cambiar la decisión (RN-02-04).
+ESTADOS_EN_UP = (EstadoTramite.SUBIDO_EN_UP, EstadoTramite.APROBADO_EN_UP)
+MSG_BLOQUEO_REQUIERE_MODIFICACION = (
+    'La propuesta espera las correcciones del estudiante; podrás decidir cuando la reenvíe.'
+)
 # Tope del estado solicitado que se copia a la auditoría de intentos bloqueados.
 LONGITUD_MAXIMA_ESTADO = 50
 
@@ -171,16 +176,22 @@ def bandeja(request: HttpRequest) -> HttpResponse:
     limites_sem = (limite_verde, limite_amarillo)
     propuestas_con_meta = []
     for prop in propuestas_pagina:
-        bloqueada_reversion = (
+        # El control solo queda activo donde el servidor acepta la decisión (cambiar_estado).
+        if prop.estado == EstadoTramite.REQUIERE_MODIFICACION:
+            motivo_bloqueo = MSG_BLOQUEO_REQUIERE_MODIFICACION
+        elif prop.estado in ESTADOS_EN_UP or (
             prop.pk in cargues_bloqueados_ids or prop.pk in informes_bloqueados_ids
-        )
+        ):
+            motivo_bloqueo = MSG_02_07
+        else:
+            motivo_bloqueo = ''
         sem = calcular_semaforo(prop, limites=limites_sem)
         propuestas_con_meta.append(
             {
                 'propuesta': prop,
                 'semaforo': sem,
-                'bloqueada_reversion': bloqueada_reversion,
-                'bloqueo_motivo': MSG_02_07 if bloqueada_reversion else '',
+                'bloqueada_reversion': bool(motivo_bloqueo),
+                'motivo_bloqueo': motivo_bloqueo,
             }
         )
 

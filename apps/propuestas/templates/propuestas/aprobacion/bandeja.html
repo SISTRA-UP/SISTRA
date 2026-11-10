@@ -524,7 +524,7 @@
                         <div>
                             <input type="checkbox" class="chk-fila" value="{{ prop.pk }}" data-estado="{{ prop.estado }}"
                                    aria-label="Seleccionar {{ prop.codigo }}"
-                                   {% if meta.bloqueada_reversion %}disabled title="Bloqueado: cargado en UP"{% endif %}>
+                                   {% if meta.bloqueada_reversion %}disabled title="{{ meta.motivo_bloqueo }}"{% endif %}>
                         </div>
 
                         {# 2. Código #}
@@ -588,11 +588,11 @@
                                     Reactivar Propuesta
                                 </button>
                             {% elif meta.bloqueada_reversion %}
-                                {# Bloqueada: Cargado en UP #}
+                                {# Bloqueada: cargue en UP, informe iniciado o esperando el reenvío del estudiante #}
                                 <div class="sl" style="opacity: .5;" role="radiogroup" aria-disabled="true" title="{{ meta.motivo_bloqueo }}">
                                     <button type="button" role="radio" class="btn-bloqueado" data-motivo="{{ meta.motivo_bloqueo }}">Rechazado</button>
-                                    <button type="button" role="radio" class="btn-bloqueado" data-motivo="{{ meta.motivo_bloqueo }}">Modificar</button>
-                                    <button type="button" role="radio" class="g1 btn-bloqueado" data-motivo="{{ meta.motivo_bloqueo }}">Aprobado</button>
+                                    <button type="button" role="radio" class="{% if prop.estado == 'Requiere modificación' %}y1 {% endif %}btn-bloqueado" data-motivo="{{ meta.motivo_bloqueo }}">Modificar</button>
+                                    <button type="button" role="radio" class="{% if prop.estado != 'Requiere modificación' %}g1 {% endif %}btn-bloqueado" data-motivo="{{ meta.motivo_bloqueo }}">Aprobado</button>
                                 </div>
                                 <button type="button" class="b l btn-detalle" data-id="{{ prop.pk }}">
                                     Ver detalle

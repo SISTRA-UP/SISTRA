@@ -1225,6 +1225,57 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.assertNotIn(prop_borrador.pk, propuestas_mostradas)
         self.assertNotIn(prop_otra.pk, propuestas_mostradas)
 
+    def test_bandeja_bloquea_control_en_estados_sin_decision_del_director(self):
+        """Subido en UP, Aprobado en UP y Requiere modificación muestran el control bloqueado.
+
+        El servidor ya rechaza el cambio; la fila no debe ofrecer un control activo que
+        solo falla al confirmar. El motivo llega a la plantilla para el aviso.
+        """
+        estudiante_3 = self._crear_estudiante('1098111004', 'Estudiante Tres', self.carrera)
+        props = {
+            EstadoTramite.SUBIDO_EN_UP: self.crear_propuesta(
+                self.estudiante_1, 'PROP-BLQ-SUB', estado=EstadoTramite.SUBIDO_EN_UP
+            ),
+            EstadoTramite.APROBADO_EN_UP: self.crear_propuesta(
+                self.estudiante_2, 'PROP-BLQ-APUP', estado=EstadoTramite.APROBADO_EN_UP
+            ),
+            EstadoTramite.REQUIERE_MODIFICACION: self.crear_propuesta(
+                estudiante_3, 'PROP-BLQ-MOD', estado=EstadoTramite.REQUIERE_MODIFICACION
+            ),
+        }
+
+        self.client.force_login(self.user_director)
+        response = self.client.get(reverse('propuestas:aprobacion'))
+        metas = {m['propuesta'].pk: m for m in response.context['propuestas_con_meta']}
+        html = response.content.decode('utf-8')
+
+        for estado, prop in props.items():
+            with self.subTest(estado=estado):
+                meta = metas[prop.pk]
+                self.assertTrue(meta['bloqueada_reversion'])
+                self.assertTrue(meta['motivo_bloqueo'])
+                self.assertNotIn(f'aria-label="Cambiar estado {prop.codigo}"', html)
+
+        self.assertEqual(metas[props[EstadoTramite.SUBIDO_EN_UP].pk]['motivo_bloqueo'], MSG_02_07)
+        self.assertIn(f'data-motivo="{MSG_02_07}"', html)
+
+    def test_bandeja_mantiene_control_activo_en_revision_y_aprobado_sin_cargue(self):
+        """En revisión y Aprobado sin cargue ni informe conservan el control deslizante activo."""
+        prop_rev = self.crear_propuesta(self.estudiante_1, 'PROP-ACT-REV')
+        prop_apr = self.crear_propuesta(
+            self.estudiante_2, 'PROP-ACT-APR', estado=EstadoTramite.APROBADO
+        )
+
+        self.client.force_login(self.user_director)
+        response = self.client.get(reverse('propuestas:aprobacion'))
+        metas = {m['propuesta'].pk: m for m in response.context['propuestas_con_meta']}
+        html = response.content.decode('utf-8')
+
+        for prop in (prop_rev, prop_apr):
+            with self.subTest(codigo=prop.codigo):
+                self.assertFalse(metas[prop.pk]['bloqueada_reversion'])
+                self.assertIn(f'aria-label="Cambiar estado {prop.codigo}"', html)
+
     def test_bandeja_filtros_busqueda_y_estado(self):
         """Filtra propuestas por texto general (título/código/estudiante) y por estado."""
         p1 = self.crear_propuesta(
