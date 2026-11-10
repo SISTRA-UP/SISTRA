@@ -1,6 +1,7 @@
 """SISTRA-11 · Parametrización: vistas de estados del proceso (actividades y tipos de rechazo)."""
 
 from django.contrib import messages
+from django.db import models
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
@@ -11,54 +12,8 @@ from ..forms.estados import ActividadForm, TipoRechazoForm
 from ..models import Actividad, TipoRechazo
 
 
-ESTADOS_TRAMITE_DETALLE = [
-    {
-        'estado': 'Borrador',
-        'badge': 'secondary',
-        'actor': 'Estudiante',
-        'descripcion': 'El estudiante formula la propuesta o redacta el informe. Puede editar libremente antes de enviar.',
-    },
-    {
-        'estado': 'En revisión',
-        'badge': 'warning text-dark',
-        'actor': 'Director / Evaluador',
-        'descripcion': 'El documento ha sido enviado y se encuentra en evaluación académica y metodológica (inicia semáforo).',
-    },
-    {
-        'estado': 'Requiere modificación',
-        'badge': 'info text-dark',
-        'actor': 'Estudiante',
-        'descripcion': 'El evaluador devuelve el documento con observaciones que el estudiante debe corregir para un nuevo envío.',
-    },
-    {
-        'estado': 'Rechazado',
-        'badge': 'danger',
-        'actor': 'Director',
-        'descripcion': 'No aprobado por incumplimiento de requisitos o plazo vencido. Requiere motivo de rechazo y observación.',
-    },
-    {
-        'estado': 'Aprobado',
-        'badge': 'success',
-        'actor': 'Director',
-        'descripcion': 'Aprobado académicamente en SISTRA. Habilita al estudiante para cargar el documento en Plataforma UP.',
-    },
-    {
-        'estado': 'Subido en UP',
-        'badge': 'primary',
-        'actor': 'Estudiante',
-        'descripcion': 'El estudiante declara formalmente que radicó el documento aprobado en la plataforma institucional UP.',
-    },
-    {
-        'estado': 'Aprobado en UP',
-        'badge': 'success',
-        'actor': 'Director',
-        'descripcion': 'El Director verifica el soporte del cargue institucional en UP y avala definitivamente el trámite.',
-    },
-]
-
-
 class EstadosView(ParametrizarRequeridoMixin, View):
-    """Lista las etapas del proceso (actividades), los estados del trámite y los tipos de rechazo."""
+    """Lista las etapas generales (actividades/estados) y los tipos de rechazo."""
 
     template_name = 'parametrizacion/parametrizacion/estados.html'
 
@@ -68,7 +23,6 @@ class EstadosView(ParametrizarRequeridoMixin, View):
         return render(request, self.template_name, {
             **contexto_menu(request.user),
             'seccion': 'estados',
-            'estados_tramite': ESTADOS_TRAMITE_DETALLE,
             'actividades': actividades,
             'tipos_rechazo': tipos_rechazo,
             'form_actividad': ActividadForm(),
@@ -136,6 +90,32 @@ class EditarActividadView(ParametrizarRequeridoMixin, View):
         })
 
 
+class EliminarActividadView(ParametrizarRequeridoMixin, View):
+    """Elimina una etapa del proceso."""
+
+    def post(self, request, pk):
+        actividad = get_object_or_404(Actividad, pk=pk)
+        nombre = actividad.nombre
+        try:
+            actividad.delete()
+            Auditoria.objects.create(
+                usuario=request.user,
+                accion='Eliminar etapa del proceso',
+                tabla_afectada='actividad',
+                id_registro_afectado=pk,
+                detalle=f'Etapa eliminada: {nombre}',
+                resultado='Éxito',
+            )
+            messages.success(request, f'Etapa «{nombre}» eliminada correctamente.')
+        except models.ProtectedError:
+            messages.error(
+                request,
+                f'No se puede eliminar la etapa «{nombre}» porque tiene registros asociados. '
+                'Puede cambiar su estado a Inactivo desde Editar.'
+            )
+        return redirect('parametrizacion:estados')
+
+
 class CrearTipoRechazoView(ParametrizarRequeridoMixin, View):
     """Crea una nueva causal o tipo de rechazo."""
 
@@ -194,3 +174,29 @@ class EditarTipoRechazoView(ParametrizarRequeridoMixin, View):
             'tipo': tipo,
             'form': form,
         })
+
+
+class EliminarTipoRechazoView(ParametrizarRequeridoMixin, View):
+    """Elimina una causal o tipo de rechazo."""
+
+    def post(self, request, pk):
+        tipo = get_object_or_404(TipoRechazo, pk=pk)
+        nombre = tipo.nombre
+        try:
+            tipo.delete()
+            Auditoria.objects.create(
+                usuario=request.user,
+                accion='Eliminar tipo de rechazo',
+                tabla_afectada='tipo_rechazo',
+                id_registro_afectado=pk,
+                detalle=f'Tipo de rechazo eliminado: {nombre}',
+                resultado='Éxito',
+            )
+            messages.success(request, f'Tipo de rechazo «{nombre}» eliminado correctamente.')
+        except models.ProtectedError:
+            messages.error(
+                request,
+                f'No se puede eliminar «{nombre}» porque está en uso en trámites del sistema. '
+                'Puede cambiar su estado a Inactivo desde Editar.'
+            )
+        return redirect('parametrizacion:estados')

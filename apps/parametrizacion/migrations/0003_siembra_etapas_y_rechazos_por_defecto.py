@@ -1,47 +1,48 @@
 from django.db import migrations
 
 
+# Estados oficiales del proceso sin "Borrador", configurados como etapas generales
 ETAPAS_DEFECTO = [
     {
         'orden': 1,
-        'nombre': 'Presentación de Propuesta',
-        'descripcion': 'El estudiante formula y radica la propuesta inicial de Trabajo Social con el aval del tutor o docente.',
+        'nombre': 'En revisión',
+        'descripcion': 'Propuesta o informe radicado y en proceso de evaluación académica y metodológica.',
         'obligatoria': True,
         'estado': 'Activo',
     },
     {
         'orden': 2,
-        'nombre': 'Revisión y Aprobación de Propuesta',
-        'descripcion': 'Evaluación académica y metodológica de la propuesta por parte del Director o evaluador asignado.',
-        'obligatoria': True,
+        'nombre': 'Requiere modificación',
+        'descripcion': 'Devuelto al estudiante con observaciones para que realice los ajustes solicitados.',
+        'obligatoria': False,
         'estado': 'Activo',
     },
     {
         'orden': 3,
-        'nombre': 'Cargue y Verificación en Plataforma UP',
-        'descripcion': 'El estudiante declara la subida de la propuesta aprobada en la plataforma institucional UP y el Director verifica el soporte.',
+        'nombre': 'Aprobado',
+        'descripcion': 'Aprobación académica formal en SISTRA para habilitar el cargue en Plataforma UP.',
         'obligatoria': True,
         'estado': 'Activo',
     },
     {
         'orden': 4,
-        'nombre': 'Ejecución del Trabajo Social',
-        'descripcion': 'Desarrollo de las actividades planificadas en el cronograma institucional y cumplimiento de las horas reglamentarias.',
+        'nombre': 'Subido en UP',
+        'descripcion': 'El estudiante declara formalmente que radicó el documento aprobado en la Plataforma UP.',
         'obligatoria': True,
         'estado': 'Activo',
     },
     {
         'orden': 5,
-        'nombre': 'Presentación de Informe Final',
-        'descripcion': 'Consolidación de resultados, evidencias y entrega del informe final de cumplimiento de Trabajo Social.',
+        'nombre': 'Aprobado en UP',
+        'descripcion': 'El Director valida el soporte institucional en la Plataforma UP y concluye el trámite.',
         'obligatoria': True,
         'estado': 'Activo',
     },
     {
         'orden': 6,
-        'nombre': 'Aprobación y Certificación Final',
-        'descripcion': 'Revisión final, visto bueno institucional en Plataforma UP y cierre exitoso del proceso de Trabajo Social.',
-        'obligatoria': True,
+        'nombre': 'Rechazado',
+        'descripcion': 'Trámite no aprobado por incumplimiento de requisitos o plazo reglamentario vencido.',
+        'obligatoria': False,
         'estado': 'Activo',
     },
 ]

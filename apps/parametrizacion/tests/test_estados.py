@@ -73,10 +73,9 @@ class EstadosViewTests(TestCase):
         resp = self.client.get(reverse('parametrizacion:estados'))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'Estados del proceso')
-        self.assertContains(resp, 'Estados del trámite')
         self.assertContains(resp, 'Propuesta de Trabajo Social')
         self.assertContains(resp, 'Documentación incompleta')
-        self.assertIn('estados_tramite', resp.context)
+        self.assertNotContains(resp, 'Borrador')
 
     def test_crear_actividad_exitosa(self):
         resp = self.client.post(reverse('parametrizacion:actividad_nueva'), {
@@ -156,3 +155,22 @@ class EstadosViewTests(TestCase):
         self.assertEqual(tipo.nombre, 'Falta firma del director de proyecto')
         self.assertEqual(tipo.estado, 'Inactivo')
         self.assertTrue(Auditoria.objects.filter(accion='Editar tipo de rechazo').exists())
+
+    def test_eliminar_actividad(self):
+        actividad = Actividad.objects.create(
+            nombre='Etapa para borrar', descripcion='', orden=9, obligatoria=False, estado='Activo'
+        )
+        resp = self.client.post(reverse('parametrizacion:actividad_eliminar', args=[actividad.pk]))
+        self.assertRedirects(resp, reverse('parametrizacion:estados'))
+        self.assertFalse(Actividad.objects.filter(pk=actividad.pk).exists())
+        self.assertTrue(Auditoria.objects.filter(accion='Eliminar etapa del proceso').exists())
+
+    def test_eliminar_tipo_rechazo(self):
+        tipo = TipoRechazo.objects.create(
+            nombre='Rechazo para borrar', descripcion='', estado='Activo'
+        )
+        resp = self.client.post(reverse('parametrizacion:rechazo_eliminar', args=[tipo.pk]))
+        self.assertRedirects(resp, reverse('parametrizacion:estados'))
+        self.assertFalse(TipoRechazo.objects.filter(pk=tipo.pk).exists())
+        self.assertTrue(Auditoria.objects.filter(accion='Eliminar tipo de rechazo').exists())
+

@@ -7,7 +7,7 @@
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
         <h1 class="sis-titulo">Estados del proceso</h1>
-        <p class="sis-sub mb-0">Catálogo de etapas generales de Trabajo Social y motivos de rechazo para revisiones.</p>
+        <p class="sis-sub mb-0">Gestione las etapas generales del proceso de Trabajo Social y los tipos de rechazo configurados.</p>
     </div>
     <div class="d-flex gap-2">
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevaActividad">
@@ -18,40 +18,6 @@
         </button>
     </div>
 </div>
-
-<!-- Sección: Estados del Trámite (Flujo oficial acordado en el BRD) -->
-<section class="sis-card mb-4" aria-labelledby="titulo-tramite">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <div>
-            <h2 id="titulo-tramite" class="h5 mb-1">Estados del trámite (Propuestas e Informes)</h2>
-            <p class="text-muted small mb-0">Flujo de estados predefinidos por el sistema para el ciclo de vida de propuestas e informes.</p>
-        </div>
-        <span class="badge bg-light text-dark border">7 estados base</span>
-    </div>
-
-    <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle mb-0">
-            <thead>
-                <tr>
-                    <th scope="col" style="width: 220px;">Estado</th>
-                    <th scope="col" style="width: 180px;">Actor responsable</th>
-                    <th scope="col">Descripción y comportamiento en el sistema</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in estados_tramite %}
-                <tr>
-                    <td>
-                        <span class="badge bg-{{ item.badge }} px-2 py-1">{{ item.estado }}</span>
-                    </td>
-                    <td class="fw-semibold small text-secondary">{{ item.actor }}</td>
-                    <td class="small text-muted">{{ item.descripcion }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</section>
 
 <!-- Sección 1: Etapas del Proceso (Actividades) -->
 <section class="sis-card mb-4" aria-labelledby="titulo-etapas">
@@ -73,7 +39,7 @@
                     <th scope="col">Descripción</th>
                     <th scope="col">Obligatoria</th>
                     <th scope="col">Estado</th>
-                    <th scope="col" class="text-end"><span class="visually-hidden">Acciones</span></th>
+                    <th scope="col" class="text-end" style="min-width: 170px;">Acciones</th>
                 </tr>
             </thead>
             <tbody>
@@ -99,10 +65,20 @@
                         {% endif %}
                     </td>
                     <td class="text-end">
-                        <a class="btn btn-sm btn-outline-secondary"
-                           href="{% url 'parametrizacion:actividad_editar' actividad.pk %}">
-                            Editar
-                        </a>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <a class="btn btn-outline-secondary"
+                               href="{% url 'parametrizacion:actividad_editar' actividad.pk %}">
+                                Editar
+                            </a>
+                            <form method="post" action="{% url 'parametrizacion:actividad_eliminar' actividad.pk %}"
+                                  style="display: inline;"
+                                  onsubmit="return confirm('¿Está seguro de eliminar la etapa «{{ actividad.nombre }}»?');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-danger">
+                                    Eliminar
+                                </button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
@@ -137,7 +113,7 @@
                     <th scope="col">Motivo o causal</th>
                     <th scope="col">Descripción</th>
                     <th scope="col">Estado</th>
-                    <th scope="col" class="text-end"><span class="visually-hidden">Acciones</span></th>
+                    <th scope="col" class="text-end" style="min-width: 170px;">Acciones</th>
                 </tr>
             </thead>
             <tbody>
@@ -153,10 +129,20 @@
                         {% endif %}
                     </td>
                     <td class="text-end">
-                        <a class="btn btn-sm btn-outline-secondary"
-                           href="{% url 'parametrizacion:rechazo_editar' tipo.pk %}">
-                            Editar
-                        </a>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <a class="btn btn-outline-secondary"
+                               href="{% url 'parametrizacion:rechazo_editar' tipo.pk %}">
+                                Editar
+                            </a>
+                            <form method="post" action="{% url 'parametrizacion:rechazo_eliminar' tipo.pk %}"
+                                  style="display: inline;"
+                                  onsubmit="return confirm('¿Está seguro de eliminar el tipo de rechazo «{{ tipo.nombre }}»?');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-danger">
+                                    Eliminar
+                                </button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
