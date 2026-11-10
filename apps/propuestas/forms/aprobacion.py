@@ -3,8 +3,6 @@
 Solo el responsable de este requisito edita este archivo.
 """
 
-import re
-
 from django import forms
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -62,8 +60,8 @@ class ReactivacionInvalidaError(Exception):
 
 
 def sanitizar_texto(valor: str) -> str:
-    """Elimina etiquetas HTML y espacios sobrantes"""
-    return re.sub(r'<[^>]*?>', '', valor.strip()) if valor else ''
+    """Quita espacios sobrantes. El escape lo hacen las plantillas y textContent."""
+    return valor.strip() if valor else ''
 
 
 def obtener_limites_semaforo() -> tuple[int, int]:

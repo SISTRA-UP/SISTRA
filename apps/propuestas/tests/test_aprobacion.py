@@ -1,7 +1,7 @@
 """SISTRA-02 · Aprobación de propuesta: pruebas automatizadas exhaustivas.
 
 Cubre:
-- Dominio y cálculos: sanitización XSS, semáforo (RG-07), reversión de aprobación (RN-02-04 / EX-05).
+- Dominio y cálculos: limpieza de texto (sin borrar < ni >), semáforo (RG-07), reversión de aprobación (RN-02-04 / EX-05).
 - Formularios individuales: Aprobación, Modificación, Rechazo y Reactivación.
 - Formulario de acciones masivas: AccionMasivaForm (aislamiento, compatibilidad, colisiones RG-05 / EX-02).
 - Vistas web y API JSON: bandeja, decisión individual, reactivación, masivo, detalle lazy y descarga.
@@ -204,19 +204,17 @@ class BaseAprobacionTestCase(TestCase):
 class TestDominioYSemaforo(BaseAprobacionTestCase):
     """Pruebas unitarias de las funciones de soporte del dominio de aprobación."""
 
-    def test_sanitizar_texto_ataque_xss_y_etiquetas(self):
-        """Elimina etiquetas HTML peligrosas sin escapar comillas ni ampersand (Django autoescapa al renderizar)."""
-        xss_input = "<script>alert('Ataque XSS')</script>Observación limpia"
-        resultado = sanitizar_texto(xss_input)
-        self.assertNotIn('<script>', resultado)
-        self.assertNotIn('</script>', resultado)
-        self.assertEqual(resultado, "alert('Ataque XSS')Observación limpia")
-
-        html_input = "<b>Negrita</b> & <img src=x onerror=alert(1)>Texto final"
-        resultado_html = sanitizar_texto(html_input)
-        self.assertNotIn('<b>', resultado_html)
-        self.assertNotIn('<img', resultado_html)
-        self.assertEqual(resultado_html, "Negrita & Texto final")
+    def test_sanitizar_texto_conserva_simbolos_menor_y_mayor(self):
+        """Solo quita espacios: no borra texto entre < y > (el escape ocurre al mostrar)."""
+        texto = '  La población debe ser < 50 personas y > 10 por jornada  '
+        self.assertEqual(
+            sanitizar_texto(texto),
+            'La población debe ser < 50 personas y > 10 por jornada',
+        )
+        self.assertEqual(
+            sanitizar_texto('Revisar <img src=x onerror=alert(1)> antes de aprobar'),
+            'Revisar <img src=x onerror=alert(1)> antes de aprobar',
+        )
 
         ejemplo_revisor = "Revise la sección 'Objetivos' y Peña & Cía"
         self.assertEqual(sanitizar_texto(ejemplo_revisor), "Revise la sección 'Objetivos' y Peña & Cía")
@@ -382,7 +380,7 @@ class TestFiltroBandejaPropuestasForm(BaseAprobacionTestCase):
         self.assertEqual(form.cleaned_data['semaforo'], '')
 
     def test_filtro_sanitiza_busqueda_y_acepta_opciones_validas(self):
-        """Sanitiza el texto de búsqueda y valida opciones de los selectores."""
+        """Recorta el texto de búsqueda y valida opciones de los selectores."""
         data = {
             'buscar': "<script>alert(1)</script> Juan Pérez ",
             'estado': EstadoTramite.EN_REVISION,
@@ -390,7 +388,7 @@ class TestFiltroBandejaPropuestasForm(BaseAprobacionTestCase):
         }
         form = FiltroBandejaPropuestasForm(data=data)
         self.assertTrue(form.is_valid())
-        self.assertEqual(form.cleaned_data['buscar'], 'alert(1) Juan Pérez')
+        self.assertEqual(form.cleaned_data['buscar'], '<script>alert(1)</script> Juan Pérez')
         self.assertEqual(form.cleaned_data['estado'], EstadoTramite.EN_REVISION)
         self.assertEqual(form.cleaned_data['semaforo'], 'amarillo')
 
@@ -454,7 +452,7 @@ class TestAprobacionPropuestaForm(BaseAprobacionTestCase):
         self.assertEqual(audit.resultado, 'Éxito')
 
     def test_aprobar_exito_con_observacion(self):
-        """Aprueba con éxito registrando la observación opcional sanitizada."""
+        """Aprueba con éxito guardando la observación tal cual (se escapa al mostrarla)."""
         prop = self.crear_propuesta(self.estudiante_1, 'PROP-APR-2')
         obs = '<b>Felicitaciones</b>, propuesta excelente para la comunidad.'
         form = AprobacionPropuestaForm(data={'observacion': obs})
@@ -462,7 +460,7 @@ class TestAprobacionPropuestaForm(BaseAprobacionTestCase):
 
         form.procesar(prop, self.user_director)
         hist = HistorialEstado.objects.filter(propuesta=prop).latest('id_historial')
-        self.assertEqual(hist.observacion, 'Felicitaciones, propuesta excelente para la comunidad.')
+        self.assertEqual(hist.observacion, obs)
 
     def test_aprobar_falla_observacion_mayor_a_1000_caracteres(self):
         """Falla si la observación supera el límite de 1000 caracteres (Tabla 8)."""

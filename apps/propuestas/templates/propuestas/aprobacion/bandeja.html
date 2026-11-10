@@ -863,14 +863,19 @@ document.addEventListener('DOMContentLoaded', function () {
                         cronoVacio.style.display = 'none';
                         data.cronograma.forEach(act => {
                             const tr = document.createElement('tr');
-                            tr.innerHTML = `
-                                <td class="text-center fw-semibold text-muted">${act.orden}</td>
-                                <td class="fw-semibold text-dark">${act.nombre}</td>
-                                <td class="text-secondary">${act.descripcion || '-'}</td>
-                                <td class="text-nowrap">${act.fecha_inicio || '-'}</td>
-                                <td class="text-nowrap">${act.fecha_fin || '-'}</td>
-                                <td class="text-secondary">${act.responsable || '-'}</td>
-                            `;
+                            [
+                                ['text-center fw-semibold text-muted', act.orden],
+                                ['fw-semibold text-dark', act.nombre],
+                                ['text-secondary', act.descripcion || '-'],
+                                ['text-nowrap', act.fecha_inicio || '-'],
+                                ['text-nowrap', act.fecha_fin || '-'],
+                                ['text-secondary', act.responsable || '-'],
+                            ].forEach(([clase, valor]) => {
+                                const td = document.createElement('td');
+                                td.className = clase;
+                                td.textContent = valor;
+                                tr.appendChild(td);
+                            });
                             cronoTbody.appendChild(tr);
                         });
                     } else {
@@ -887,12 +892,18 @@ document.addEventListener('DOMContentLoaded', function () {
                         data.historial.forEach(h => {
                             const fila = document.createElement('div');
                             fila.className = 'hi';
-                            fila.innerHTML = `
-                                <span class="s" style="color: var(--sistra-muted);">${h.fecha_hora}</span>
-                                <span class="ch">${h.tipo_accion}</span>
-                                <span class="fw-medium text-dark" style="min-width: 140px;">${h.usuario}</span>
-                                <span style="color: var(--sistra-dark);">${h.observacion || h.motivo_reactivacion || 'Sin observaciones registradas'}</span>
-                            `;
+                            [
+                                ['s', 'color: var(--sistra-muted);', h.fecha_hora],
+                                ['ch', '', h.tipo_accion],
+                                ['fw-medium text-dark', 'min-width: 140px;', h.usuario],
+                                ['', 'color: var(--sistra-dark);', h.observacion || h.motivo_reactivacion || 'Sin observaciones registradas'],
+                            ].forEach(([clase, estilo, valor]) => {
+                                const span = document.createElement('span');
+                                if (clase) span.className = clase;
+                                if (estilo) span.style.cssText = estilo;
+                                span.textContent = valor;
+                                fila.appendChild(span);
+                            });
                             historialContainer.appendChild(fila);
                         });
                     } else {
