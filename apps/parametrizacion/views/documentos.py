@@ -15,20 +15,25 @@ from ..models import Plantilla, VersionPlantilla
 
 
 def _guardar_archivo(archivo, plantilla, numero_version):
-    """Persiste el archivo en MEDIA_ROOT y devuelve la ruta relativa."""
+    """Persiste el archivo en MEDIA_ROOT/documentos/ y devuelve la ruta relativa.
+
+    La carpeta documentos/ es la única que SISTRA-02 sirve al exterior (protección
+    agregada en ese PR). La ruta relativa se guarda en `ruta_archivo` para que el
+    módulo de propuestas pueda construir la URL de descarga.
+    """
     from django.conf import settings
 
-    directorio = os.path.join(
-        settings.MEDIA_ROOT, 'plantillas', str(plantilla.pk)
-    )
+    directorio = os.path.join(settings.MEDIA_ROOT, 'documentos')
     os.makedirs(directorio, exist_ok=True)
-    nombre = f'v{numero_version}_{archivo.name}'
+    # Nombre único: tipo_plantilla-pk-v{n}-nombre_original
+    nombre_seguro = archivo.name.replace(' ', '_')
+    nombre = f'{plantilla.tipo}-{plantilla.pk}-v{numero_version}-{nombre_seguro}'
     ruta = os.path.join(directorio, nombre)
     with open(ruta, 'wb') as destino:
         for bloque in archivo.chunks():
             destino.write(bloque)
-    # Ruta relativa a MEDIA_ROOT para portabilidad
-    return os.path.relpath(ruta, settings.MEDIA_ROOT)
+    # Ruta relativa a MEDIA_ROOT: "documentos/nombre_archivo"
+    return os.path.join('documentos', nombre)
 
 
 class DocumentosView(ParametrizarRequeridoMixin, View):

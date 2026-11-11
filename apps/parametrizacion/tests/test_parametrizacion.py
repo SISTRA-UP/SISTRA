@@ -1,3 +1,8 @@
+"""SISTRA-11 · Parametrización: pruebas de acceso y vistas principales.
+
+Solo el Administrador (permiso `sistema.parametrizar`) puede entrar.
+Directores y Estudiantes deben recibir 403 en todas las URLs del módulo.
+"""
 from datetime import date
 
 from django.core import mail
@@ -7,179 +12,144 @@ from django.urls import reverse
 from apps.parametrizacion.models import Carrera
 from apps.personas.models import DirectorCarrera
 from apps.seguimiento.models import Auditoria
-from apps.usuarios.models import ROL_DIRECTOR, ROL_ESTUDIANTE, Usuario
+from apps.usuarios.models import ROL_DIRECTOR, ROL_ESTUDIANTE, Permiso, Rol, RolPermiso, Usuario
 from apps.usuarios.servicios import crear_usuario
 
 
-class UsuariosViewTests(TestCase):
+def _crear_admin():
+    """Crea un Administrador con el permiso sistema.parametrizar."""
+    rol, _ = Rol.objects.get_or_create(nombre='Administrador')
+    usuario = Usuario.objects.create_user(
+        correo_institucional='admin@unipamplona.edu.co',
+        password='Admin-Segura-1',
+        nombre='Admin Test',
+        cedula='900000001',
+        nombre_usuario='admin.test',
+        rol=rol,
+        requiere_cambio_contrasena=False,
+    )
+    permiso, _ = Permiso.objects.get_or_create(
+        nombre='sistema.parametrizar',
+        defaults={'descripcion': 'Acceso a parametrización', 'estado': 'Activo'},
+    )
+    RolPermiso.objects.get_or_create(rol=rol, permiso=permiso)
+    return usuario
+
+
+def _crear_director(cedula, correo):
+    """Crea un Director sin carrera asignada."""
+    return crear_usuario(
+        nombre='Director', apellido='Test',
+        cedula=cedula, correo=correo,
+        rol=ROL_DIRECTOR,
+    )
+
+
+def _crear_estudiante():
+    return crear_usuario(
+        nombre='Estudiante', apellido='Test',
+        cedula='100999001', correo='est@unipamplona.edu.co',
+        rol=ROL_ESTUDIANTE,
+    )
+
+
+# URLs del módulo que solo el Administrador puede ver (permiso sistema.parametrizar)
+URLS_SOLO_ADMIN = [
+    'parametrizacion:parametrizacion',
+    'parametrizacion:periodos',
+    'parametrizacion:alertas',
+    'parametrizacion:estados',
+    'parametrizacion:directores',
+    'parametrizacion:documentos',
+]
+
+
+class AccesoModuloTests(TestCase):
+    """Verifica que solo el Administrador accede; Director y Estudiante reciben 403."""
+
     @classmethod
     def setUpTestData(cls):
-        cls.admin = Usuario.objects.create_superuser(
-            'admin@unipamplona.edu.co', 'Clave-Segura-123',
-            nombre='Admin', cedula='900000001', nombre_usuario='admin',
-        )
-        cls.derecho = Carrera.objects.get(codigo='52382')
-        cls.director = crear_usuario(
-            nombre='Diana', apellido='Rojas', cedula='900000002',
-            correo='diana@unipamplona.edu.co', rol=ROL_DIRECTOR,
-        )
-        DirectorCarrera.objects.create(
-            director=cls.director.director, carrera=cls.derecho,
-            fecha_inicio=date.today(), activo=True,
-        )
-        cls.director_sin_carrera = crear_usuario(
-            nombre='Sin', apellido='Carrera', cedula='900000003',
-            correo='sin@unipamplona.edu.co', rol=ROL_DIRECTOR,
-        )
-        cls.url = reverse('parametrizacion:usuarios')
+        cls.admin = _crear_admin()
+        cls.director = _crear_director('900000002', 'dir@unipamplona.edu.co')
+        cls.estudiante = _crear_estudiante()
 
-    def datos(self, **cambios):
-        datos = {'cedula': '1001234567', 'nombre': 'Ana', 'apellido': 'Pérez',
-                 'correo': 'ana.perez@unipamplona.edu.co', 'telefono': '3001234567'}
-        datos.update(cambios)
-        return datos
+    def test_sin_sesion_redirige(self):
+        for nombre in URLS_SOLO_ADMIN:
+            with self.subTest(url=nombre):
+                resp = self.client.get(reverse(nombre))
+                self.assertEqual(resp.status_code, 302, msg=f'{nombre} debe redirigir sin sesión')
 
-    def crear_estudiante(self):
-        with self.captureOnCommitCallbacks(execute=True):
-            return crear_usuario(
-                nombre='Luis', apellido='Díaz', cedula='1007654321',
-                correo='luis@unipamplona.edu.co', rol=ROL_ESTUDIANTE,
-            )
+    def test_director_recibe_403_en_todas_las_urls(self):
+        self.client.force_login(self.director)
+        for nombre in URLS_SOLO_ADMIN:
+            with self.subTest(url=nombre):
+                resp = self.client.get(reverse(nombre))
+                self.assertEqual(resp.status_code, 403, msg=f'Director debe recibir 403 en {nombre}')
 
-    # --- Acceso ---
-    def test_sin_sesion_redirige_al_login(self):
-        self.assertEqual(self.client.get(self.url).status_code, 302)
+    def test_estudiante_recibe_403_en_todas_las_urls(self):
+        self.client.force_login(self.estudiante)
+        for nombre in URLS_SOLO_ADMIN:
+            with self.subTest(url=nombre):
+                resp = self.client.get(reverse(nombre))
+                self.assertEqual(resp.status_code, 403, msg=f'Estudiante debe recibir 403 en {nombre}')
 
-    def test_el_administrador_no_crea_usuarios(self):
+    def test_administrador_accede_al_inicio(self):
         self.client.force_login(self.admin)
-        self.assertEqual(self.client.get(self.url).status_code, 403)
+        resp = self.client.get(reverse('parametrizacion:parametrizacion'))
+        self.assertEqual(resp.status_code, 200)
 
-    def test_un_estudiante_no_crea_usuarios(self):
-        self.client.force_login(self.crear_estudiante())
-        self.assertEqual(self.client.get(self.url).status_code, 403)
-
-    def test_un_estudiante_no_entra_al_modulo(self):
-        self.client.force_login(self.crear_estudiante())
-        self.assertEqual(self.client.get(reverse('parametrizacion:parametrizacion')).status_code, 403)
-
-    def test_el_director_entra_al_modulo_y_va_a_usuarios(self):
-        self.client.force_login(self.director)
-        respuesta = self.client.get(reverse('parametrizacion:parametrizacion'))
-        self.assertRedirects(respuesta, self.url)
-
-    def test_el_administrador_ve_las_secciones_pero_no_usuarios(self):
+    def test_administrador_ve_secciones_principales(self):
         self.client.force_login(self.admin)
-        respuesta = self.client.get(reverse('parametrizacion:parametrizacion'))
-        self.assertContains(respuesta, 'Periodo académico')
-        self.assertNotContains(respuesta, 'aria-current="page">Usuarios')
-
-    def test_el_director_solo_ve_usuarios_en_el_menu(self):
-        self.client.force_login(self.director)
-        respuesta = self.client.get(self.url)
-        self.assertContains(respuesta, 'aria-current="page">Usuarios')
-        self.assertNotContains(respuesta, 'Periodo académico')
-        self.assertNotContains(respuesta, 'Estados del proceso')
-
-    # --- Crear estudiantes ---
-    def test_el_director_ve_el_formulario(self):
-        self.client.force_login(self.director)
-        self.assertContains(self.client.get(self.url), 'Crear estudiante uno a uno')
-
-    def test_director_crea_estudiante_en_su_carrera_y_audita(self):
-        self.client.force_login(self.director)
-        with self.captureOnCommitCallbacks(execute=True):
-            respuesta = self.client.post(self.url, self.datos())
-        self.assertRedirects(respuesta, self.url)
-        estudiante = Usuario.objects.get(correo_institucional='ana.perez@unipamplona.edu.co')
-        self.assertEqual(estudiante.estudiante.inscripciones.get().carrera, self.derecho)
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertTrue(Auditoria.objects.filter(
-            accion='Crear usuario', resultado='Éxito', usuario=self.director).exists())
-
-    def test_error_se_muestra_y_se_audita(self):
-        self.client.force_login(self.director)
-        respuesta = self.client.post(self.url, self.datos(correo='ana@gmail.com'))
-        self.assertContains(respuesta, 'El correo debe ser institucional.')
-        self.assertTrue(Auditoria.objects.filter(resultado='Fallo').exists())
-        self.assertEqual(len(mail.outbox), 0)
-
-    def test_la_respuesta_no_incluye_la_contrasena(self):
-        self.client.force_login(self.director)
-        with self.captureOnCommitCallbacks(execute=True):
-            respuesta = self.client.post(self.url, self.datos(), follow=True)
-        self.assertNotContains(respuesta, 'Contraseña temporal:')
-
-    def test_director_sin_carrera_recibe_aviso(self):
-        self.client.force_login(self.director_sin_carrera)
-        self.assertContains(self.client.get(self.url), 'No tiene una carrera asignada')
-
-    # --- Cerrar sesión ---
-    def test_cerrar_sesion_por_post(self):
-        self.client.force_login(self.director)
-        self.assertEqual(self.client.post(reverse('parametrizacion:salir')).status_code, 302)
-        self.assertEqual(self.client.get(self.url).status_code, 302)
-
-    def test_cerrar_sesion_no_acepta_get(self):
-        self.client.force_login(self.director)
-        self.assertEqual(self.client.get(reverse('parametrizacion:salir')).status_code, 405)
+        resp = self.client.get(reverse('parametrizacion:parametrizacion'))
+        self.assertContains(resp, 'Periodo')
 
 
 class DirectoresViewTests(TestCase):
+    """Creación de directores: solo el Administrador puede hacerlo."""
+
     @classmethod
     def setUpTestData(cls):
-        cls.admin = Usuario.objects.create_superuser(
-            'admin@unipamplona.edu.co', 'Clave-Segura-123',
-            nombre='Admin', cedula='900000001', nombre_usuario='admin',
-        )
+        cls.admin = _crear_admin()
         cls.derecho = Carrera.objects.get(codigo='52382')
         cls.url = reverse('parametrizacion:directores')
 
     def datos(self, **cambios):
-        datos = {'nombre': 'Diana', 'apellido': 'Rojas', 'cedula': '1005005005',
-                 'correo': 'diana.rojas@unipamplona.edu.co', 'telefono': '',
-                 'carrera': self.derecho.pk}
-        datos.update(cambios)
-        return datos
+        base = {
+            'nombre': 'Diana', 'apellido': 'Rojas',
+            'cedula': '1005005005', 'correo': 'diana.rojas@unipamplona.edu.co',
+            'carrera': self.derecho.pk,
+        }
+        base.update(cambios)
+        return base
 
-    def test_un_director_no_entra(self):
-        with self.captureOnCommitCallbacks(execute=True):
-            director = crear_usuario(
-                nombre='Otro', apellido='Director', cedula='900000009',
-                correo='otro@unipamplona.edu.co', rol=ROL_DIRECTOR,
-            )
+    def test_director_no_puede_crear_directores(self):
+        director = _crear_director('900000010', 'dir10@unipamplona.edu.co')
         self.client.force_login(director)
         self.assertEqual(self.client.get(self.url).status_code, 403)
 
     def test_administrador_crea_director_y_lo_asigna(self):
         self.client.force_login(self.admin)
         with self.captureOnCommitCallbacks(execute=True):
-            respuesta = self.client.post(self.url, self.datos())
-        self.assertRedirects(respuesta, self.url)
+            resp = self.client.post(self.url, self.datos())
+        self.assertRedirects(resp, self.url)
         usuario = Usuario.objects.get(correo_institucional='diana.rojas@unipamplona.edu.co')
         asignacion = usuario.director.asignaciones.get()
-        self.assertEqual((asignacion.carrera, asignacion.activo), (self.derecho, True))
+        self.assertEqual(asignacion.carrera, self.derecho)
+        self.assertTrue(asignacion.activo)
         self.assertEqual(len(mail.outbox), 1)
         self.assertTrue(Auditoria.objects.filter(accion='Asignar director a carrera').exists())
 
-    def test_segundo_director_en_la_misma_carrera_se_rechaza_sin_crear_nada(self):
+    def test_segundo_director_en_misma_carrera_se_rechaza(self):
         self.client.force_login(self.admin)
         with self.captureOnCommitCallbacks(execute=True):
             self.client.post(self.url, self.datos())
-        respuesta = self.client.post(self.url, self.datos(
+        resp = self.client.post(self.url, self.datos(
             cedula='1006006006', correo='otra@unipamplona.edu.co'))
-        self.assertContains(respuesta, 'ya tiene un director activo')
-        self.assertFalse(Usuario.objects.filter(correo_institucional='otra@unipamplona.edu.co').exists())
-
-    def test_el_director_creado_puede_crear_estudiantes_pero_no_directores(self):
-        self.client.force_login(self.admin)
-        with self.captureOnCommitCallbacks(execute=True):
-            self.client.post(self.url, self.datos())
-        director = Usuario.objects.get(correo_institucional='diana.rojas@unipamplona.edu.co')
-        self.client.force_login(director)
-        self.assertEqual(self.client.get(reverse('parametrizacion:usuarios')).status_code, 200)
-        self.assertEqual(self.client.get(self.url).status_code, 403)
+        self.assertContains(resp, 'ya tiene un director activo')
+        self.assertFalse(Usuario.objects.filter(
+            correo_institucional='otra@unipamplona.edu.co').exists())
 
     def test_correo_no_institucional_se_rechaza(self):
         self.client.force_login(self.admin)
-        respuesta = self.client.post(self.url, self.datos(correo='diana@gmail.com'))
-        self.assertContains(respuesta, 'El correo debe ser institucional.')
+        resp = self.client.post(self.url, self.datos(correo='diana@gmail.com'))
+        self.assertContains(resp, 'El correo debe ser institucional.')

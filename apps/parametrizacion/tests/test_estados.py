@@ -9,12 +9,12 @@ from django.urls import reverse
 
 from apps.parametrizacion.models import Actividad, TipoRechazo
 from apps.seguimiento.models import Auditoria
-from apps.usuarios.models import Estado, Rol, Usuario
+from apps.usuarios.models import Estado, Permiso, Rol, RolPermiso, Usuario
 
 
 def _crear_admin():
     rol, _ = Rol.objects.get_or_create(nombre='Administrador', defaults={'estado': Estado.ACTIVO})
-    return Usuario.objects.create_user(
+    usuario = Usuario.objects.create_user(
         correo_institucional='admin.estados@unipamplona.edu.co',
         password='Admin1234',
         nombre='Admin Estados',
@@ -24,6 +24,12 @@ def _crear_admin():
         requiere_cambio_contrasena=False,
         estado=Estado.ACTIVO,
     )
+    permiso, _ = Permiso.objects.get_or_create(
+        nombre='sistema.parametrizar',
+        defaults={'descripcion': 'Acceso a parametrización', 'estado': 'Activo'},
+    )
+    RolPermiso.objects.get_or_create(rol=rol, permiso=permiso)
+    return usuario
 
 
 def _crear_director():
@@ -58,41 +64,42 @@ class EstadosViewTests(TestCase):
         self.assertEqual(resp.status_code, 403)
 
     def test_admin_ve_lista_estados(self):
+        # Usar orden 97 para no colisionar con las etapas sembradas (1-6)
         Actividad.objects.create(
             nombre='Propuesta de Trabajo Social',
             descripcion='Presentación inicial',
-            orden=1,
+            orden=97,
             obligatoria=True,
             estado='Activo',
         )
+        # Usar nombre único para no colisionar con TipoRechazo sembrados
         TipoRechazo.objects.create(
-            nombre='Documentación incompleta',
-            descripcion='Falta soporte institucional',
+            nombre='Falta de acta de compromiso',
+            descripcion='No adjunta acta',
             estado='Activo',
         )
         resp = self.client.get(reverse('parametrizacion:estados'))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'Estados del proceso')
         self.assertContains(resp, 'Propuesta de Trabajo Social')
-        self.assertContains(resp, 'Documentación incompleta')
+        self.assertContains(resp, 'Falta de acta de compromiso')
         self.assertNotContains(resp, 'Borrador')
 
     def test_crear_actividad_exitosa(self):
+        # Usar orden 98 para no colisionar con las etapas sembradas (1-6)
         resp = self.client.post(reverse('parametrizacion:actividad_nueva'), {
             'nombre': 'Informe Final',
             'descripcion': 'Entrega de informe al finalizar horas',
-            'orden': 2,
+            'orden': 98,
             'obligatoria': True,
             'estado': 'Activo',
         })
         self.assertRedirects(resp, reverse('parametrizacion:estados'))
-        self.assertTrue(Actividad.objects.filter(nombre='Informe Final', orden=2).exists())
+        self.assertTrue(Actividad.objects.filter(nombre='Informe Final', orden=98).exists())
         self.assertTrue(Auditoria.objects.filter(accion='Crear etapa del proceso').exists())
 
     def test_crear_actividad_orden_duplicado_falla(self):
-        Actividad.objects.create(
-            nombre='Etapa 1', descripcion='', orden=1, obligatoria=True, estado='Activo'
-        )
+        # La siembra ya creó orden=1; intentar crearlo de nuevo debe fallar
         resp = self.client.post(reverse('parametrizacion:actividad_nueva'), {
             'nombre': 'Otra etapa con orden 1',
             'descripcion': '',
@@ -104,13 +111,14 @@ class EstadosViewTests(TestCase):
         self.assertContains(resp, 'Ya existe una etapa con el orden 1')
 
     def test_editar_actividad(self):
+        # Usar orden 99 para no colisionar con las etapas sembradas (1-6)
         actividad = Actividad.objects.create(
-            nombre='Etapa Inicial', descripcion='', orden=3, obligatoria=True, estado='Activo'
+            nombre='Etapa Inicial', descripcion='', orden=99, obligatoria=True, estado='Activo'
         )
         resp = self.client.post(reverse('parametrizacion:actividad_editar', args=[actividad.pk]), {
             'nombre': 'Etapa Inicial Modificada',
             'descripcion': 'Nueva descripción',
-            'orden': 3,
+            'orden': 99,
             'obligatoria': False,
             'estado': 'Inactivo',
         })

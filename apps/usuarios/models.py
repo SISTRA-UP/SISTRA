@@ -18,7 +18,7 @@ from django.conf import settings
 ROL_ADMINISTRADOR = 'Administrador'
 ROL_ESTUDIANTE = 'Estudiante'
 ROL_DIRECTOR = 'Director'
-PERMISO_PARAMETRIZAR = 'parametrizar_sistema'
+PERMISO_PARAMETRIZAR = 'sistema.parametrizar'
 PERMISO_CREAR_USUARIOS = 'crear_usuarios'
 
 
@@ -117,7 +117,7 @@ class Usuario(AbstractBaseUser):
     cedula = models.CharField(max_length=15, unique=True)
     correo_institucional = models.EmailField(max_length=254, unique=True)
     nombre_usuario = models.CharField(max_length=80, unique=True)
-    telefono = models.CharField(max_length=20, blank=True, default='')
+
     # Heredados de AbstractBaseUser, con los nombres de columna del DER.
     password = models.CharField('contraseña', max_length=255, db_column='contrasena_hash')
     last_login = models.DateTimeField('último ingreso', blank=True, null=True, db_column='ultimo_ingreso')

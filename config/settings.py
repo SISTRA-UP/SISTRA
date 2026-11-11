@@ -218,7 +218,7 @@ DOMINIOS_CORREO_PERMITIDOS = ['unipamplona.edu.co']
 
 
 if DEBUG:
-    LOGIN_URL = 'parametrizacion:acceso_dev'
+    LOGIN_URL = '/'                                    # SISTRA-13 definirá la URL real
     LOGIN_REDIRECT_URL = 'parametrizacion:parametrizacion'
 
 

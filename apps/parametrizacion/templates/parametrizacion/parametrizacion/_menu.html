@@ -29,11 +29,4 @@
     <a class="sis-nav-item" href="{% url 'parametrizacion:directores' %}">Directores</a>
     {% endif %}
     {% endif %}
-    {% if puede_crear_usuarios %}
-    {% if seccion == 'usuarios' %}
-    <a class="sis-nav-item is-active" href="{% url 'parametrizacion:usuarios' %}" aria-current="page">Usuarios</a>
-    {% else %}
-    <a class="sis-nav-item" href="{% url 'parametrizacion:usuarios' %}">Usuarios</a>
-    {% endif %}
-    {% endif %}
 </nav>

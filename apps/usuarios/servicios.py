@@ -163,7 +163,7 @@ def _enviar_contrasena(usuario, contrasena):
 
 
 def crear_usuario(
-    *, nombre, cedula, correo, rol, apellido='', telefono='',
+    *, nombre, cedula, correo, rol, apellido='',
     carrera=None, creado_por=None, auditar=True,
 ):
     """Crea el usuario y su perfil. Un Estudiante queda inscrito en la carrera
@@ -176,7 +176,7 @@ def crear_usuario(
     Usuario = get_user_model()
     if rol not in ROLES_CREABLES:
         raise ErrorCreacion('Solo se pueden crear usuarios con rol Estudiante o Director.')
-    nombre, cedula, correo, telefono = _validar_datos(nombre, apellido, cedula, correo, telefono)
+    nombre, cedula, correo, _ = _validar_datos(nombre, apellido, cedula, correo)
     if Usuario.objects.filter(correo_institucional__iexact=correo).exists():
         raise ErrorCreacion(_MENSAJES_DUPLICADO['correo_institucional'])
     try:
@@ -196,7 +196,6 @@ def crear_usuario(
                 contrasena,
                 nombre=nombre,
                 cedula=cedula,
-                telefono=telefono,
                 nombre_usuario=derivar_nombre_usuario(correo),
                 rol=rol_obj,
                 requiere_cambio_contrasena=True,
@@ -227,7 +226,7 @@ def crear_usuario(
     return usuario
 
 
-def crear_director(*, nombre, cedula, correo, carrera, apellido='', telefono='', creado_por=None):
+def crear_director(*, nombre, cedula, correo, carrera, apellido='', creado_por=None):
     """Crea un Director y lo asigna a la carrera. Una carrera solo puede tener
     un director activo; si ya lo tiene, no se crea nada."""
     if carrera is None or carrera.estado != 'Activo':
@@ -245,7 +244,7 @@ def crear_director(*, nombre, cedula, correo, carrera, apellido='', telefono='',
         with transaction.atomic():
             usuario = crear_usuario(
                 nombre=nombre, apellido=apellido, cedula=cedula, correo=correo,
-                telefono=telefono, rol=ROL_DIRECTOR, creado_por=creado_por,
+                rol=ROL_DIRECTOR, creado_por=creado_por,
             )
             asignacion = DirectorCarrera.objects.create(
                 director=usuario.director, carrera=carrera,
@@ -264,21 +263,20 @@ def crear_director(*, nombre, cedula, correo, carrera, apellido='', telefono='',
     return usuario
 
 
-def actualizar_estudiante(usuario, *, nombre, apellido, telefono, carrera):
-    """Actualiza nombre y teléfono de un estudiante existente y lo inscribe en la
+def actualizar_estudiante(usuario, *, nombre, apellido, carrera):
+    """Actualiza el nombre de un estudiante existente y lo inscribe en la
     carrera si falta. Nunca cambia el correo, el rol ni la contraseña.
     Devuelve True si algo cambió."""
     if usuario.rol.nombre != ROL_ESTUDIANTE or not hasattr(usuario, 'estudiante'):
         raise ErrorCreacion('El usuario existente no es un estudiante.')
-    nombre, _, _, telefono = _validar_datos(
-        nombre, apellido, usuario.cedula, usuario.correo_institucional, telefono
+    nombre, _, _, _ = _validar_datos(
+        nombre, apellido, usuario.cedula, usuario.correo_institucional
     )
     cambio = False
     with transaction.atomic():
-        if usuario.nombre != nombre or (telefono and usuario.telefono != telefono):
+        if usuario.nombre != nombre:
             usuario.nombre = nombre
-            usuario.telefono = telefono or usuario.telefono
-            usuario.save(update_fields=['nombre', 'telefono'])
+            usuario.save(update_fields=['nombre'])
             cambio = True
         _, inscrito = EstudianteCarrera.objects.get_or_create(
             estudiante=usuario.estudiante,

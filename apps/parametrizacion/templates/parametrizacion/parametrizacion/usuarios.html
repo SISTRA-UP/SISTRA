@@ -17,7 +17,7 @@
         <span>Espacio del {{ request.user.rol.nombre|lower }}</span>
         <span class="sis-avatar" aria-hidden="true">{{ request.user.nombre|slice:":1" }}</span>
         <span>{{ request.user.nombre }}</span>
-        <form method="post" action="{% url 'parametrizacion:salir' %}" class="sis-salir-form">
+        <form method="post" action="{% url 'usuarios:salir' %}" class="sis-salir-form">
             {% csrf_token %}<button type="submit" class="sis-salir">Cerrar sesión</button>
         </form>
     </div>
