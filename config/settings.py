@@ -217,11 +217,6 @@ MAILERS = {
 DOMINIOS_CORREO_PERMITIDOS = ['unipamplona.edu.co']
 
 
-if DEBUG:
-    LOGIN_URL = '/'                                    # SISTRA-13 definirá la URL real
-    LOGIN_REDIRECT_URL = 'parametrizacion:parametrizacion'
-
-
 
 CARGA_MASIVA_MAX_FILAS = 100
 CARGA_MASIVA_MAX_MB = 2
