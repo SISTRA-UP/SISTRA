@@ -16,4 +16,6 @@ app_name = 'personas'
 
 urlpatterns = [
     # SISTRA-10 · Roles (registro de estudiantes)
+    path('estudiantes/', registro_estudiantes.registrar, name='estudiantes'),
+    path('estudiantes/csv/', registro_estudiantes.cargar_csv, name='estudiantes_csv'),
 ]

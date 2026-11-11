@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Usuarios · SISTRA{% endblock %}
+
+{% block contenido %}
+<main class="container py-4">
+
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <div>
+      <h1 class="h3 mb-1">Usuarios</h1>
+      <p class="text-body-secondary mb-0">
+        Busca por nombre, cédula, usuario, correo o carrera.
+      </p>
+    </div>
+    <div class="d-flex gap-2">
+      {% if perms.rol.ver %}
+        <a class="btn btn-outline-secondary" href="{% url 'usuarios:roles' %}">Roles</a>
+      {% endif %}
+      {% if perms.usuario.crear %}
+        <a class="btn btn-primary" href="{% url 'usuarios:usuario_nuevo' %}">Nuevo usuario</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% include 'usuarios/roles/_mensajes.html' %}
+
+  <form method="get" class="card card-body shadow-sm mb-4">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-7">
+        <label class="form-label" for="{{ formulario.q.id_for_label }}">
+          {{ formulario.q.label }}
+        </label>
+        {{ formulario.q }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="{{ formulario.rol.id_for_label }}">
+          {{ formulario.rol.label }}
+        </label>
+        {{ formulario.rol }}
+      </div>
+      <div class="col-md-2 d-grid">
+        <button type="submit" class="btn btn-primary">Buscar</button>
+      </div>
+    </div>
+  </form>
+
+  <div class="card shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th scope="col">Nombre</th>
+            <th scope="col">Cédula</th>
+            <th scope="col">Usuario y correo</th>
+            <th scope="col">Carrera</th>
+            <th scope="col">Rol</th>
+            <th scope="col" class="text-center">Estado</th>
+            <th scope="col" class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for usuario in usuarios %}
+            <tr>
+              <th scope="row" class="fw-semibold">{{ usuario.nombre }}</th>
+              <td>{{ usuario.cedula }}</td>
+              <td>
+                <span class="font-monospace small">{{ usuario.nombre_usuario }}</span><br>
+                <span class="text-body-secondary small">{{ usuario.correo_institucional }}</span>
+              </td>
+              <td>
+                {% for carrera in usuario.carreras %}
+                  <span class="badge text-bg-light border">{{ carrera }}</span>
+                {% empty %}
+                  <span class="text-body-secondary">—</span>
+                {% endfor %}
+              </td>
+              <td>{{ usuario.rol.nombre }}</td>
+              <td class="text-center">
+                {% if usuario.estado == 'Activo' %}
+                  <span class="badge text-bg-success">Activo</span>
+                {% else %}
+                  <span class="badge text-bg-secondary">Inactivo</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <div class="d-inline-flex gap-2">
+                  {% if perms.usuario.editar %}
+                    <a class="btn btn-sm btn-outline-primary"
+                       href="{% url 'usuarios:usuario_editar' usuario.pk %}">Editar</a>
+                  {% endif %}
+                  {% if perms.usuario.inactivar and usuario.pk != request.user.pk %}
+                    <form method="post" action="{% url 'usuarios:usuario_estado' usuario.pk %}">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-outline-secondary">
+                        {% if usuario.estado == 'Activo' %}Inactivar{% else %}Activar{% endif %}
+                      </button>
+                    </form>
+                  {% endif %}
+                  {% if perms.usuario.eliminar and usuario.pk != request.user.pk and not usuario.tiene_perfil %}
+                    <form method="post" action="{% url 'usuarios:usuario_eliminar' usuario.pk %}"
+                          onsubmit="return confirm('¿Eliminar a {{ usuario.nombre|escapejs }}? Si tiene información registrada, el sistema lo impedirá y podrás inactivarlo.');">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar</button>
+                    </form>
+                  {% endif %}
+                  {% if usuario.pk == request.user.pk %}
+                    <span class="badge text-bg-light border" title="Tu propia cuenta">tú</span>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7" class="text-center text-body-secondary py-4">
+                No se encontraron usuarios con ese criterio.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="text-body-secondary small mt-3 mb-0">
+    Un usuario con información registrada no se elimina: se inactiva. Un usuario inactivo no puede
+    entrar al sistema y sus trámites se conservan. Ningún estudiante ni Director se elimina.
+  </p>
+
+</main>
+{% endblock %}
