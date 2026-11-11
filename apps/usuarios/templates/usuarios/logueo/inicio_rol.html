@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block titulo %}Inicio de {{ nombre_rol }} · SISTRA-UP{% endblock %}
+
+{% block css %}
+<link rel="stylesheet" href="{% static 'usuarios/css/logueo.css' %}">
+{% endblock %}
+
+{% block contenido %}
+<main class="container py-5 private-home">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-5">
+        <a class="brand brand-compact d-inline-flex align-items-center gap-2 text-decoration-none" href="{% url 'usuarios:inicio_estudiante' %}" aria-label="SISTRA-UP, inicio">
+            <span class="brand-mark" aria-hidden="true"><img src="{% static 'img/escudo-unipamplona.png' %}" alt=""></span>
+            <span class="brand-word"><span class="brand-name">SISTRA<span class="brand-period">.</span></span><small>Universidad de Pamplona</small></span>
+        </a>
+        <form method="post" action="{% url 'usuarios:logout' %}">
+            {% csrf_token %}
+            <button class="btn btn-outline-secondary" type="submit">Cerrar sesión</button>
+        </form>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }}" role="status">{{ message }}</div>{% endfor %}
+    {% endif %}
+    <section class="private-card p-4 p-md-5" aria-labelledby="titulo-inicio">
+        <p class="eyebrow">ACCESO INSTITUCIONAL VERIFICADO · {{ nombre_rol|upper }}</p>
+        <h1 id="titulo-inicio">Hola, {{ nombre_usuario }}.</h1>
+        <p class="muted mb-0">Tu cuenta está activa y has ingresado como {{ nombre_rol }}. El dashboard funcional de este rol pertenece a SISTRA-14; esta página confirma y conserva el destino independiente de tu rol mientras ese módulo se integra.</p>
+    </section>
+</main>
+{% endblock %}
