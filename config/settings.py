@@ -213,12 +213,3 @@ MAILERS = {
 }
 
 
-# Parametrización · Usuarios
-DOMINIOS_CORREO_PERMITIDOS = ['unipamplona.edu.co']
-
-
-
-CARGA_MASIVA_MAX_FILAS = 100
-CARGA_MASIVA_MAX_MB = 2
-
-
