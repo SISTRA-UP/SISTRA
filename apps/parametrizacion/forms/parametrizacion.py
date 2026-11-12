@@ -30,18 +30,6 @@ class CrearUsuarioForm(forms.Form):
                 widget.attrs['class'] = widget.attrs.get('class', '') + ' is-invalid'
                 widget.attrs['aria-invalid'] = 'true'
 
-
-class CrearDirectorForm(CrearUsuarioForm):
-    """Alta de un Director: mismos datos personales más su carrera."""
-
-    carrera = forms.ModelChoiceField(
-        label='Carrera', empty_label='Seleccione…',
-        queryset=Carrera.objects.filter(estado='Activo').order_by('nombre'),
-        help_text='Una carrera solo puede tener un director activo.',
-        widget=forms.Select(attrs={'class': 'form-select sis-input'}),
-    )
-
-
 class CargaMasivaForm(forms.Form):
     archivo = forms.FileField(
         label='Archivo CSV',

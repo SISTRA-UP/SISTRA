@@ -137,3 +137,106 @@ class DocumentosViewTests(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(plantilla.versiones.count(), 0)
+
+
+class DescargaPlantillaTests(TestCase):
+    """Tests de descarga de plantillas (ADMO y Director con permiso CSV)."""
+
+    def setUp(self):
+        self.admin = _crear_admin()
+        # Plantilla propuesta
+        self.plantilla = Plantilla.objects.create(
+            nombre='Propuesta TS', tipo='propuesta', estado='Activo',
+        )
+
+    def _subir_version(self, plantilla, contenido=b'contenido', nombre='plantilla.docx'):
+        """Helper: crea una VersionPlantilla directamente en BD."""
+        import os
+        from django.conf import settings
+        directorio = os.path.join(settings.MEDIA_ROOT, 'documentos')
+        os.makedirs(directorio, exist_ok=True)
+        ruta_abs = os.path.join(directorio, nombre)
+        with open(ruta_abs, 'wb') as f:
+            f.write(contenido)
+        return VersionPlantilla.objects.create(
+            plantilla=plantilla,
+            usuario=self.admin,
+            numero_version=1,
+            nombre_archivo=nombre,
+            ruta_archivo=os.path.join('documentos', nombre),
+            es_vigente=True,
+        )
+
+    def test_admo_descarga_plantilla_vigente(self):
+        self._subir_version(self.plantilla)
+        self.client.force_login(self.admin)
+        resp = self.client.get(
+            reverse('parametrizacion:documentos_descargar', args=[self.plantilla.pk])
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('attachment', resp.get('Content-Disposition', ''))
+
+    def test_admo_sin_version_redirige(self):
+        self.client.force_login(self.admin)
+        resp = self.client.get(
+            reverse('parametrizacion:documentos_descargar', args=[self.plantilla.pk]),
+            follow=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+
+    def _crear_director_con_permiso_csv(self):
+        rol, _ = Rol.objects.get_or_create(nombre='Director', defaults={'estado': 'Activo'})
+        usuario = Usuario.objects.create_user(
+            correo_institucional='dir@unipamplona.edu.co',
+            password='Director-Test-1',
+            nombre='Director CSV',
+            cedula='800000099',
+            nombre_usuario='dir.csv',
+            rol=rol,
+            requiere_cambio_contrasena=False,
+        )
+        permiso, _ = Permiso.objects.get_or_create(
+            nombre='estudiante.cargar_csv',
+            defaults={'descripcion': 'Cargar CSV', 'estado': 'Activo'},
+        )
+        RolPermiso.objects.get_or_create(rol=rol, permiso=permiso)
+        return usuario
+
+    def test_director_descarga_csv_sin_version_cargada(self):
+        """Sin versión vigente devuelve CSV básico con las 4 columnas."""
+        director = self._crear_director_con_permiso_csv()
+        self.client.force_login(director)
+        resp = self.client.get(reverse('parametrizacion:plantilla_csv_estudiantes'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('text/csv', resp.get('Content-Type', ''))
+        contenido = b''.join(resp.streaming_content) if hasattr(resp, 'streaming_content') else resp.content
+        primera_linea = contenido.decode('utf-8').strip().split('\r\n')[0]
+        self.assertEqual(primera_linea, 'nombre,cedula,correo,carrera')
+
+    def test_director_descarga_csv_con_version(self):
+        """Con versión vigente cargada devuelve ese archivo."""
+        plantilla_csv = Plantilla.objects.create(
+            nombre='CSV Estudiantes', tipo='csv', estado='Activo',
+        )
+        self._subir_version(plantilla_csv, contenido=b'nombre,cedula,correo,carrera\n', nombre='est.csv')
+        director = self._crear_director_con_permiso_csv()
+        self.client.force_login(director)
+        resp = self.client.get(reverse('parametrizacion:plantilla_csv_estudiantes'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('attachment', resp.get('Content-Disposition', ''))
+
+    def test_sin_permiso_no_descarga_csv(self):
+        """Un usuario sin estudiante.cargar_csv recibe 403."""
+        rol, _ = Rol.objects.get_or_create(nombre='Estudiante', defaults={'estado': 'Activo'})
+        usuario = Usuario.objects.create_user(
+            correo_institucional='est2@unipamplona.edu.co',
+            password='Est-Test-1',
+            nombre='Est Sin Permiso',
+            cedula='700000099',
+            nombre_usuario='est2',
+            rol=rol,
+            requiere_cambio_contrasena=False,
+        )
+        self.client.force_login(usuario)
+        resp = self.client.get(reverse('parametrizacion:plantilla_csv_estudiantes'))
+        self.assertEqual(resp.status_code, 403)

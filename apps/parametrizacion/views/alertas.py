@@ -4,7 +4,7 @@ from django.db import transaction
 from django.shortcuts import redirect, render
 from django.views import View
 
-from apps.usuarios.permisos import ParametrizarRequeridoMixin, contexto_menu
+from apps.parametrizacion.permisos import ParametrizarRequeridoMixin, contexto_menu
 
 from apps.parametrizacion import servicios
 from apps.parametrizacion.forms.alertas import AlertasForm

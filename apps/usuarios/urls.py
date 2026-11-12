@@ -1,4 +1,13 @@
-from django.contrib.auth.views import LogoutView
+"""Rutas de la app usuarios.
+
+Agrega tus rutas debajo del comentario de tu requisito, por ejemplo:
+
+    path('...', roles.inicio, name='roles'),
+
+En las plantillas se enlazan con el nombre de la app:
+{% url 'usuarios:roles' %}.
+"""
+
 from django.urls import path  # noqa: F401
 
 from .views import roles  # noqa: F401  SISTRA-10
@@ -7,9 +16,6 @@ from .views import logueo  # noqa: F401  SISTRA-13
 app_name = 'usuarios'
 
 urlpatterns = [
-    # Cierre de sesión (compartido por todos los módulos)
-    path('salir/', LogoutView.as_view(next_page='/'), name='salir'),
-
     # SISTRA-10 · Roles (roles, permisos y usuarios)
     path('roles/', roles.lista_roles, name='roles'),
     path('roles/nuevo/', roles.crear_rol, name='rol_nuevo'),

@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
 from apps.seguimiento.models import Auditoria
-from apps.usuarios.permisos import ParametrizarRequeridoMixin, contexto_menu
+from apps.parametrizacion.permisos import ParametrizarRequeridoMixin, contexto_menu
 
 from ..forms.estados import ActividadForm, TipoRechazoForm
 from ..models import Actividad, TipoRechazo

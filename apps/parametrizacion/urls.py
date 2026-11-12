@@ -21,11 +21,11 @@ urlpatterns = [
     path('estados/rechazos/nuevo/', estados.CrearTipoRechazoView.as_view(), name='rechazo_nuevo'),
     path('estados/rechazos/<int:pk>/editar/', estados.EditarTipoRechazoView.as_view(), name='rechazo_editar'),
     path('estados/rechazos/<int:pk>/eliminar/', estados.EliminarTipoRechazoView.as_view(), name='rechazo_eliminar'),
-    # Directores
-    path('directores/', parametrizacion.DirectoresView.as_view(), name='directores'),
     # Documentos y formatos
     path('documentos/', documentos.DocumentosView.as_view(), name='documentos'),
     path('documentos/nueva/', documentos.CrearPlantillaView.as_view(), name='documentos_nueva'),
+    path('documentos/csv-estudiantes/', documentos.DescargaPlantillaCsvEstudiantesView.as_view(), name='plantilla_csv_estudiantes'),
     path('documentos/<int:pk>/editar/', documentos.EditarPlantillaView.as_view(), name='documentos_editar'),
     path('documentos/<int:pk>/version/', documentos.SubirVersionView.as_view(), name='documentos_version'),
+    path('documentos/<int:pk>/descargar/', documentos.DescargaPlantillaView.as_view(), name='documentos_descargar'),
 ]

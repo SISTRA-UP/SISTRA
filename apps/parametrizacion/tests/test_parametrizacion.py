@@ -13,7 +13,6 @@ from apps.parametrizacion.models import Carrera
 from apps.personas.models import DirectorCarrera
 from apps.seguimiento.models import Auditoria
 from apps.usuarios.models import ROL_DIRECTOR, ROL_ESTUDIANTE, Permiso, Rol, RolPermiso, Usuario
-from apps.usuarios.servicios import crear_usuario
 
 
 def _crear_admin():
@@ -38,18 +37,28 @@ def _crear_admin():
 
 def _crear_director(cedula, correo):
     """Crea un Director sin carrera asignada."""
-    return crear_usuario(
-        nombre='Director', apellido='Test',
-        cedula=cedula, correo=correo,
-        rol=ROL_DIRECTOR,
+    rol, _ = Rol.objects.get_or_create(nombre=ROL_DIRECTOR)
+    return Usuario.objects.create_user(
+        correo_institucional=correo,
+        password='Director-Test-1',
+        nombre='Director Test',
+        cedula=cedula,
+        nombre_usuario=correo.split('@')[0].replace('.', '_'),
+        rol=rol,
+        requiere_cambio_contrasena=False,
     )
 
 
 def _crear_estudiante():
-    return crear_usuario(
-        nombre='Estudiante', apellido='Test',
-        cedula='100999001', correo='est@unipamplona.edu.co',
-        rol=ROL_ESTUDIANTE,
+    rol, _ = Rol.objects.get_or_create(nombre=ROL_ESTUDIANTE)
+    return Usuario.objects.create_user(
+        correo_institucional='est@unipamplona.edu.co',
+        password='Estudiante-Test-1',
+        nombre='Estudiante Test',
+        cedula='100999001',
+        nombre_usuario='est',
+        rol=rol,
+        requiere_cambio_contrasena=False,
     )
 
 
@@ -59,7 +68,6 @@ URLS_SOLO_ADMIN = [
     'parametrizacion:periodos',
     'parametrizacion:alertas',
     'parametrizacion:estados',
-    'parametrizacion:directores',
     'parametrizacion:documentos',
 ]
 

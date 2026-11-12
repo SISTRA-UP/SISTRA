@@ -40,23 +40,14 @@ class PlantillaForm(forms.ModelForm):
 
 
 class VersionPlantillaForm(forms.Form):
-    """Subir una nueva versión de archivo para una plantilla existente."""
+    """Subir una nueva versión de archivo para una plantilla existente.
+
+    La validación de extensión y tamaño se hace en la vista (SubirVersionView)
+    porque depende del tipo de plantilla y del parámetro del sistema.
+    """
 
     archivo = forms.FileField(
         label='Archivo',
-        help_text='Formatos permitidos: .docx, .xlsx, .csv, .pdf.',
+        help_text='El formato y tamaño permitidos dependen del tipo de plantilla.',
         widget=forms.ClearableFileInput(attrs={'class': 'form-control'}),
     )
-
-    EXTENSIONES = ('.docx', '.xlsx', '.csv', '.pdf')
-
-    def clean_archivo(self):
-        archivo = self.cleaned_data['archivo']
-        nombre = archivo.name.lower()
-        if not any(nombre.endswith(ext) for ext in self.EXTENSIONES):
-            raise forms.ValidationError(
-                f'Solo se permiten: {", ".join(self.EXTENSIONES)}.'
-            )
-        if archivo.size > 10 * 1024 * 1024:
-            raise forms.ValidationError('El archivo no puede pesar más de 10 MB.')
-        return archivo

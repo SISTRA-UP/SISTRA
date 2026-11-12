@@ -17,6 +17,7 @@ PARAMETROS_POR_DEFECTO = {
     'recordatorio.frecuencia_dias': ('7', 'Cada cuántos días se recuerda al estudiante declarar «Subido en UP».'),
     'registro_estudiantes.maximo_filas_csv': ('100', 'Máximo de filas por carga masiva de estudiantes.'),
     'registro_estudiantes.max_mb_csv': ('2', 'Tamaño máximo (MB) del CSV de carga masiva.'),
+    'propuesta.max_mb_docx': ('10', 'Tamaño máximo (MB) del archivo Word de propuesta.'),
     'url_up': (None, 'Dirección de la plataforma UP.'),
     'dias_archivado_propuesta_rechazada': (None, 'Días para archivar una propuesta rechazada.'),
     'dias_archivado_informe_rechazado': (None, 'Días para archivar un informe rechazado.'),

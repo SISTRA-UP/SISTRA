@@ -3,8 +3,7 @@ from django.urls import reverse
 
 from apps.parametrizacion.models import EstadoPeriodo, PeriodoAcademico
 from apps.seguimiento.models import Auditoria
-from apps.usuarios.models import ROL_DIRECTOR, Usuario
-from apps.usuarios.servicios import crear_usuario
+from apps.usuarios.models import ROL_DIRECTOR, Rol, Usuario
 
 
 class PeriodosTests(TestCase):
@@ -14,9 +13,15 @@ class PeriodosTests(TestCase):
             'admin@unipamplona.edu.co', 'Clave-Segura-123',
             nombre='Admin', cedula='900000001', nombre_usuario='admin',
         )
-        cls.director = crear_usuario(
-            nombre='Diana', apellido='Rojas', cedula='900000002',
-            correo='diana@unipamplona.edu.co', rol=ROL_DIRECTOR,
+        rol_dir, _ = Rol.objects.get_or_create(nombre=ROL_DIRECTOR)
+        cls.director = Usuario.objects.create_user(
+            correo_institucional='diana@unipamplona.edu.co',
+            password='Director-Test-1',
+            nombre='Diana Rojas',
+            cedula='900000002',
+            nombre_usuario='diana.rojas',
+            rol=rol_dir,
+            requiere_cambio_contrasena=False,
         )
         cls.lista = reverse('parametrizacion:periodos')
         cls.nuevo = reverse('parametrizacion:periodo_nuevo')
