@@ -20,6 +20,10 @@ app_name = 'cargue_up'
 
 urlpatterns = [
     # SISTRA-03 · Cargue al sistema de UP
+    path('', cargue_propuesta.inicio, name='cargue_propuesta'),
+    path('descargar/<int:id_propuesta>/', cargue_propuesta.descargar_propuesta, name='descargar_propuesta'),
+    path('notificar/<int:id_propuesta>/', cargue_propuesta.notificar_cargue, name='notificar_cargue'),
+    path('ir-up/<int:id_propuesta>/', cargue_propuesta.ir_a_up, name='ir_a_up'),
 
     # SISTRA-04 · Notificación de cargue UP
 
