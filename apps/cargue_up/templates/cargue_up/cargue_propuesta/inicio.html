@@ -8,7 +8,6 @@
 <style>
     /* ==========================================================================
        IDENTIDAD VISUAL INSTITUCIONAL - UNIVERSIDAD DE PAMPLONA (SISTRA-03)
-       Rediseño profesional v2.0
        ========================================================================== */
     :root {
         --up-azul: #003366;
@@ -25,8 +24,8 @@
         --up-border: #E2E8F0;
         --up-green: #1E7D3E;
         --up-green-light: #ECFDF5;
-        --up-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
-        --up-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+        --up-shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+        --up-shadow: 0 4px 16px rgba(0,0,0,0.06);
         --up-radius: 12px;
         --up-radius-sm: 8px;
     }
@@ -38,16 +37,13 @@
         min-height: 100vh;
     }
 
-    /* ============================
-       HEADER INSTITUCIONAL
-       ============================ */
+    /* Header Institucional */
     .sistra-header {
         background: linear-gradient(135deg, var(--up-azul) 0%, #004080 100%);
         color: #fff;
         position: relative;
-        box-shadow: 0 2px 12px rgba(0, 51, 102, 0.18);
+        box-shadow: 0 2px 12px rgba(0,51,102,0.18);
     }
-
     .sistra-header::after {
         content: '';
         position: absolute;
@@ -58,7 +54,6 @@
         background: linear-gradient(90deg, var(--up-rojo) 0%, var(--up-rojo) 35%, rgba(173, 51, 51, 0.45) 80%, transparent 100%);
         clip-path: polygon(0 0, 100% calc(100% - 2px), 100% 100%, 0 100%);
     }
-
     .sistra-header-inner {
         display: flex;
         align-items: center;
@@ -66,7 +61,6 @@
         padding: 10px 0;
         gap: 16px;
     }
-
     .sistra-brand {
         display: flex;
         align-items: center;
@@ -74,74 +68,52 @@
         text-decoration: none;
         color: #fff;
     }
-
-    .sistra-brand:hover {
-        color: #fff;
-    }
-
+    .sistra-brand:hover { color: #fff; }
     .sistra-logo-wrap {
         width: 44px;
         height: 44px;
-        background: rgba(255, 255, 255, 0.15);
+        background: rgba(255,255,255,0.15);
         border-radius: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
-    }
-
-    .sistra-logo-wrap img {
-        width: 32px;
-        height: 32px;
-        object-fit: contain;
-    }
-
-    .sistra-logo-wrap .bi {
         font-size: 1.5rem;
     }
-
     .sistra-brand-text {
         display: flex;
         flex-direction: column;
         line-height: 1.2;
     }
-
     .sistra-brand-name {
         font-weight: 700;
         font-size: 1.2rem;
         letter-spacing: 1px;
     }
-
     .sistra-brand-sub {
         font-size: 0.72rem;
-        color: rgba(255, 255, 255, 0.75);
+        color: rgba(255,255,255,0.75);
         font-weight: 400;
         letter-spacing: 0.3px;
     }
-
     .sistra-user-info {
         display: flex;
         align-items: center;
         gap: 10px;
         font-size: 0.875rem;
-        color: rgba(255, 255, 255, 0.92);
+        color: rgba(255,255,255,0.92);
     }
-
     .sistra-user-avatar {
         width: 36px;
         height: 36px;
         border-radius: 50%;
-        background: rgba(255, 255, 255, 0.18);
+        background: rgba(255,255,255,0.18);
         display: flex;
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
-    }
-
-    .sistra-user-avatar .bi {
         font-size: 1.15rem;
     }
-
     .sistra-user-name {
         font-weight: 500;
         white-space: nowrap;
@@ -150,55 +122,43 @@
         max-width: 200px;
     }
 
-    /* ============================
-       LAYOUT PRINCIPAL
-       ============================ */
+    /* Layout principal */
     .sistra-main {
         max-width: 1080px;
         margin: 0 auto;
         padding: 0 20px;
     }
 
-    /* ============================
-       BREADCRUMB
-       ============================ */
+    /* Breadcrumbs */
     .breadcrumb-item a {
         color: var(--up-azul);
         text-decoration: none;
         font-weight: 500;
     }
-
     .breadcrumb-item a:hover {
         text-decoration: underline;
     }
-
     .breadcrumb-item.active {
         color: var(--up-muted);
     }
 
-    /* ============================
-       PAGE HEADER
-       ============================ */
+    /* Page Header */
     .page-header {
         margin-bottom: 28px;
     }
-
     .page-header h1 {
         font-size: 1.55rem;
         font-weight: 700;
         color: var(--up-azul);
         margin-bottom: 4px;
     }
-
     .page-header p {
         color: var(--up-muted);
         font-size: 0.95rem;
         margin-bottom: 0;
     }
 
-    /* ============================
-       TARJETAS
-       ============================ */
+    /* Tarjetas */
     .up-card {
         background: var(--up-card);
         border: 1px solid var(--up-border);
@@ -208,11 +168,9 @@
         margin-bottom: 24px;
         transition: box-shadow 0.2s ease;
     }
-
     .up-card:hover {
         box-shadow: var(--up-shadow);
     }
-
     .up-card-header {
         display: flex;
         align-items: center;
@@ -221,7 +179,6 @@
         padding-bottom: 16px;
         border-bottom: 1px solid var(--up-border);
     }
-
     .up-card-header-icon {
         width: 40px;
         height: 40px;
@@ -232,54 +189,36 @@
         flex-shrink: 0;
         font-size: 1.15rem;
     }
-
     .up-card-header-icon.azul {
         background: var(--up-azul-light);
         color: var(--up-azul);
     }
-
-    .up-card-header-icon.rojo {
-        background: var(--up-rojo-light);
-        color: var(--up-rojo);
-    }
-
-    .up-card-header-icon.green {
-        background: var(--up-green-light);
-        color: var(--up-green);
-    }
-
     .up-card-title {
         font-size: 1.1rem;
         font-weight: 700;
         color: var(--up-text);
         margin: 0;
     }
-
     .up-card-subtitle {
         font-size: 0.82rem;
         color: var(--up-muted);
         margin: 2px 0 0 0;
     }
 
-    /* ============================
-       PROYECTO INFO GRID
-       ============================ */
+    /* Grid información proyecto */
     .project-info-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 16px 24px;
     }
-
     .project-info-item {
         display: flex;
         flex-direction: column;
         gap: 2px;
     }
-
     .project-info-item.full-width {
         grid-column: 1 / -1;
     }
-
     .project-info-label {
         font-size: 0.78rem;
         font-weight: 600;
@@ -287,20 +226,17 @@
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
-
     .project-info-value {
         font-size: 0.95rem;
         font-weight: 500;
         color: var(--up-text);
     }
-
     .project-info-value.project-name {
         font-size: 1.1rem;
         font-weight: 700;
         color: var(--up-azul);
         line-height: 1.35;
     }
-
     .project-code {
         display: inline-block;
         font-size: 0.78rem;
@@ -313,9 +249,7 @@
         font-family: 'Consolas', 'Monaco', monospace;
     }
 
-    /* ============================
-       BADGES DE ESTADO
-       ============================ */
+    /* Badges */
     .up-badge {
         display: inline-flex;
         align-items: center;
@@ -326,34 +260,28 @@
         border-radius: 20px;
         border: 1px solid transparent;
     }
-
     .up-badge.aprobado {
         background-color: #DCFCE7;
         color: #166534;
         border-color: #BBF7D0;
     }
-
     .up-badge.cargado {
         background-color: #E0F2FE;
         color: #0369A1;
         border-color: #BAE6FD;
     }
-
     .up-badge.revision {
         background-color: #FEF3C7;
         color: #92400E;
         border-color: #FDE68A;
     }
-
     .up-badge.rechazado {
         background-color: #FEE2E2;
         color: #991B1B;
         border-color: #FECACA;
     }
 
-    /* ============================
-       STEPPER / PROGRESO
-       ============================ */
+    /* Stepper */
     .stepper {
         display: flex;
         align-items: flex-start;
@@ -361,7 +289,6 @@
         margin: 8px 0 0 0;
         padding: 0;
     }
-
     .stepper-item {
         flex: 1;
         display: flex;
@@ -370,8 +297,6 @@
         position: relative;
         padding: 0 8px;
     }
-
-    /* Línea conectora entre pasos */
     .stepper-item:not(:last-child)::after {
         content: '';
         position: absolute;
@@ -382,11 +307,9 @@
         background: var(--up-border);
         z-index: 1;
     }
-
     .stepper-item.completed:not(:last-child)::after {
         background: var(--up-green);
     }
-
     .stepper-item.active:not(:last-child)::after {
         background: linear-gradient(90deg, var(--up-azul) 0%, var(--up-border) 100%);
     }
@@ -407,13 +330,11 @@
         background: #fff;
         color: var(--up-muted);
     }
-
     .stepper-item.completed .step-indicator {
         background: var(--up-green);
         border-color: var(--up-green);
         color: #fff;
     }
-
     .stepper-item.active .step-indicator {
         background: var(--up-azul);
         border-color: var(--up-azul);
@@ -426,37 +347,30 @@
         margin-top: 10px;
         max-width: 160px;
     }
-
     .step-name {
         font-size: 0.82rem;
         font-weight: 600;
         color: var(--up-muted);
         line-height: 1.35;
     }
-
     .stepper-item.completed .step-name {
         color: var(--up-text);
     }
-
     .stepper-item.active .step-name {
         color: var(--up-azul);
         font-weight: 700;
     }
-
     .step-desc {
         font-size: 0.72rem;
         color: var(--up-muted);
         margin-top: 3px;
         line-height: 1.3;
     }
-
     .stepper-item.active .step-desc {
         color: var(--up-azul);
     }
 
-    /* ============================
-       ALERTAS CONTEXTUALES
-       ============================ */
+    /* Alertas */
     .up-alert {
         display: flex;
         align-items: flex-start;
@@ -467,46 +381,38 @@
         line-height: 1.5;
         border: 1px solid transparent;
     }
-
     .up-alert-icon {
         font-size: 1.25rem;
         flex-shrink: 0;
         margin-top: 1px;
     }
-
     .up-alert.info {
         background: #EFF6FF;
         border-color: #BFDBFE;
         color: #1E40AF;
     }
-
     .up-alert.success {
         background: #F0FDF4;
         border-color: #BBF7D0;
         color: #166534;
     }
-
     .up-alert.warning {
         background: #FFFBEB;
         border-color: #FDE68A;
         color: #92400E;
     }
-
     .up-alert.neutral {
         background: #F8FAFC;
         border-color: var(--up-border);
         color: var(--up-muted);
     }
 
-    /* ============================
-       TARJETAS DE PASOS (ACCIONES)
-       ============================ */
+    /* Tarjetas de acción */
     .step-card {
         display: flex;
         gap: 20px;
         align-items: flex-start;
     }
-
     .step-number {
         width: 48px;
         height: 48px;
@@ -518,47 +424,39 @@
         font-weight: 800;
         font-size: 1.25rem;
     }
-
     .step-number.azul {
         background: var(--up-azul-light);
         color: var(--up-azul);
     }
-
     .step-number.rojo {
         background: var(--up-rojo-light);
         color: var(--up-rojo);
     }
-
     .step-number.done {
         background: var(--up-green-light);
         color: var(--up-green);
     }
-
     .step-body {
         flex: 1;
     }
-
     .step-body h3 {
         font-size: 1.05rem;
         font-weight: 700;
         color: var(--up-text);
         margin-bottom: 4px;
     }
-
     .step-body .step-description {
         color: var(--up-muted);
         font-size: 0.88rem;
         margin-bottom: 16px;
         line-height: 1.5;
     }
-
     .step-actions {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: 12px;
     }
-
     .step-complete-msg {
         display: flex;
         align-items: center;
@@ -572,9 +470,7 @@
         border-radius: var(--up-radius-sm);
     }
 
-    /* ============================
-       BOTONES INSTITUCIONALES
-       ============================ */
+    /* Botones */
     .btn-up-primary {
         background-color: var(--up-azul);
         color: #fff;
@@ -588,20 +484,16 @@
         align-items: center;
         gap: 8px;
     }
-
-    .btn-up-primary:hover,
-    .btn-up-primary:focus {
+    .btn-up-primary:hover, .btn-up-primary:focus {
         background-color: var(--up-azul-hover);
         color: #fff;
         box-shadow: 0 3px 10px rgba(0, 51, 102, 0.25);
     }
-
     .btn-up-primary:disabled {
         background-color: #94A3B8;
         cursor: not-allowed;
         box-shadow: none;
     }
-
     .btn-up-accent {
         background-color: var(--up-rojo);
         color: #fff;
@@ -615,20 +507,16 @@
         align-items: center;
         gap: 8px;
     }
-
-    .btn-up-accent:hover,
-    .btn-up-accent:focus {
+    .btn-up-accent:hover, .btn-up-accent:focus {
         background-color: var(--up-rojo-hover);
         color: #fff;
         box-shadow: 0 3px 10px rgba(173, 51, 51, 0.25);
     }
-
     .btn-up-accent:disabled {
         background-color: #94A3B8;
         cursor: not-allowed;
         box-shadow: none;
     }
-
     .btn-up-outline {
         border: 1.5px solid var(--up-border);
         background: #fff;
@@ -642,19 +530,16 @@
         align-items: center;
         gap: 8px;
     }
-
     .btn-up-outline:hover {
         background: #F8FAFC;
         border-color: var(--up-azul);
         color: var(--up-azul);
     }
-
     .btn-up-outline:disabled {
         color: #94A3B8;
         border-color: var(--up-border);
         cursor: not-allowed;
     }
-
     .external-link-hint {
         font-size: 0.78rem;
         color: var(--up-muted);
@@ -663,42 +548,28 @@
         gap: 4px;
     }
 
-    /* ============================
-       MODAL
-       ============================ */
-    .modal-content {
-        border-radius: var(--up-radius);
-        border: none;
-    }
-
+    /* Modal */
+    .modal-content { border-radius: var(--up-radius); border: none; }
     .up-modal-header {
         padding: 20px 28px 16px;
         border-bottom: 1px solid var(--up-border);
     }
-
     .up-modal-header .modal-title {
         font-size: 1.1rem;
         font-weight: 700;
         color: var(--up-text);
     }
-
-    .up-modal-body {
-        padding: 24px 28px;
-    }
-
+    .up-modal-body { padding: 24px 28px; }
     .up-modal-footer {
         padding: 16px 28px 20px;
         border-top: 1px solid var(--up-border);
     }
 
-    /* ============================
-       ESTADO VACÍO
-       ============================ */
+    /* Estado vacío */
     .empty-state {
         text-align: center;
         padding: 56px 24px;
     }
-
     .empty-state-icon {
         width: 80px;
         height: 80px;
@@ -708,20 +579,15 @@
         align-items: center;
         justify-content: center;
         margin-bottom: 20px;
-    }
-
-    .empty-state-icon .bi {
         font-size: 2rem;
         color: var(--up-azul);
     }
-
     .empty-state h2 {
         font-size: 1.15rem;
         font-weight: 700;
         color: var(--up-text);
         margin-bottom: 8px;
     }
-
     .empty-state p {
         color: var(--up-muted);
         max-width: 480px;
@@ -730,51 +596,25 @@
         line-height: 1.6;
     }
 
-    /* ============================
-       RESPONSIVE
-       ============================ */
+    /* Responsive */
     @media (max-width: 767.98px) {
-        .sistra-header-inner {
-            padding: 8px 0;
-        }
+        .sistra-header-inner { padding: 8px 0; }
+        .sistra-brand-name { font-size: 1.05rem; }
+        .sistra-brand-sub { font-size: 0.65rem; }
+        .sistra-user-name { display: none; }
+        .sistra-logo-wrap { width: 38px; height: 38px; }
 
-        .sistra-brand-name {
-            font-size: 1.05rem;
-        }
-
-        .sistra-brand-sub {
-            font-size: 0.65rem;
-        }
-
-        .sistra-user-name {
-            display: none;
-        }
-
-        .sistra-logo-wrap {
-            width: 38px;
-            height: 38px;
-        }
-
-        .sistra-logo-wrap img {
-            width: 28px;
-            height: 28px;
-        }
-
-        .up-card {
-            padding: 20px 16px;
-        }
+        .up-card { padding: 20px 16px; }
 
         .project-info-grid {
             grid-template-columns: 1fr;
             gap: 12px;
         }
 
-        /* Stepper vertical en móvil */
         .stepper {
             flex-direction: column;
             gap: 0;
         }
-
         .stepper-item {
             flex-direction: row;
             align-items: flex-start;
@@ -782,11 +622,7 @@
             padding: 0;
             margin-bottom: 24px;
         }
-
-        .stepper-item:last-child {
-            margin-bottom: 0;
-        }
-
+        .stepper-item:last-child { margin-bottom: 0; }
         .stepper-item:not(:last-child)::after {
             top: 48px;
             left: 21px;
@@ -794,46 +630,30 @@
             width: 3px;
             height: calc(100% - 4px);
         }
-
         .step-indicator {
             width: 42px;
             height: 42px;
             flex-shrink: 0;
         }
-
         .step-content {
             text-align: left;
             margin-top: 2px;
             max-width: none;
         }
 
-        .step-card {
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .step-actions {
-            flex-direction: column;
-            align-items: stretch;
-        }
+        .step-card { flex-direction: column; gap: 12px; }
+        .step-actions { flex-direction: column; align-items: stretch; }
     }
 
     @media (max-width: 575.98px) {
-        .sistra-main {
-            padding: 0 12px;
-        }
-
-        .page-header h1 {
-            font-size: 1.3rem;
-        }
+        .sistra-main { padding: 0 12px; }
+        .page-header h1 { font-size: 1.3rem; }
     }
 </style>
 {% endblock %}
 
 {% block contenido %}
-<!-- ============================
-     HEADER INSTITUCIONAL
-     ============================ -->
+<!-- Header institucional -->
 <header class="sistra-header">
     <div class="container sistra-header-inner">
         <a href="{% url 'cargue_up:cargue_propuesta' %}" class="sistra-brand">
@@ -849,24 +669,18 @@
             <div class="sistra-user-avatar">
                 <i class="bi bi-person-fill"></i>
             </div>
-            <span class="sistra-user-name">
-                {% if request.user.nombre %}{{ request.user.nombre }}{% else %}{{
-                request.user.nombre_usuario|default:"Estudiante" }}{% endif %}
-            </span>
+            <span class="sistra-user-name">{% if request.user.nombre %}{{ request.user.nombre }}{% else %}{{ request.user.nombre_usuario|default:"Estudiante" }}{% endif %}</span>
         </div>
     </div>
 </header>
 
-<!-- ============================
-     CONTENIDO PRINCIPAL
-     ============================ -->
+<!-- Contenido principal -->
 <main class="sistra-main mt-4 mb-5">
 
     <!-- Breadcrumb -->
     <nav aria-label="breadcrumb" class="mb-3">
         <ol class="breadcrumb mb-0">
-            <li class="breadcrumb-item"><a href="{% url 'cargue_up:cargue_propuesta' %}"><i
-                        class="bi bi-house-door me-1"></i>Inicio</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'cargue_up:cargue_propuesta' %}"><i class="bi bi-house-door me-1"></i>Inicio</a></li>
             <li class="breadcrumb-item active" aria-current="page">Cargue UP</li>
         </ol>
     </nav>
@@ -877,382 +691,311 @@
         <p>Gestión y notificación de cargue de proyecto de horas sociales en el sistema UP.</p>
     </div>
 
-    <!-- Mensajes del Sistema (Django messages) -->
+    <!-- Mensajes Django -->
     {% if messages %}
-    {% for mensaje in messages %}
-    <div class="alert alert-{% if mensaje.tags == 'error' %}danger{% elif mensaje.tags == 'success' %}success{% elif mensaje.tags == 'warning' %}warning{% else %}info{% endif %} alert-dismissible fade show shadow-sm mb-3"
-        role="alert" style="border-radius: var(--up-radius-sm);">
-        <i
-            class="bi {% if mensaje.tags == 'success' %}bi-check-circle-fill{% elif mensaje.tags == 'error' %}bi-exclamation-triangle-fill{% elif mensaje.tags == 'warning' %}bi-exclamation-triangle-fill{% else %}bi-info-circle-fill{% endif %} me-2"></i>
-        {{ mensaje }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-    </div>
-    {% endfor %}
+        {% for mensaje in messages %}
+            <div class="alert alert-{% if mensaje.tags == 'error' %}danger{% elif mensaje.tags == 'success' %}success{% elif mensaje.tags == 'warning' %}warning{% else %}info{% endif %} alert-dismissible fade show shadow-sm mb-3" role="alert" style="border-radius: var(--up-radius-sm);">
+                <i class="bi {% if mensaje.tags == 'success' %}bi-check-circle-fill{% elif mensaje.tags == 'error' %}bi-exclamation-triangle-fill{% elif mensaje.tags == 'warning' %}bi-exclamation-triangle-fill{% else %}bi-info-circle-fill{% endif %} me-2"></i>
+                {{ mensaje }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+            </div>
+        {% endfor %}
     {% endif %}
 
     {% if not propuesta %}
-    <!-- ============================
-             ESTADO VACÍO
-             ============================ -->
-    <div class="up-card empty-state">
-        <div class="empty-state-icon">
-            <i class="bi bi-folder2-open"></i>
+        <!-- Estado Vacío -->
+        <div class="up-card empty-state">
+            <div class="empty-state-icon">
+                <i class="bi bi-folder2-open"></i>
+            </div>
+            <h2>No tienes proyectos vigentes registrados</h2>
+            <p>Aún no has enviado tu proyecto de horas sociales. Envíalo para revisión de tu docente; cuando sea aprobado podrás cargarlo en la UP desde aquí.</p>
         </div>
-        <h2>No tienes proyectos vigentes registrados</h2>
-        <p>
-            Aún no has enviado tu proyecto de horas sociales. Envíalo para revisión de tu docente;
-            cuando sea aprobado podrás cargarlo en la UP desde aquí.
-        </p>
-    </div>
     {% else %}
 
-    <!-- ============================
-             TARJETA: MI PROYECTO
-             ============================ -->
-    <div class="up-card">
-        <div class="up-card-header">
-            <div class="up-card-header-icon azul">
-                <i class="bi bi-file-earmark-text-fill"></i>
-            </div>
-            <div>
-                <h2 class="up-card-title">Mi proyecto de horas sociales</h2>
-                <p class="up-card-subtitle">Información general de tu propuesta</p>
-            </div>
-        </div>
-
-        <!-- Info grid -->
-        <div class="project-info-grid mb-3">
-            <div class="project-info-item full-width">
-                <span class="project-info-label">Proyecto</span>
-                <span class="project-info-value project-name">{{ propuesta.titulo|default:propuesta.codigo }}</span>
-                <span class="project-code">{{ propuesta.codigo }}</span>
-            </div>
-            <div class="project-info-item">
-                <span class="project-info-label">Docente responsable</span>
-                <span class="project-info-value">{{ docente_nombre }}</span>
-            </div>
-            <div class="project-info-item">
-                <span class="project-info-label">Fecha de aprobación</span>
-                <span class="project-info-value">
-                    {% if fecha_aprobacion %}{{ fecha_aprobacion|date:"d/m/Y" }}{% else %}Pendiente{% endif %}
-                </span>
-            </div>
-        </div>
-
-        <!-- Estado actual -->
-        <div class="pt-3 border-top d-flex align-items-center gap-3 flex-wrap">
-            <span class="project-info-label mb-0" style="text-transform: uppercase; letter-spacing: 0.5px;">Estado
-                actual</span>
-            {% if estado_actual == EstadoTramite.APROBADO and not cargue_existente %}
-            <span class="up-badge aprobado"><i class="bi bi-check2-circle"></i>Aprobado</span>
-            {% elif estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
-            <span class="up-badge cargado"><i class="bi bi-send-check"></i>Cargado en UP</span>
-            {% elif estado_actual == EstadoTramite.RECHAZADO %}
-            <span class="up-badge rechazado"><i class="bi bi-x-circle"></i>Rechazado</span>
-            {% else %}
-            <span class="up-badge revision"><i class="bi bi-hourglass-split"></i>{{ estado_actual }}</span>
-            {% endif %}
-        </div>
-
-        <!-- ============================
-                 STEPPER DE PROGRESO
-                 ============================ -->
-        <div class="mt-4 pt-3 border-top">
-            <span class="project-info-label d-block mb-3"
-                style="text-transform: uppercase; letter-spacing: 0.5px;">Seguimiento del trámite</span>
-
-            <div class="stepper">
-                <!-- Paso 1: Aprobado por el docente -->
-                <div
-                    class="stepper-item {% if estado_actual == EstadoTramite.APROBADO or estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual == EstadoTramite.APROBADO_EN_UP or cargue_existente %}completed{% else %}active{% endif %}">
-                    <div class="step-indicator">
-                        {% if estado_actual == EstadoTramite.APROBADO or estado_actual == EstadoTramite.SUBIDO_EN_UP or
-                        estado_actual == EstadoTramite.APROBADO_EN_UP or cargue_existente %}
-                        <i class="bi bi-check-lg"></i>
-                        {% else %}
-                        1
-                        {% endif %}
-                    </div>
-                    <div class="step-content">
-                        <div class="step-name">Aprobado por el docente</div>
-                        <div class="step-desc">
-                            {% if estado_actual == EstadoTramite.APROBADO or estado_actual == EstadoTramite.SUBIDO_EN_UP
-                            or estado_actual == EstadoTramite.APROBADO_EN_UP or cargue_existente %}
-                            Propuesta aprobada
-                            {% else %}
-                            Esperando revisión
-                            {% endif %}
-                        </div>
-                    </div>
+        <!-- Tarjeta: Mi proyecto -->
+        <div class="up-card">
+            <div class="up-card-header">
+                <div class="up-card-header-icon azul">
+                    <i class="bi bi-file-earmark-text-fill"></i>
                 </div>
-
-                <!-- Paso 2: Cargado en la UP -->
-                <div
-                    class="stepper-item {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual == EstadoTramite.APROBADO_EN_UP or cargue_existente %}completed{% elif estado_actual == EstadoTramite.APROBADO %}active{% endif %}">
-                    <div class="step-indicator">
-                        {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual ==
-                        EstadoTramite.APROBADO_EN_UP or cargue_existente %}
-                        <i class="bi bi-check-lg"></i>
-                        {% else %}
-                        2
-                        {% endif %}
-                    </div>
-                    <div class="step-content">
-                        <div class="step-name">Cargado en la UP</div>
-                        <div class="step-desc">
-                            {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
-                            Notificación enviada
-                            {% elif estado_actual == EstadoTramite.APROBADO %}
-                            Pendiente de cargue
-                            {% else %}
-                            —
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Paso 3: Respuesta de la UP -->
-                <div
-                    class="stepper-item {% if estado_actual == EstadoTramite.APROBADO_EN_UP %}completed{% elif estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}active{% endif %}">
-                    <div class="step-indicator">
-                        {% if estado_actual == EstadoTramite.APROBADO_EN_UP %}
-                        <i class="bi bi-check-lg"></i>
-                        {% else %}
-                        3
-                        {% endif %}
-                    </div>
-                    <div class="step-content">
-                        <div class="step-name">Respuesta en la UP</div>
-                        <div class="step-desc">
-                            {% if estado_actual == EstadoTramite.APROBADO_EN_UP %}
-                            Aprobado por el director
-                            {% elif estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
-                            Esperando verificación
-                            {% else %}
-                            —
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ============================
-                 ALERTA CONTEXTUAL
-                 ============================ -->
-        <div class="mt-4">
-            {% if estado_actual == EstadoTramite.APROBADO and not cargue_existente %}
-            <div class="up-alert info">
-                <i class="bi bi-info-circle-fill up-alert-icon"></i>
                 <div>
-                    <strong>Tu proyecto fue aprobado.</strong> Descárgalo y cárgalo en el sistema de la UP. Mientras no
-                    notifiques el cargue, recibirás recordatorios periódicos.
+                    <h2 class="up-card-title">Mi proyecto de horas sociales</h2>
+                    <p class="up-card-subtitle">Información general de tu propuesta</p>
                 </div>
             </div>
-            {% elif estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
-            <div class="up-alert success">
-                <i class="bi bi-check-circle-fill up-alert-icon"></i>
-                <div>
-                    <strong>Notificación enviada.</strong>
-                    {% if cargue_existente %}
-                    Notificaste el cargue el <strong>{{ cargue_existente.fecha_declaracion|date:"d/m/Y" }}</strong> a
-                    las <strong>{{ cargue_existente.fecha_declaracion|date:"H:i" }}</strong>.
-                    {% endif %}
-                    Tu proyecto está a la espera de la verificación oficial en la UP.
-                </div>
-            </div>
-            {% elif estado_actual == EstadoTramite.RECHAZADO %}
-            <div class="up-alert warning">
-                <i class="bi bi-exclamation-triangle-fill up-alert-icon"></i>
-                <div>
-                    <strong>Proyecto no aprobado.</strong> Tu docente no aprobó tu proyecto, por lo que aún no puedes
-                    cargarlo en la UP. Consulta la respuesta de tu docente.
-                </div>
-            </div>
-            {% else %}
-            <div class="up-alert neutral">
-                <i class="bi bi-clock-history up-alert-icon"></i>
-                <div>
-                    Tu proyecto aún no ha sido aprobado por tu docente (Estado: <strong>{{ estado_actual }}</strong>).
-                    Podrás cargarlo en el sistema de la UP cuando su estado sea Aprobado.
-                </div>
-            </div>
-            {% endif %}
-        </div>
-    </div>
 
-    <!-- ============================
-             TARJETA: PASO 1 — CARGAR EN LA UP
-             ============================ -->
-    <div class="up-card">
-        <div class="step-card">
-            <div
-                class="step-number {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}done{% else %}azul{% endif %}">
-                {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
-                <i class="bi bi-check-lg"></i>
+            <!-- Grid de datos -->
+            <div class="project-info-grid mb-3">
+                <div class="project-info-item full-width">
+                    <span class="project-info-label">Proyecto</span>
+                    <span class="project-info-value project-name">{{ propuesta.titulo|default:propuesta.codigo }}</span>
+                    <span class="project-code">{{ propuesta.codigo }}</span>
+                </div>
+                <div class="project-info-item">
+                    <span class="project-info-label">Docente responsable</span>
+                    <span class="project-info-value">{{ docente_nombre }}</span>
+                </div>
+                <div class="project-info-item">
+                    <span class="project-info-label">Fecha de aprobación</span>
+                    <span class="project-info-value">{% if fecha_aprobacion %}{{ fecha_aprobacion|date:"d/m/Y" }}{% else %}Pendiente{% endif %}</span>
+                </div>
+            </div>
+
+            <!-- Estado actual -->
+            <div class="pt-3 border-top d-flex align-items-center gap-3 flex-wrap">
+                <span class="project-info-label mb-0">Estado actual</span>
+                {% if estado_actual == EstadoTramite.APROBADO and not cargue_existente %}
+                    <span class="up-badge aprobado"><i class="bi bi-check2-circle"></i>Aprobado</span>
+                {% elif estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
+                    <span class="up-badge cargado"><i class="bi bi-send-check"></i>Cargado en UP</span>
+                {% elif estado_actual == EstadoTramite.RECHAZADO %}
+                    <span class="up-badge rechazado"><i class="bi bi-x-circle"></i>Rechazado</span>
                 {% else %}
-                1
+                    <span class="up-badge revision"><i class="bi bi-hourglass-split"></i>{{ estado_actual }}</span>
                 {% endif %}
             </div>
-            <div class="step-body">
-                <h3>
-                    <i class="bi bi-cloud-arrow-up me-2" style="color: var(--up-azul);"></i>
-                    Cargar el proyecto en la UP
-                </h3>
-                <p class="step-description">
-                    Descarga el documento avalado de tu propuesta y accede a la plataforma de la Universidad de Pamplona
-                    para radicarlo.
-                </p>
 
-                <div class="step-actions">
-                    <!-- Botón Descargar -->
-                    {% if puede_cargar or estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual ==
-                    EstadoTramite.APROBADO_EN_UP %}
-                    <a href="{% url 'cargue_up:descargar_propuesta' propuesta.pk %}" class="btn btn-up-outline">
-                        <i class="bi bi-download"></i>Descargar proyecto
-                    </a>
-                    {% else %}
-                    <button type="button" class="btn btn-up-outline" disabled
-                        title="Disponible solo cuando el proyecto está Aprobado">
-                        <i class="bi bi-download"></i>Descargar proyecto
-                    </button>
-                    {% endif %}
+            <!-- Stepper de seguimiento -->
+            <div class="mt-4 pt-3 border-top">
+                <span class="project-info-label d-block mb-3">Seguimiento del trámite</span>
 
-                    <!-- Botón Ir al sistema UP -->
-                    {% if puede_cargar %}
-                    <a href="{% url 'cargue_up:ir_a_up' propuesta.pk %}" target="_blank" rel="noopener noreferrer"
-                        class="btn btn-up-primary" id="btn-ir-up">
-                        <i class="bi bi-box-arrow-up-right"></i>Ir al sistema de la UP
-                    </a>
-                    <span class="external-link-hint">
-                        <i class="bi bi-window"></i>Se abre en nueva pestaña
-                    </span>
-                    {% else %}
-                    <button type="button" class="btn btn-up-primary" disabled
-                        title="Disponible solo cuando el proyecto está Aprobado">
-                        <i class="bi bi-box-arrow-up-right"></i>Ir al sistema de la UP
-                    </button>
-                    {% endif %}
-                </div>
-
-                {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
-                <div class="step-complete-msg">
-                    <i class="bi bi-check-circle-fill"></i>Paso completado
-                </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    <!-- ============================
-             TARJETA: PASO 2 — AVISAR A TU DOCENTE
-             ============================ -->
-    <div class="up-card">
-        <div class="step-card">
-            <div class="step-number {% if cargue_existente %}done{% else %}rojo{% endif %}">
-                {% if cargue_existente %}
-                <i class="bi bi-check-lg"></i>
-                {% else %}
-                2
-                {% endif %}
-            </div>
-            <div class="step-body">
-                <h3>
-                    <i class="bi bi-bell me-2" style="color: var(--up-rojo);"></i>
-                    Avisar a tu docente
-                </h3>
-                <p class="step-description">
-                    ¿Ya cargaste tu proyecto en el sistema de la UP? Avísale a tu docente para dejar de recibir
-                    recordatorios y avanzar a la etapa de verificación.
-                </p>
-
-                <div class="step-actions">
-                    {% if puede_cargar %}
-                    <button type="button" class="btn btn-up-accent" data-bs-toggle="modal"
-                        data-bs-target="#modalConfirmarCargue">
-                        <i class="bi bi-check-circle"></i>Ya cargué mi proyecto
-                    </button>
-                    {% else %}
-                    <button type="button" class="btn btn-up-accent" disabled
-                        title="{% if cargue_existente %}El cargue ya fue notificado{% else %}Disponible solo cuando el proyecto está Aprobado{% endif %}">
-                        <i class="bi bi-check-circle"></i>Ya cargué mi proyecto
-                    </button>
-                    {% endif %}
-                </div>
-
-                {% if cargue_existente %}
-                <div class="step-complete-msg">
-                    <i class="bi bi-check-circle-fill"></i>
-                    Notificación enviada
-                    {% if cargue_existente.fecha_declaracion %}
-                    el {{ cargue_existente.fecha_declaracion|date:"d/m/Y" }} a las {{
-                    cargue_existente.fecha_declaracion|date:"H:i" }}
-                    {% endif %}
-                </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    <!-- ============================
-             MODAL DE CONFIRMACIÓN
-             ============================ -->
-    <div class="modal fade" id="modalConfirmarCargue" tabindex="-1" aria-labelledby="modalConfirmarCargueLabel"
-        aria-hidden="true" data-bs-backdrop="static">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content shadow">
-                <form method="post" action="{% url 'cargue_up:notificar_cargue' propuesta.pk %}"
-                    id="form-notificar-cargue" novalidate>
-                    {% csrf_token %}
-                    <div class="up-modal-header">
-                        <div class="d-flex align-items-center gap-12">
-                            <h2 class="modal-title" id="modalConfirmarCargueLabel">
-                                <i class="bi bi-send-check me-2" style="color: var(--up-azul);"></i>
-                                Confirmar notificación de cargue
-                            </h2>
-                        </div>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                    </div>
-                    <div class="up-modal-body">
-                        <p class="text-secondary mb-4" style="font-size: 0.9rem; line-height: 1.55;">
-                            ¿Confirmas que ya cargaste tu proyecto en el sistema de la UP? Se notificará a tu docente y
-                            dejarás de recibir recordatorios.
-                        </p>
-
-                        <!-- Fecha de cargue -->
-                        <div class="mb-3">
-                            <label for="cup_fecha_cargue" class="form-label fw-semibold text-dark">
-                                Fecha de cargue en la UP <span class="text-danger">*</span>
-                            </label>
-                            {{ formulario.fecha_cargue }}
-                            <div class="form-text small">La fecha no puede ser futura.</div>
-                        </div>
-
-                        <!-- Observaciones -->
-                        <div class="mb-2">
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <label for="cup_observaciones" class="form-label fw-semibold text-dark mb-0">
-                                    Observaciones (opcional)
-                                </label>
-                                <span class="text-muted small" id="contador-caracteres">0 / 500</span>
+                <div class="stepper">
+                    <!-- Paso 1 -->
+                    {% if estado_actual == EstadoTramite.APROBADO or estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual == EstadoTramite.APROBADO_EN_UP or cargue_existente %}
+                        <div class="stepper-item completed">
+                            <div class="step-indicator"><i class="bi bi-check-lg"></i></div>
+                            <div class="step-content">
+                                <div class="step-name">Aprobado por el docente</div>
+                                <div class="step-desc">Propuesta aprobada</div>
                             </div>
-                            {{ formulario.observaciones }}
+                        </div>
+                    {% else %}
+                        <div class="stepper-item active">
+                            <div class="step-indicator">1</div>
+                            <div class="step-content">
+                                <div class="step-name">Aprobado por el docente</div>
+                                <div class="step-desc">Esperando revisión</div>
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    <!-- Paso 2 -->
+                    {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual == EstadoTramite.APROBADO_EN_UP or cargue_existente %}
+                        <div class="stepper-item completed">
+                            <div class="step-indicator"><i class="bi bi-check-lg"></i></div>
+                            <div class="step-content">
+                                <div class="step-name">Cargado en la UP</div>
+                                <div class="step-desc">Notificación enviada</div>
+                            </div>
+                        </div>
+                    {% elif estado_actual == EstadoTramite.APROBADO %}
+                        <div class="stepper-item active">
+                            <div class="step-indicator">2</div>
+                            <div class="step-content">
+                                <div class="step-name">Cargado en la UP</div>
+                                <div class="step-desc">Pendiente de cargue</div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="stepper-item">
+                            <div class="step-indicator">2</div>
+                            <div class="step-content">
+                                <div class="step-name">Cargado en la UP</div>
+                                <div class="step-desc">—</div>
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    <!-- Paso 3 -->
+                    {% if estado_actual == EstadoTramite.APROBADO_EN_UP %}
+                        <div class="stepper-item completed">
+                            <div class="step-indicator"><i class="bi bi-check-lg"></i></div>
+                            <div class="step-content">
+                                <div class="step-name">Respuesta en la UP</div>
+                                <div class="step-desc">Aprobado por el director</div>
+                            </div>
+                        </div>
+                    {% elif estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
+                        <div class="stepper-item active">
+                            <div class="step-indicator">3</div>
+                            <div class="step-content">
+                                <div class="step-name">Respuesta en la UP</div>
+                                <div class="step-desc">Esperando verificación</div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="stepper-item">
+                            <div class="step-indicator">3</div>
+                            <div class="step-content">
+                                <div class="step-name">Respuesta en la UP</div>
+                                <div class="step-desc">—</div>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Alerta contextual -->
+            <div class="mt-4">
+                {% if estado_actual == EstadoTramite.APROBADO and not cargue_existente %}
+                    <div class="up-alert info">
+                        <i class="bi bi-info-circle-fill up-alert-icon"></i>
+                        <div><strong>Tu proyecto fue aprobado.</strong> Descárgalo y cárgalo en el sistema de la UP. Mientras no notifiques el cargue, recibirás recordatorios periódicos.</div>
+                    </div>
+                {% elif estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
+                    <div class="up-alert success">
+                        <i class="bi bi-check-circle-fill up-alert-icon"></i>
+                        <div>
+                            <strong>Notificación enviada.</strong>
+                            {% if cargue_existente %}Notificaste el cargue el <strong>{{ cargue_existente.fecha_declaracion|date:"d/m/Y" }}</strong> a las <strong>{{ cargue_existente.fecha_declaracion|date:"H:i" }}</strong>.{% endif %}
+                            Tu proyecto está a la espera de la verificación oficial en la UP.
                         </div>
                     </div>
-                    <div class="up-modal-footer d-flex justify-content-end gap-2">
-                        <button type="button" class="btn btn-up-outline" data-bs-dismiss="modal">
-                            Cancelar
-                        </button>
-                        <button type="submit" class="btn btn-up-accent" id="btn-submit-notificar">
-                            <span class="spinner-border spinner-border-sm me-1 d-none" id="spinner-notificar"
-                                role="status" aria-hidden="true"></span>
-                            Confirmar y notificar
-                        </button>
+                {% elif estado_actual == EstadoTramite.RECHAZADO %}
+                    <div class="up-alert warning">
+                        <i class="bi bi-exclamation-triangle-fill up-alert-icon"></i>
+                        <div><strong>Proyecto no aprobado.</strong> Tu docente no aprobó tu proyecto, por lo que aún no puedes cargarlo en la UP. Consulta la respuesta de tu docente.</div>
                     </div>
-                </form>
+                {% else %}
+                    <div class="up-alert neutral">
+                        <i class="bi bi-clock-history up-alert-icon"></i>
+                        <div>Tu proyecto aún no ha sido aprobado por tu docente (Estado: <strong>{{ estado_actual }}</strong>). Podrás cargarlo en el sistema de la UP cuando su estado sea Aprobado.</div>
+                    </div>
+                {% endif %}
             </div>
         </div>
-    </div>
+
+        <!-- Tarjeta: Paso 1 -->
+        <div class="up-card">
+            <div class="step-card">
+                <div class="step-number {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}done{% else %}azul{% endif %}">
+                    {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
+                        <i class="bi bi-check-lg"></i>
+                    {% else %}
+                        1
+                    {% endif %}
+                </div>
+                <div class="step-body">
+                    <h3><i class="bi bi-cloud-arrow-up me-2" style="color: var(--up-azul);"></i>Cargar el proyecto en la UP</h3>
+                    <p class="step-description">Descarga el documento avalado de tu propuesta y accede a la plataforma de la Universidad de Pamplona para radicarlo.</p>
+
+                    <div class="step-actions">
+                        {% if puede_cargar or estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual == EstadoTramite.APROBADO_EN_UP %}
+                            <a href="{% url 'cargue_up:descargar_propuesta' propuesta.pk %}" class="btn btn-up-outline">
+                                <i class="bi bi-download"></i>Descargar proyecto
+                            </a>
+                        {% else %}
+                            <button type="button" class="btn btn-up-outline" disabled title="Disponible solo cuando el proyecto está Aprobado">
+                                <i class="bi bi-download"></i>Descargar proyecto
+                            </button>
+                        {% endif %}
+
+                        {% if puede_cargar %}
+                            <a href="{% url 'cargue_up:ir_a_up' propuesta.pk %}" target="_blank" rel="noopener noreferrer" class="btn btn-up-primary" id="btn-ir-up">
+                                <i class="bi bi-box-arrow-up-right"></i>Ir al sistema de la UP
+                            </a>
+                            <span class="external-link-hint"><i class="bi bi-window"></i>Se abre en nueva pestaña</span>
+                        {% else %}
+                            <button type="button" class="btn btn-up-primary" disabled title="Disponible solo cuando el proyecto está Aprobado">
+                                <i class="bi bi-box-arrow-up-right"></i>Ir al sistema de la UP
+                            </button>
+                        {% endif %}
+                    </div>
+
+                    {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
+                        <div class="step-complete-msg">
+                            <i class="bi bi-check-circle-fill"></i>Paso completado
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Tarjeta: Paso 2 -->
+        <div class="up-card">
+            <div class="step-card">
+                <div class="step-number {% if cargue_existente %}done{% else %}rojo{% endif %}">
+                    {% if cargue_existente %}
+                        <i class="bi bi-check-lg"></i>
+                    {% else %}
+                        2
+                    {% endif %}
+                </div>
+                <div class="step-body">
+                    <h3><i class="bi bi-bell me-2" style="color: var(--up-rojo);"></i>Avisar a tu docente</h3>
+                    <p class="step-description">¿Ya cargaste tu proyecto en el sistema de la UP? Avísale a tu docente para dejar de recibir recordatorios y avanzar a la etapa de verificación.</p>
+
+                    <div class="step-actions">
+                        {% if puede_cargar %}
+                            <button type="button" class="btn btn-up-accent" data-bs-toggle="modal" data-bs-target="#modalConfirmarCargue">
+                                <i class="bi bi-check-circle"></i>Ya cargué mi proyecto
+                            </button>
+                        {% else %}
+                            <button type="button" class="btn btn-up-accent" disabled title="{% if cargue_existente %}El cargue ya fue notificado{% else %}Disponible solo cuando el proyecto está Aprobado{% endif %}">
+                                <i class="bi bi-check-circle"></i>Ya cargué mi proyecto
+                            </button>
+                        {% endif %}
+                    </div>
+
+                    {% if cargue_existente %}
+                        <div class="step-complete-msg">
+                            <i class="bi bi-check-circle-fill"></i>
+                            Notificación enviada{% if cargue_existente.fecha_declaracion %} el {{ cargue_existente.fecha_declaracion|date:"d/m/Y" }} a las {{ cargue_existente.fecha_declaracion|date:"H:i" }}{% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Confirmación -->
+        <div class="modal fade" id="modalConfirmarCargue" tabindex="-1" aria-labelledby="modalConfirmarCargueLabel" aria-hidden="true" data-bs-backdrop="static">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content shadow">
+                    <form method="post" action="{% url 'cargue_up:notificar_cargue' propuesta.pk %}" id="form-notificar-cargue" novalidate>
+                        {% csrf_token %}
+                        <div class="up-modal-header">
+                            <h2 class="modal-title" id="modalConfirmarCargueLabel">
+                                <i class="bi bi-send-check me-2" style="color: var(--up-azul);"></i>Confirmar notificación de cargue
+                            </h2>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                        </div>
+                        <div class="up-modal-body">
+                            <p class="text-secondary mb-4" style="font-size: 0.9rem; line-height: 1.55;">
+                                ¿Confirmas que ya cargaste tu proyecto en el sistema de la UP? Se notificará a tu docente y dejarás de recibir recordatorios.
+                            </p>
+
+                            <!-- Fecha de cargue -->
+                            <div class="mb-3">
+                                <label for="cup_fecha_cargue" class="form-label fw-semibold text-dark">
+                                    Fecha de cargue en la UP <span class="text-danger">*</span>
+                                </label>
+                                {{ formulario.fecha_cargue }}
+                                <div class="form-text small">La fecha no puede ser futura.</div>
+                            </div>
+
+                            <!-- Observaciones -->
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label for="cup_observaciones" class="form-label fw-semibold text-dark mb-0">
+                                        Observaciones (opcional)
+                                    </label>
+                                    <span class="text-muted small" id="contador-caracteres">0 / 500</span>
+                                </div>
+                                {{ formulario.observaciones }}
+                            </div>
+                        </div>
+                        <div class="up-modal-footer d-flex justify-content-end gap-2">
+                            <button type="button" class="btn btn-up-outline" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-up-accent" id="btn-submit-notificar">
+                                <span class="spinner-border spinner-border-sm me-1 d-none" id="spinner-notificar" role="status" aria-hidden="true"></span>
+                                Confirmar y notificar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
 
     {% endif %}
 
@@ -1261,45 +1004,45 @@
 
 {% block js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        // 1. Contador de caracteres para observaciones (0 / 500)
-        const textareaObs = document.getElementById('cup_observaciones');
-        const contador = document.getElementById('contador-caracteres');
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. Contador de caracteres para observaciones (0 / 500)
+    const textareaObs = document.getElementById('cup_observaciones');
+    const contador = document.getElementById('contador-caracteres');
 
-        if (textareaObs && contador) {
-            function actualizarContador() {
-                const longitud = textareaObs.value.length;
-                contador.textContent = `${longitud} / 500`;
-                if (longitud >= 500) {
-                    contador.classList.add('text-danger');
-                } else {
-                    contador.classList.remove('text-danger');
-                }
+    if (textareaObs && contador) {
+        function actualizarContador() {
+            const longitud = textareaObs.value.length;
+            contador.textContent = `${longitud} / 500`;
+            if (longitud >= 500) {
+                contador.classList.add('text-danger');
+            } else {
+                contador.classList.remove('text-danger');
             }
-            textareaObs.addEventListener('input', actualizarContador);
-            actualizarContador();
         }
+        textareaObs.addEventListener('input', actualizarContador);
+        actualizarContador();
+    }
 
-        // 2. Prevenir doble envío (CA-09, E7)
-        const formNotificar = document.getElementById('form-notificar-cargue');
-        const btnSubmit = document.getElementById('btn-submit-notificar');
-        const spinner = document.getElementById('spinner-notificar');
+    // 2. Prevenir doble envío
+    const formNotificar = document.getElementById('form-notificar-cargue');
+    const btnSubmit = document.getElementById('btn-submit-notificar');
+    const spinner = document.getElementById('spinner-notificar');
 
-        if (formNotificar && btnSubmit) {
-            formNotificar.addEventListener('submit', function () {
-                btnSubmit.disabled = true;
-                if (spinner) {
-                    spinner.classList.remove('d-none');
-                }
-            });
-        }
+    if (formNotificar && btnSubmit) {
+        formNotificar.addEventListener('submit', function() {
+            btnSubmit.disabled = true;
+            if (spinner) {
+                spinner.classList.remove('d-none');
+            }
+        });
+    }
 
-        // 3. Fecha máxima = hoy (CA-11)
-        const inputFecha = document.getElementById('cup_fecha_cargue');
-        if (inputFecha) {
-            const hoy = new Date().toISOString().split('T')[0];
-            inputFecha.setAttribute('max', hoy);
-        }
-    });
+    // 3. Fecha máxima = hoy
+    const inputFecha = document.getElementById('cup_fecha_cargue');
+    if (inputFecha) {
+        const hoy = new Date().toISOString().split('T')[0];
+        inputFecha.setAttribute('max', hoy);
+    }
+});
 </script>
 {% endblock %}
