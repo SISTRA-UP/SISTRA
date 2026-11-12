@@ -5,13 +5,10 @@ Directores y Estudiantes deben recibir 403 en todas las URLs del módulo.
 """
 from datetime import date
 
-from django.core import mail
 from django.test import TestCase
 from django.urls import reverse
 
 from apps.parametrizacion.models import Carrera
-from apps.personas.models import DirectorCarrera
-from apps.seguimiento.models import Auditoria
 from apps.usuarios.models import ROL_DIRECTOR, ROL_ESTUDIANTE, Permiso, Rol, RolPermiso, Usuario
 
 
@@ -111,53 +108,3 @@ class AccesoModuloTests(TestCase):
         resp = self.client.get(reverse('parametrizacion:parametrizacion'))
         self.assertContains(resp, 'Periodo')
 
-
-class DirectoresViewTests(TestCase):
-    """Creación de directores: solo el Administrador puede hacerlo."""
-
-    @classmethod
-    def setUpTestData(cls):
-        cls.admin = _crear_admin()
-        cls.derecho = Carrera.objects.get(codigo='52382')
-        cls.url = reverse('parametrizacion:directores')
-
-    def datos(self, **cambios):
-        base = {
-            'nombre': 'Diana', 'apellido': 'Rojas',
-            'cedula': '1005005005', 'correo': 'diana.rojas@unipamplona.edu.co',
-            'carrera': self.derecho.pk,
-        }
-        base.update(cambios)
-        return base
-
-    def test_director_no_puede_crear_directores(self):
-        director = _crear_director('900000010', 'dir10@unipamplona.edu.co')
-        self.client.force_login(director)
-        self.assertEqual(self.client.get(self.url).status_code, 403)
-
-    def test_administrador_crea_director_y_lo_asigna(self):
-        self.client.force_login(self.admin)
-        with self.captureOnCommitCallbacks(execute=True):
-            resp = self.client.post(self.url, self.datos())
-        self.assertRedirects(resp, self.url)
-        usuario = Usuario.objects.get(correo_institucional='diana.rojas@unipamplona.edu.co')
-        asignacion = usuario.director.asignaciones.get()
-        self.assertEqual(asignacion.carrera, self.derecho)
-        self.assertTrue(asignacion.activo)
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertTrue(Auditoria.objects.filter(accion='Asignar director a carrera').exists())
-
-    def test_segundo_director_en_misma_carrera_se_rechaza(self):
-        self.client.force_login(self.admin)
-        with self.captureOnCommitCallbacks(execute=True):
-            self.client.post(self.url, self.datos())
-        resp = self.client.post(self.url, self.datos(
-            cedula='1006006006', correo='otra@unipamplona.edu.co'))
-        self.assertContains(resp, 'ya tiene un director activo')
-        self.assertFalse(Usuario.objects.filter(
-            correo_institucional='otra@unipamplona.edu.co').exists())
-
-    def test_correo_no_institucional_se_rechaza(self):
-        self.client.force_login(self.admin)
-        resp = self.client.post(self.url, self.datos(correo='diana@gmail.com'))
-        self.assertContains(resp, 'El correo debe ser institucional.')

@@ -32,11 +32,11 @@ def obtener(clave):
     return guardado if guardado is not None else PARAMETROS_POR_DEFECTO[clave][0]
 
 
-def obtener_entero(clave):
+def obtener_entero(clave, default=None):
     try:
         return int(obtener(clave))
     except (TypeError, ValueError):
-        return None
+        return default
 
 
 def guardar(clave, valor, usuario):

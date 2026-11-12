@@ -23,10 +23,6 @@
     {% else %}
     <a class="sis-nav-item" href="{% url 'parametrizacion:estados' %}">Estados del proceso</a>
     {% endif %}
-    {% if seccion == 'directores' %}
-    <a class="sis-nav-item is-active" href="{% url 'parametrizacion:directores' %}" aria-current="page">Directores</a>
-    {% else %}
-    <a class="sis-nav-item" href="{% url 'parametrizacion:directores' %}">Directores</a>
-    {% endif %}
+    {# Directores — lo agrega SISTRA-10; ruta eliminada de esta rama #}
     {% endif %}
 </nav>
