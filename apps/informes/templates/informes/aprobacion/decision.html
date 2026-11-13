@@ -1,0 +1,215 @@
+<div
+    class="modal fade"
+    id="modal-decision"
+    tabindex="-1"
+    aria-labelledby="titulo-decision"
+    aria-hidden="true"
+>
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="form-decision" method="post">
+                {% csrf_token %}
+
+                <div class="modal-header">
+                    <h2 class="modal-title fs-5" id="titulo-decision">
+                        Evaluar informe
+                    </h2>
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Cerrar"
+                    ></button>
+                </div>
+
+                <div class="modal-body">
+                    <p id="referencia-informe" class="fw-semibold"></p>
+
+                    <input
+                        type="hidden"
+                        name="fecha_actualizacion"
+                        id="version-decision"
+                    >
+
+                    <!-- Conserva el campo que valida Django y usa la bandeja. -->
+                    <div hidden>
+                        {{ form_decision.nuevo_estado }}
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="control-decision" class="form-label">
+                            Decisión del Director
+                        </label>
+
+                        <input
+                            type="range"
+                            class="form-range"
+                            id="control-decision"
+                            min="0"
+                            max="2"
+                            step="1"
+                            value="1"
+                            aria-describedby="ayuda-decision"
+                            aria-valuetext="Sin decisión seleccionada"
+                        >
+
+                        <div class="d-flex justify-content-between gap-2 small">
+                            <span class="text-danger">Rechazado</span>
+                            <span class="text-center">
+                                Requiere modificación
+                            </span>
+                            <span class="text-success">Aprobado</span>
+                        </div>
+
+                        <p id="ayuda-decision" class="small text-secondary mt-2">
+                            Mueve el control o usa las flechas del teclado.
+                            La decisión solo se guarda al confirmar.
+                        </p>
+
+                        <div class="text-center">
+                            <output
+                                id="texto-decision"
+                                for="control-decision"
+                                class="badge text-bg-secondary"
+                                aria-live="polite"
+                            >
+                                Selecciona una decisión
+                            </output>
+                        </div>
+
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary btn-sm mt-3"
+                            id="seleccionar-modificacion"
+                        >
+                            Seleccionar Requiere modificación
+                        </button>
+                    </div>
+
+                    <div class="mb-3" id="grupo-rechazo" hidden>
+                        {{ form_decision.tipo_rechazo.label_tag }}
+                        {{ form_decision.tipo_rechazo }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form_decision.observacion.label_tag }}
+                        {{ form_decision.observacion }}
+                    </div>
+
+                    <div class="mb-3" id="grupo-justificacion" hidden>
+                        <label for="justificacion" class="form-label">
+                            Justificación del cambio de aprobación
+                        </label>
+                        <textarea
+                            id="justificacion"
+                            name="justificacion"
+                            class="form-control"
+                            rows="3"
+                        ></textarea>
+                    </div>
+
+                    <p class="text-secondary small">
+                        Al confirmar, la decisión quedará en el historial
+                        y se notificará al estudiante dentro de SISTRA.
+                    </p>
+
+                    <div
+                        id="error-decision"
+                        class="alert alert-danger text-break"
+                        role="alert"
+                        hidden
+                    ></div>
+                </div>
+
+                <div class="modal-footer">
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="submit"
+                        class="btn btn-primary"
+                        id="confirmar-decision"
+                    >
+                        Confirmar decisión
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(() => {
+    const modal = document.getElementById("modal-decision");
+    const control = document.getElementById("control-decision");
+    const campo = document.getElementById("id_nuevo_estado");
+    const texto = document.getElementById("texto-decision");
+    const confirmar = document.getElementById("confirmar-decision");
+    const elegirModificacion = document.getElementById(
+        "seleccionar-modificacion"
+    );
+
+    const estados = [
+        "Rechazado",
+        "Requiere modificación",
+        "Aprobado"
+    ];
+
+    const clases = [
+        "badge text-bg-danger",
+        "badge text-bg-warning text-dark",
+        "badge text-bg-success"
+    ];
+
+    function seleccionar() {
+        const posicion = Number(control.value);
+        const estado = estados[posicion];
+
+        const opcion = Array.from(campo.options).find(
+            elemento => elemento.value === estado
+        );
+
+        if (!opcion || opcion.disabled) {
+            campo.value = "";
+            texto.textContent = "El informe ya tiene ese estado";
+            texto.className = "badge text-bg-secondary";
+            confirmar.disabled = true;
+        } else {
+            campo.value = estado;
+            texto.textContent = estado;
+            texto.className = clases[posicion];
+            confirmar.disabled = false;
+        }
+
+        control.setAttribute("aria-valuetext", estado);
+        campo.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    control.addEventListener("input", seleccionar);
+
+    elegirModificacion.addEventListener("click", () => {
+        control.value = "1";
+        seleccionar();
+    });
+
+    modal.addEventListener("shown.bs.modal", () => {
+        // Abrir la ventana no selecciona ni guarda una decisión.
+        campo.value = "";
+        control.value = "1";
+        control.setAttribute(
+            "aria-valuetext",
+            "Sin decisión seleccionada"
+        );
+
+        texto.textContent = "Selecciona una decisión";
+        texto.className = "badge text-bg-secondary";
+        confirmar.disabled = true;
+
+        campo.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+})();
+</script>

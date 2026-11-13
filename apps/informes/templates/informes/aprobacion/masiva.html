@@ -1,0 +1,284 @@
+<div
+    class="modal fade"
+    id="modal-masivo"
+    tabindex="-1"
+    aria-labelledby="titulo-masivo"
+    aria-hidden="true"
+>
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form
+                id="form-masivo"
+                method="post"
+                action="{% url 'informes:decidir_masivo' %}"
+            >
+                {% csrf_token %}
+
+                <input type="hidden" name="nuevo_estado" id="estado-masivo">
+
+                <div class="modal-header">
+                    <h2 class="modal-title fs-5" id="titulo-masivo">
+                        Decisión masiva
+                    </h2>
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Cerrar"
+                    ></button>
+                </div>
+
+                <div class="modal-body">
+                    <p id="resumen-masivo" class="fw-semibold"></p>
+                    <ul id="lista-masiva" class="small"></ul>
+
+                    <div class="alert alert-info">
+                        La decisión se aplicará a todos los seleccionados.
+                        Si alguno no permite el cambio, no se modificará ninguno.
+                    </div>
+
+                    <div id="grupo-causal-masiva" class="mb-3" hidden>
+                        <label for="causal-masiva" class="form-label">
+                            Tipo de rechazo
+                        </label>
+                        <select
+                            name="tipo_rechazo"
+                            id="causal-masiva"
+                            class="form-select"
+                        >
+                            <option value="">Selecciona un tipo de rechazo</option>
+                            {% for causal in form_decision.fields.tipo_rechazo.queryset %}
+                                <option value="{{ causal.pk }}">
+                                    {{ causal.nombre }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="observacion-masiva" class="form-label">
+                            Observación común para los estudiantes
+                        </label>
+                        <textarea
+                            id="observacion-masiva"
+                            name="observacion"
+                            class="form-control"
+                            rows="4"
+                        ></textarea>
+                    </div>
+
+                    <div id="grupo-justificacion-masiva" class="mb-3" hidden>
+                        <label for="justificacion-masiva" class="form-label">
+                            Justificación del cambio de aprobación
+                        </label>
+                        <textarea
+                            id="justificacion-masiva"
+                            name="justificacion"
+                            class="form-control"
+                            rows="3"
+                        ></textarea>
+                    </div>
+
+                    <div
+                        id="error-masivo"
+                        class="alert alert-danger text-break"
+                        role="alert"
+                        hidden
+                    ></div>
+                </div>
+
+                <div class="modal-footer">
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="submit"
+                        id="confirmar-masivo"
+                        class="btn btn-primary"
+                    >
+                        Confirmar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const casillas = Array.from(
+        document.querySelectorAll(".seleccionar-informe")
+    );
+    const seleccionarTodos = document.getElementById("seleccionar-todos");
+    const contador = document.getElementById("contador-seleccion");
+    const aprobar = document.getElementById("aprobar-masivo");
+    const rechazar = document.getElementById("rechazar-masivo");
+
+    const modal = document.getElementById("modal-masivo");
+    const formulario = document.getElementById("form-masivo");
+    const confirmar = document.getElementById("confirmar-masivo");
+    const error = document.getElementById("error-masivo");
+    const causal = document.getElementById("causal-masiva");
+    const observacion = document.getElementById("observacion-masiva");
+    const justificacion = document.getElementById("justificacion-masiva");
+
+    let seleccion = [];
+    let enviando = false;
+
+    function actualizarSeleccion() {
+        const elegidas = casillas.filter(casilla => casilla.checked);
+        contador.textContent = elegidas.length;
+
+        aprobar.disabled =
+            elegidas.length === 0 ||
+            elegidas.some(casilla => casilla.dataset.estado === "Aprobado");
+
+        rechazar.disabled = elegidas.length === 0;
+
+        seleccionarTodos.checked =
+            casillas.length > 0 && elegidas.length === casillas.length;
+
+        seleccionarTodos.indeterminate =
+            elegidas.length > 0 && elegidas.length < casillas.length;
+
+        seleccionarTodos.disabled = casillas.length === 0;
+    }
+
+    casillas.forEach(casilla => {
+        casilla.addEventListener("change", actualizarSeleccion);
+    });
+
+    seleccionarTodos.addEventListener("change", () => {
+        casillas.forEach(casilla => {
+            casilla.checked = seleccionarTodos.checked;
+        });
+        actualizarSeleccion();
+    });
+
+    modal.addEventListener("show.bs.modal", evento => {
+        const boton = evento.relatedTarget;
+        seleccion = casillas
+            .filter(casilla => casilla.checked)
+            .map(casilla => ({
+                id: casilla.value,
+                codigo: casilla.dataset.codigo,
+                estado: casilla.dataset.estado,
+                version: casilla.dataset.version
+            }));
+
+        if (!boton || seleccion.length === 0) {
+            evento.preventDefault();
+            return;
+        }
+
+        formulario.reset();
+        error.hidden = true;
+        error.textContent = "";
+
+        const estado = boton.dataset.decision;
+        const esRechazo = estado === "Rechazado";
+        const cambiaAprobacion = seleccion.some(
+            informe => informe.estado === "Aprobado"
+        );
+
+        document.getElementById("estado-masivo").value = estado;
+        document.getElementById("titulo-masivo").textContent =
+            esRechazo ? "Rechazar informes" : "Aprobar informes";
+
+        document.getElementById("resumen-masivo").textContent =
+            seleccion.length + " informe(s) seleccionado(s).";
+
+        const lista = document.getElementById("lista-masiva");
+        lista.replaceChildren();
+
+        seleccion.forEach(informe => {
+            const elemento = document.createElement("li");
+            elemento.textContent = informe.codigo;
+            lista.appendChild(elemento);
+        });
+
+        document.getElementById("grupo-causal-masiva").hidden = !esRechazo;
+        causal.required = esRechazo;
+        causal.disabled = !esRechazo;
+        observacion.required = esRechazo;
+
+        document.getElementById("grupo-justificacion-masiva").hidden =
+            !cambiaAprobacion;
+        justificacion.required = cambiaAprobacion;
+        justificacion.disabled = !cambiaAprobacion;
+    });
+
+    modal.addEventListener("hide.bs.modal", evento => {
+        if (enviando) evento.preventDefault();
+    });
+
+    formulario.addEventListener("submit", async evento => {
+        evento.preventDefault();
+        if (enviando || !formulario.reportValidity()) return;
+
+        const datos = new FormData(formulario);
+        const versiones = {};
+
+        seleccion.forEach(informe => {
+            datos.append("informes", informe.id);
+            versiones[informe.id] = informe.version;
+        });
+
+        datos.set("versiones", JSON.stringify(versiones));
+
+        enviando = true;
+        confirmar.disabled = true;
+        confirmar.textContent = "Guardando...";
+        error.hidden = true;
+
+        try {
+            const respuesta = await fetch(formulario.action, {
+                method: "POST",
+                body: datos,
+                credentials: "same-origin"
+            });
+
+            const contenido = respuesta.headers.get("content-type") || "";
+
+            if (respuesta.redirected || !contenido.includes("application/json")) {
+                throw new Error(
+                    "No se pudo confirmar la operación. " +
+                    "Actualiza la pantalla y comprueba tu sesión."
+                );
+            }
+
+            const resultado = await respuesta.json();
+
+            if (!respuesta.ok || !resultado.ok) {
+                let mensaje = resultado.mensaje || "No se pudo guardar.";
+
+                if (resultado.errores) {
+                    for (const errores of Object.values(resultado.errores)) {
+                        for (const detalle of errores) {
+                            mensaje += " " + detalle.message;
+                        }
+                    }
+                }
+
+                throw new Error(mensaje);
+            }
+
+            window.location.reload();
+        } catch (fallo) {
+            error.textContent = fallo.message ||
+                "No se pudo confirmar el resultado. Actualiza la pantalla.";
+            error.hidden = false;
+        } finally {
+            enviando = false;
+            confirmar.disabled = false;
+            confirmar.textContent = "Confirmar";
+        }
+    });
+
+    actualizarSeleccion();
+});
+</script>

@@ -1,0 +1,405 @@
+{% extends "base.html" %}
+
+{% block titulo %}Aprobación de informes · SISTRA-UP{% endblock %}
+
+{% block contenido %}
+<main class="container py-4">
+    <h1 class="h3 text-primary">Aprobación de informes</h1>
+    <p class="text-secondary">
+        Consulta y evalúa los informes de los estudiantes de tu carrera.
+    </p>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-lg-5">
+                    <label for="buscar" class="form-label">Buscar informe</label>
+                    <input
+                        type="search"
+                        id="buscar"
+                        name="buscar"
+                        class="form-control"
+                        value="{{ buscar }}"
+                        placeholder="Nombre, cédula, código del informe o título"
+                    >
+                </div>
+
+                <div class="col-lg-3">
+                    <label for="estado" class="form-label">Estado</label>
+                    <select id="estado" name="estado" class="form-select">
+                        <option value="">Todos los estados</option>
+                        {% for valor, etiqueta in estados %}
+                            <option
+                                value="{{ valor }}"
+                                {% if estado_seleccionado == valor %}selected{% endif %}
+                            >
+                                {{ etiqueta }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-lg-2">
+                    <label for="semaforo" class="form-label">Semáforo</label>
+                    <select id="semaforo" name="semaforo" class="form-select">
+                        <option value="">Todos</option>
+                        {% for valor, etiqueta in colores %}
+                            <option
+                                value="{{ valor }}"
+                                {% if color_seleccionado == valor %}selected{% endif %}
+                            >
+                                {{ etiqueta }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-lg-2">
+                    <button class="btn btn-primary w-100" type="submit">
+                        Filtrar
+                    </button>
+                </div>
+
+                <div class="col-12">
+                    <a
+                        href="{% url 'informes:aprobacion' %}"
+                        class="btn btn-outline-secondary btn-sm"
+                    >
+                        Limpiar filtros
+                    </a>
+                    <span class="small text-secondary ms-2">
+                        Los filtros de color solo muestran informes En revisión.
+                    </span>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <span class="badge text-bg-success">
+            Verde: 0–{{ limite_verde }} días
+        </span>
+        <span class="badge text-bg-warning text-dark">
+            Amarillo: {{ inicio_amarillo }}–{{ limite_amarillo }} días
+        </span>
+        <span class="badge text-bg-danger">
+            Rojo: desde {{ inicio_rojo }} días
+        </span>
+        <span class="badge text-bg-secondary">
+            Detenido: fuera de revisión
+        </span>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-white">
+            Informes encontrados:
+            <strong>{{ pagina.paginator.count }}</strong>
+        </div>
+
+        <div class="card-body border-bottom">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <span>
+                    Seleccionados:
+                    <strong id="contador-seleccion">0</strong>
+                </span>
+
+                <button
+                    type="button"
+                    id="aprobar-masivo"
+                    class="btn btn-success btn-sm"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modal-masivo"
+                    data-decision="Aprobado"
+                    disabled
+                >
+                    Aprobar seleccionados
+                </button>
+
+                <button
+                    type="button"
+                    id="rechazar-masivo"
+                    class="btn btn-outline-danger btn-sm"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modal-masivo"
+                    data-decision="Rechazado"
+                    disabled
+                >
+                    Rechazar seleccionados
+                </button>
+            </div>
+            <p class="small text-secondary mb-0 mt-2">
+                La selección corresponde únicamente a esta página.
+                Para aprobar, selecciona solo informes En revisión.
+            </p>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th scope="col">
+                            <input
+                                type="checkbox"
+                                id="seleccionar-todos"
+                                class="form-check-input"
+                                aria-label="Seleccionar los informes disponibles de esta página"
+                            >
+                        </th>
+                        <th scope="col">Código</th>
+                        <th scope="col">Estudiante</th>
+                        <th scope="col">Cédula</th>
+                        <th scope="col">Título de la propuesta</th>
+                        <th scope="col">Fecha de envío</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col">Semáforo</th>
+                        <th scope="col">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for informe in pagina %}
+                        <tr>
+                            <td>
+                                {% if informe.puede_decidir %}
+                                    <input
+                                        type="checkbox"
+                                        class="form-check-input seleccionar-informe"
+                                        value="{{ informe.pk }}"
+                                        data-codigo="{{ informe.codigo }}"
+                                        data-estado="{{ informe.estado }}"
+                                        data-version="{{ informe.version_decision }}"
+                                        aria-label="Seleccionar informe {{ informe.codigo }}"
+                                    >
+                                {% endif %}
+                            </td>
+                            <td>{{ informe.codigo }}</td>
+                            <td>
+                                {{ informe.propuesta.proceso.estudiante_carrera.estudiante.usuario.nombre }}
+                            </td>
+                            <td>
+                                {{ informe.propuesta.proceso.estudiante_carrera.estudiante.usuario.cedula }}
+                            </td>
+                            <td>{{ informe.propuesta.titulo }}</td>
+                            <td>
+                                {{ informe.fecha_envio|date:"d/m/Y H:i"|default:"Sin fecha" }}
+                            </td>
+                            <td>{{ informe.get_estado_display }}</td>
+                            <td>
+                                <span
+                                    class="badge {{ informe.semaforo.clase }}"
+                                    title="{{ informe.semaforo.descripcion }}"
+                                >
+                                    {{ informe.semaforo.texto }}
+                                    {% if informe.semaforo.dias != None %}
+                                        · {{ informe.semaforo.color|capfirst }}
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="d-flex gap-2">
+                                    <button
+                                        type="button"
+                                        class="btn btn-outline-primary btn-sm text-nowrap"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#detalle-informe-{{ informe.pk }}"
+                                    >
+                                        Ver detalle
+                                    </button>
+
+                                    {% if informe.puede_decidir %}
+                                        <button
+                                            type="button"
+                                            class="btn btn-primary btn-sm"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modal-decision"
+                                            data-url="{% url 'informes:decidir' informe.pk %}"
+                                            data-codigo="{{ informe.codigo }}"
+                                            data-version="{{ informe.version_decision }}"
+                                            data-estado="{{ informe.estado }}"
+                                        >
+                                            Evaluar
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center text-secondary py-5">
+                                {% if hay_filtros %}
+                                    No se encontraron informes con esos filtros.
+                                {% else %}
+                                    No hay informes disponibles para revisar.
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if pagina.has_other_pages %}
+        <nav class="mt-4" aria-label="Páginas de informes">
+            <ul class="pagination justify-content-center">
+                {% if pagina.has_previous %}
+                    <li class="page-item">
+                        <a
+                            class="page-link"
+                            href="?{{ filtros_url }}&amp;page={{ pagina.previous_page_number }}"
+                        >
+                            Anterior
+                        </a>
+                    </li>
+                {% endif %}
+
+                <li class="page-item active" aria-current="page">
+                    <span class="page-link">
+                        Página {{ pagina.number }}
+                        de {{ pagina.paginator.num_pages }}
+                    </span>
+                </li>
+
+                {% if pagina.has_next %}
+                    <li class="page-item">
+                        <a
+                            class="page-link"
+                            href="?{{ filtros_url }}&amp;page={{ pagina.next_page_number }}"
+                        >
+                            Siguiente
+                        </a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+    {% endif %}
+
+    {% for informe in pagina %}
+        {% include "informes/aprobacion/detalle.html" with informe=informe only %}
+    {% endfor %}
+
+    {% include "informes/aprobacion/decision.html" %}
+    {% include "informes/aprobacion/masiva.html" %}
+</main>
+{% endblock %}
+
+{% block js %}
+<script>
+(() => {
+    const modal = document.getElementById("modal-decision");
+    const formulario = document.getElementById("form-decision");
+    const decision = document.getElementById("id_nuevo_estado");
+    const tipoRechazo = document.getElementById("id_tipo_rechazo");
+    const observacion = document.getElementById("id_observacion");
+    const justificacion = document.getElementById("justificacion");
+    const error = document.getElementById("error-decision");
+    const confirmar = document.getElementById("confirmar-decision");
+
+    let estadoActual = "";
+    let enviando = false;
+
+    function actualizarCampos() {
+        const rechazo = decision.value === "Rechazado";
+        const modificacion = decision.value === "Requiere modificación";
+        const cambiaAprobacion = estadoActual === "Aprobado";
+
+        document.getElementById("grupo-rechazo").hidden = !rechazo;
+        tipoRechazo.required = rechazo;
+        tipoRechazo.disabled = !rechazo;
+
+        if (!rechazo) tipoRechazo.value = "";
+
+        observacion.required = rechazo || modificacion;
+
+        document.getElementById("grupo-justificacion").hidden =
+            !cambiaAprobacion;
+        justificacion.required = cambiaAprobacion;
+        justificacion.disabled = !cambiaAprobacion;
+    }
+
+    modal.addEventListener("show.bs.modal", evento => {
+        const boton = evento.relatedTarget;
+        if (!boton) return;
+
+        formulario.reset();
+        formulario.action = boton.dataset.url;
+        estadoActual = boton.dataset.estado;
+
+        document.getElementById("referencia-informe").textContent =
+            "Informe " + boton.dataset.codigo;
+
+        document.getElementById("version-decision").value =
+            boton.dataset.version;
+
+        error.hidden = true;
+        error.textContent = "";
+
+        for (const opcion of decision.options) {
+            opcion.disabled =
+                opcion.value !== "" && opcion.value === estadoActual;
+        }
+
+        actualizarCampos();
+    });
+
+    modal.addEventListener("hide.bs.modal", evento => {
+        if (enviando) evento.preventDefault();
+    });
+
+    decision.addEventListener("change", actualizarCampos);
+
+    formulario.addEventListener("submit", async evento => {
+        evento.preventDefault();
+
+        if (enviando || !formulario.reportValidity()) return;
+
+        enviando = true;
+        confirmar.disabled = true;
+        confirmar.textContent = "Guardando...";
+        error.hidden = true;
+
+        try {
+            const respuesta = await fetch(formulario.action, {
+                method: "POST",
+                body: new FormData(formulario),
+                credentials: "same-origin"
+            });
+
+            const contenido = respuesta.headers.get("content-type") || "";
+
+            if (respuesta.redirected || !contenido.includes("application/json")) {
+                throw new Error(
+                    "No se pudo confirmar la operación. " +
+                    "Actualiza la pantalla y comprueba tu sesión."
+                );
+            }
+
+            const datos = await respuesta.json();
+
+            if (!respuesta.ok || !datos.ok) {
+                let mensaje = datos.mensaje || "No se pudo guardar.";
+
+                if (datos.errores) {
+                    for (const errores of Object.values(datos.errores)) {
+                        for (const detalle of errores) {
+                            mensaje += " " + detalle.message;
+                        }
+                    }
+                }
+
+                throw new Error(mensaje);
+            }
+
+            window.location.reload();
+        } catch (fallo) {
+            error.textContent = fallo.message ||
+                "No se pudo confirmar el resultado. Actualiza la pantalla.";
+            error.hidden = false;
+        } finally {
+            enviando = false;
+            confirmar.disabled = false;
+            confirmar.textContent = "Confirmar decisión";
+        }
+    });
+})();
+</script>
+{% endblock %}
