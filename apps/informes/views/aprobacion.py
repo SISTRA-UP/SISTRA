@@ -4,8 +4,6 @@ Solo el responsable de este requisito edita este archivo.
 """
 """SISTRA-07 · Bandeja de aprobación de informes."""
 
-from datetime import timedelta
-
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
@@ -66,7 +64,7 @@ def _informes_del_director(usuario):
 @login_required
 @require_GET
 def bandeja(request):
-    """Presenta los informes con búsqueda, filtros y semáforo."""
+    """Presenta informes con filtros y tiempo acumulado de revisión."""
 
     informes = _informes_del_director(request.user)
 
@@ -103,6 +101,11 @@ def bandeja(request):
     if estado:
         informes = informes.filter(estado=estado)
 
+    if color:
+        informes = informes.filter(
+            estado=EstadoTramite.EN_REVISION,
+        )
+
     limites = obtener_limites_semaforo()
     verde, amarillo = limites
 
@@ -112,40 +115,17 @@ def bandeja(request):
 
     ahora = timezone.now()
 
-    if color:
-        informes = informes.filter(
-            estado=EstadoTramite.EN_REVISION,
-            fecha_envio__isnull=False,
+    informes = (
+        informes.annotate(
+            tiene_cargue_up=Exists(
+                CargueUp.objects.filter(informe_id=OuterRef("pk"))
+            )
         )
-
-        corte_verde = ahora - timedelta(days=verde + 1)
-        corte_amarillo = ahora - timedelta(days=amarillo + 1)
-
-        if color == "verde":
-            informes = informes.filter(
-                fecha_envio__gt=corte_verde,
-            )
-        elif color == "amarillo":
-            informes = informes.filter(
-                fecha_envio__lte=corte_verde,
-                fecha_envio__gt=corte_amarillo,
-            )
-        else:
-            informes = informes.filter(
-                fecha_envio__lte=corte_amarillo,
-            )
-
-    informes = informes.annotate(
-        tiene_cargue_up=Exists(
-            CargueUp.objects.filter(informe_id=OuterRef("pk"))
-        )
-    ).order_by("-fecha_envio", "-pk")
-
-    pagina = Paginator(informes, 10).get_page(
-        request.GET.get("page")
+        .prefetch_related("historial")
+        .order_by("-fecha_envio", "-pk")
     )
 
-    for informe in pagina.object_list:
+    def preparar(informe):
         informe.version_decision = (
             informe.fecha_actualizacion.isoformat()
         )
@@ -163,6 +143,32 @@ def bandeja(request):
             limites=limites,
             ahora=ahora,
         )
+
+        return informe
+
+    if color:
+        # El filtro usa exactamente el mismo cálculo que la etiqueta.
+        # Se calcula antes de paginar para obtener el total correcto.
+        coincidencias = []
+
+        for informe in informes:
+            preparar(informe)
+
+            if informe.semaforo["color"] == color:
+                coincidencias.append(informe)
+
+        pagina = Paginator(coincidencias, 10).get_page(
+            request.GET.get("page")
+        )
+    else:
+        pagina = Paginator(informes, 10).get_page(
+            request.GET.get("page")
+        )
+
+        pagina.object_list = [
+            preparar(informe)
+            for informe in pagina.object_list
+        ]
 
     filtros = request.GET.copy()
     filtros.pop("page", None)

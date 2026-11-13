@@ -1074,3 +1074,482 @@ class DecisionInformeTests(TestCase):
                     id_registro_afectado=informe.pk,
                 ).exists()
             )
+    def preparar_rechazado_para_reactivar(self):
+        from datetime import timedelta
+
+        ahora = timezone.now()
+
+        self.informe.estado = EstadoTramite.RECHAZADO
+        self.informe.fecha_envio = ahora - timedelta(days=13)
+        self.informe.save()
+
+        # Acumuló 10 días en revisión y lleva 3 días rechazado.
+        HistorialEstado.objects.create(
+            informe=self.informe,
+            usuario=self.director,
+            estado_anterior=EstadoTramite.EN_REVISION,
+            estado_nuevo=EstadoTramite.RECHAZADO,
+            tipo_rechazo=self.tipo_rechazo,
+            observacion="Rechazo de prueba.",
+            tipo_accion="decision_informe",
+            fecha_hora=ahora - timedelta(days=3),
+        )
+
+        return {
+            "motivo": "El rechazo fue registrado por error.",
+            "fecha_actualizacion": (
+                self.informe.fecha_actualizacion.isoformat()
+            ),
+        }
+
+    def test_reactivar_guarda_historial_aviso_y_conserva_dias(self):
+        from apps.informes.views.aprobacion_semaforo import (
+            calcular_semaforo_informe,
+        )
+
+        datos = self.preparar_rechazado_para_reactivar()
+        fecha_original = self.informe.fecha_envio
+        entrega_original = self.informe.version_entrega
+
+        respuesta = self.client.post(
+            reverse(
+                "informes:reactivar",
+                kwargs={"id_informe": self.informe.pk},
+            ),
+            datos,
+        )
+
+        self.assertEqual(respuesta.status_code, 200)
+
+        self.informe.refresh_from_db()
+        self.assertEqual(
+            self.informe.estado,
+            EstadoTramite.EN_REVISION,
+        )
+        self.assertEqual(self.informe.fecha_envio, fecha_original)
+        self.assertEqual(self.informe.version_entrega, entrega_original)
+
+        self.assertEqual(
+            HistorialEstado.objects.filter(
+                informe=self.informe,
+            ).count(),
+            2,
+        )
+
+        reactivacion = HistorialEstado.objects.get(
+            informe=self.informe,
+            tipo_accion="reactivacion_informe",
+        )
+
+        self.assertEqual(
+            reactivacion.motivo_reactivacion,
+            datos["motivo"],
+        )
+        self.assertEqual(
+            reactivacion.estado_anterior,
+            EstadoTramite.RECHAZADO,
+        )
+        self.assertEqual(
+            reactivacion.estado_nuevo,
+            EstadoTramite.EN_REVISION,
+        )
+
+        aviso = Notificacion.objects.get(informe=self.informe)
+        self.assertEqual(aviso.usuario_id, self.estudiante.pk)
+
+        semaforo = calcular_semaforo_informe(
+            self.informe,
+            limites=(7, 14),
+            ahora=reactivacion.fecha_hora,
+        )
+
+        self.assertEqual(semaforo["dias"], 10)
+        self.assertEqual(semaforo["color"], "amarillo")
+
+        self.assertTrue(
+            Auditoria.objects.filter(
+                accion="reactivacion_informe",
+                id_registro_afectado=self.informe.pk,
+                resultado="Exitoso",
+            ).exists()
+        )
+
+    def test_reactivar_sin_motivo_no_guarda(self):
+        datos = self.preparar_rechazado_para_reactivar()
+        datos["motivo"] = "   "
+
+        respuesta = self.client.post(
+            reverse(
+                "informes:reactivar",
+                kwargs={"id_informe": self.informe.pk},
+            ),
+            datos,
+        )
+
+        self.assertEqual(respuesta.status_code, 400)
+
+        self.informe.refresh_from_db()
+        self.assertEqual(self.informe.estado, EstadoTramite.RECHAZADO)
+        self.assertEqual(
+            HistorialEstado.objects.filter(informe=self.informe).count(),
+            1,
+        )
+        self.assertFalse(
+            Notificacion.objects.filter(informe=self.informe).exists()
+        )
+
+    def test_reactivar_dos_veces_no_duplica_registros(self):
+        datos = self.preparar_rechazado_para_reactivar()
+
+        url = reverse(
+            "informes:reactivar",
+            kwargs={"id_informe": self.informe.pk},
+        )
+
+        primera = self.client.post(url, datos)
+        segunda = self.client.post(url, datos)
+
+        self.assertEqual(primera.status_code, 200)
+        self.assertEqual(segunda.status_code, 409)
+
+        self.assertEqual(
+            HistorialEstado.objects.filter(
+                informe=self.informe,
+                tipo_accion="reactivacion_informe",
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            Notificacion.objects.filter(informe=self.informe).count(),
+            1,
+        )
+
+    def test_endpoint_reactivar_bloquea_otro_informe_activo(self):
+        datos = self.preparar_rechazado_para_reactivar()
+
+        Informe.objects.create(
+            propuesta=self.informe.propuesta,
+            periodo_academico=self.informe.periodo_academico,
+            codigo="INF-NUEVO-ACTIVO-REACT",
+            estado=EstadoTramite.BORRADOR,
+        )
+
+        respuesta = self.client.post(
+            reverse(
+                "informes:reactivar",
+                kwargs={"id_informe": self.informe.pk},
+            ),
+            datos,
+        )
+
+        self.assertEqual(respuesta.status_code, 409)
+
+        self.informe.refresh_from_db()
+        self.assertEqual(self.informe.estado, EstadoTramite.RECHAZADO)
+        self.assertFalse(
+            HistorialEstado.objects.filter(
+                informe=self.informe,
+                tipo_accion="reactivacion_informe",
+            ).exists()
+        )
+        self.assertFalse(
+            Notificacion.objects.filter(informe=self.informe).exists()
+        )
+
+    def test_endpoint_reactivar_no_permite_informe_archivado(self):
+        datos = self.preparar_rechazado_para_reactivar()
+
+        self.informe.archivado = True
+        self.informe.fecha_archivado = timezone.now()
+        self.informe.save()
+
+        datos["fecha_actualizacion"] = (
+            self.informe.fecha_actualizacion.isoformat()
+        )
+
+        respuesta = self.client.post(
+            reverse(
+                "informes:reactivar",
+                kwargs={"id_informe": self.informe.pk},
+            ),
+            datos,
+        )
+
+        # La consulta autorizada excluye los informes archivados.
+        self.assertEqual(respuesta.status_code, 404)
+
+        self.informe.refresh_from_db()
+        self.assertEqual(self.informe.estado, EstadoTramite.RECHAZADO)
+        self.assertFalse(
+            Notificacion.objects.filter(informe=self.informe).exists()
+        )
+    def preparar_dos_rechazados_para_masivo(self):
+        import json
+        from datetime import timedelta
+
+        segundo = self.crear_segundo_informe_para_masivo()
+        informes = [self.informe, segundo]
+        ahora = timezone.now()
+
+        for informe in informes:
+            informe.estado = EstadoTramite.RECHAZADO
+            informe.fecha_envio = ahora - timedelta(days=13)
+            informe.save()
+
+            HistorialEstado.objects.create(
+                informe=informe,
+                usuario=self.director,
+                estado_anterior=EstadoTramite.EN_REVISION,
+                estado_nuevo=EstadoTramite.RECHAZADO,
+                tipo_rechazo=self.tipo_rechazo,
+                observacion="Rechazo de prueba.",
+                tipo_accion="decision_informe",
+                fecha_hora=ahora - timedelta(days=3),
+            )
+
+        datos = {
+            "motivo": "Los rechazos se registraron por error.",
+            "informes": [str(informe.pk) for informe in informes],
+            "versiones": json.dumps({
+                str(informe.pk): informe.fecha_actualizacion.isoformat()
+                for informe in informes
+            }),
+        }
+
+        return informes, datos
+
+    def comprobar_reactivacion_masiva_sin_cambios(self, informes):
+        for informe in informes:
+            informe.refresh_from_db()
+
+            self.assertEqual(
+                informe.estado,
+                EstadoTramite.RECHAZADO,
+            )
+            self.assertEqual(
+                HistorialEstado.objects.filter(informe=informe).count(),
+                1,
+            )
+            self.assertFalse(
+                Notificacion.objects.filter(informe=informe).exists()
+            )
+            self.assertFalse(
+                Auditoria.objects.filter(
+                    accion="reactivacion_masiva_informe",
+                    tabla_afectada="informe",
+                    id_registro_afectado=informe.pk,
+                ).exists()
+            )
+
+    def test_reactivacion_masiva_conserva_dias_y_notifica(self):
+        from apps.informes.views.aprobacion_semaforo import (
+            calcular_semaforo_informe,
+        )
+
+        informes, datos = self.preparar_dos_rechazados_para_masivo()
+
+        fechas_originales = {
+            informe.pk: informe.fecha_envio
+            for informe in informes
+        }
+        entregas_originales = {
+            informe.pk: informe.version_entrega
+            for informe in informes
+        }
+
+        respuesta = self.client.post(
+            reverse("informes:reactivar_masivo"),
+            datos,
+        )
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.json()["cantidad"], 2)
+
+        for informe in informes:
+            with self.subTest(informe=informe.codigo):
+                informe.refresh_from_db()
+
+                self.assertEqual(
+                    informe.estado,
+                    EstadoTramite.EN_REVISION,
+                )
+                self.assertEqual(
+                    informe.fecha_envio,
+                    fechas_originales[informe.pk],
+                )
+                self.assertEqual(
+                    informe.version_entrega,
+                    entregas_originales[informe.pk],
+                )
+
+                self.assertEqual(
+                    HistorialEstado.objects.filter(informe=informe).count(),
+                    2,
+                )
+
+                evento = HistorialEstado.objects.get(
+                    informe=informe,
+                    tipo_accion="reactivacion_masiva_informe",
+                )
+
+                self.assertEqual(
+                    evento.motivo_reactivacion,
+                    datos["motivo"],
+                )
+                self.assertEqual(
+                    evento.estado_anterior,
+                    EstadoTramite.RECHAZADO,
+                )
+                self.assertEqual(
+                    evento.estado_nuevo,
+                    EstadoTramite.EN_REVISION,
+                )
+
+                aviso = Notificacion.objects.get(informe=informe)
+                estudiante = (
+                    informe.propuesta.proceso
+                    .estudiante_carrera.estudiante.usuario
+                )
+                self.assertEqual(aviso.usuario_id, estudiante.pk)
+
+                semaforo = calcular_semaforo_informe(
+                    informe,
+                    limites=(7, 14),
+                    ahora=evento.fecha_hora,
+                )
+
+                self.assertEqual(semaforo["dias"], 10)
+                self.assertEqual(semaforo["color"], "amarillo")
+
+                self.assertEqual(
+                    Auditoria.objects.filter(
+                        accion="reactivacion_masiva_informe",
+                        tabla_afectada="informe",
+                        id_registro_afectado=informe.pk,
+                        resultado="Exitoso",
+                    ).count(),
+                    1,
+                )
+
+    def test_reactivacion_masiva_sin_motivo_no_guarda(self):
+        informes, datos = self.preparar_dos_rechazados_para_masivo()
+        datos["motivo"] = "   "
+
+        respuesta = self.client.post(
+            reverse("informes:reactivar_masivo"),
+            datos,
+        )
+
+        self.assertEqual(respuesta.status_code, 400)
+        self.comprobar_reactivacion_masiva_sin_cambios(informes)
+
+    def test_reactivacion_masiva_repetida_no_duplica_registros(self):
+        informes, datos = self.preparar_dos_rechazados_para_masivo()
+        url = reverse("informes:reactivar_masivo")
+
+        primera = self.client.post(url, datos)
+        segunda = self.client.post(url, datos)
+
+        self.assertEqual(primera.status_code, 200)
+        self.assertEqual(segunda.status_code, 409)
+
+        for informe in informes:
+            self.assertEqual(
+                HistorialEstado.objects.filter(
+                    informe=informe,
+                    tipo_accion="reactivacion_masiva_informe",
+                ).count(),
+                1,
+            )
+            self.assertEqual(
+                Notificacion.objects.filter(informe=informe).count(),
+                1,
+            )
+
+    def test_reactivacion_masiva_bloquea_todo_si_hay_otro_activo(self):
+        informes, datos = self.preparar_dos_rechazados_para_masivo()
+        segundo = informes[1]
+
+        Informe.objects.create(
+            propuesta=segundo.propuesta,
+            periodo_academico=segundo.periodo_academico,
+            codigo="INF-ACTIVO-BLOQUEO-MASIVO",
+            estado=EstadoTramite.BORRADOR,
+        )
+
+        respuesta = self.client.post(
+            reverse("informes:reactivar_masivo"),
+            datos,
+        )
+
+        self.assertEqual(respuesta.status_code, 409)
+        self.comprobar_reactivacion_masiva_sin_cambios(informes)
+
+    def test_reactivacion_masiva_fallo_en_segundo_aviso_deshace_todo(self):
+        informes, datos = self.preparar_dos_rechazados_para_masivo()
+
+        crear_aviso_original = Notificacion.objects.create
+        llamadas = []
+
+        def crear_aviso_con_fallo(*args, **kwargs):
+            llamadas.append(kwargs["informe"].pk)
+
+            if len(llamadas) == 2:
+                raise RuntimeError("Fallo simulado en el segundo aviso")
+
+            return crear_aviso_original(*args, **kwargs)
+
+        with patch(
+            "apps.informes.views.aprobacion_reactivacion_masiva."
+            "Notificacion.objects.create",
+            side_effect=crear_aviso_con_fallo,
+        ):
+            with self.assertLogs(
+                "apps.informes.views.aprobacion_reactivacion_masiva",
+                level="ERROR",
+            ):
+                respuesta = self.client.post(
+                    reverse("informes:reactivar_masivo"),
+                    datos,
+                )
+
+        self.assertEqual(respuesta.status_code, 500)
+        self.assertEqual(len(llamadas), 2)
+        self.comprobar_reactivacion_masiva_sin_cambios(informes)
+    def test_auditoria_registra_decision_con_datos_incompletos(self):
+        respuesta = self.client.post(
+            self.url,
+            self.datos_decision(EstadoTramite.RECHAZADO),
+        )
+
+        self.assertEqual(respuesta.status_code, 400)
+        self.comprobar_sin_cambios(EstadoTramite.EN_REVISION)
+
+        registro = Auditoria.objects.get(
+            accion="intento_decision_informe",
+            id_registro_afectado=self.informe.pk,
+        )
+
+        self.assertEqual(registro.usuario_id, self.director.pk)
+        self.assertEqual(registro.resultado, "Fallido")
+        self.assertIn("HTTP 400", registro.detalle)
+
+    def test_auditoria_registra_intento_de_estudiante(self):
+        self.client.force_login(self.estudiante)
+
+        respuesta = self.client.post(
+            self.url,
+            self.datos_decision(EstadoTramite.APROBADO),
+        )
+
+        self.assertEqual(respuesta.status_code, 403)
+        self.comprobar_sin_cambios(EstadoTramite.EN_REVISION)
+
+        registro = Auditoria.objects.get(
+            accion="intento_decision_informe",
+            id_registro_afectado=self.informe.pk,
+        )
+
+        self.assertEqual(registro.usuario_id, self.estudiante.pk)
+        self.assertEqual(registro.resultado, "Bloqueado")
+        self.assertIn("HTTP 403", registro.detalle)

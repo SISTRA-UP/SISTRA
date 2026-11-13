@@ -8,6 +8,7 @@ from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
+from apps.informes.views.aprobacion_auditoria import auditar_intentos
 from apps.informes.forms.aprobacion_masiva import (
     DecisionMasivaInformeForm,
 )
@@ -32,6 +33,7 @@ def _error(mensaje, estado=400):
 
 @login_required
 @require_POST
+@auditar_intentos("decision_masiva_informe")
 def decidir_masivo(request):
     """Procesa todos los informes seleccionados o ninguno."""
 

@@ -11,6 +11,8 @@
                 id="form-masivo"
                 method="post"
                 action="{% url 'informes:decidir_masivo' %}"
+                data-url-decision="{% url 'informes:decidir_masivo' %}"
+                data-url-reactivacion="{% url 'informes:reactivar_masivo' %}"
             >
                 {% csrf_token %}
 
@@ -18,7 +20,7 @@
 
                 <div class="modal-header">
                     <h2 class="modal-title fs-5" id="titulo-masivo">
-                        Decisión masiva
+                        Operación masiva
                     </h2>
                     <button
                         type="button"
@@ -33,8 +35,25 @@
                     <ul id="lista-masiva" class="small"></ul>
 
                     <div class="alert alert-info">
-                        La decisión se aplicará a todos los seleccionados.
-                        Si alguno no permite el cambio, no se modificará ninguno.
+                        Si algún informe no permite la operación,
+                        no se modificará ninguno de los seleccionados.
+                    </div>
+
+                    <div id="grupo-motivo-masivo" class="mb-3" hidden>
+                        <label for="motivo-masivo" class="form-label">
+                            Motivo de la reactivación
+                        </label>
+                        <textarea
+                            id="motivo-masivo"
+                            name="motivo"
+                            class="form-control"
+                            rows="4"
+                        ></textarea>
+                        <p class="small text-secondary mt-2">
+                            Los informes volverán a En revisión,
+                            conservando el tiempo de revisión acumulado.
+                            Se notificará a cada estudiante.
+                        </p>
                     </div>
 
                     <div id="grupo-causal-masiva" class="mb-3" hidden>
@@ -55,7 +74,7 @@
                         </select>
                     </div>
 
-                    <div class="mb-3">
+                    <div id="grupo-observacion-masiva" class="mb-3">
                         <label for="observacion-masiva" class="form-label">
                             Observación común para los estudiantes
                         </label>
@@ -113,31 +132,46 @@ document.addEventListener("DOMContentLoaded", () => {
     const casillas = Array.from(
         document.querySelectorAll(".seleccionar-informe")
     );
+
     const seleccionarTodos = document.getElementById("seleccionar-todos");
     const contador = document.getElementById("contador-seleccion");
     const aprobar = document.getElementById("aprobar-masivo");
     const rechazar = document.getElementById("rechazar-masivo");
+    const reactivar = document.getElementById("reactivar-masivo");
 
     const modal = document.getElementById("modal-masivo");
     const formulario = document.getElementById("form-masivo");
     const confirmar = document.getElementById("confirmar-masivo");
     const error = document.getElementById("error-masivo");
+
+    const estadoCampo = document.getElementById("estado-masivo");
     const causal = document.getElementById("causal-masiva");
     const observacion = document.getElementById("observacion-masiva");
     const justificacion = document.getElementById("justificacion-masiva");
+    const motivo = document.getElementById("motivo-masivo");
 
     let seleccion = [];
     let enviando = false;
 
     function actualizarSeleccion() {
         const elegidas = casillas.filter(casilla => casilla.checked);
+        const haySeleccion = elegidas.length > 0;
+
         contador.textContent = elegidas.length;
 
-        aprobar.disabled =
-            elegidas.length === 0 ||
-            elegidas.some(casilla => casilla.dataset.estado === "Aprobado");
+        aprobar.disabled = !haySeleccion || !elegidas.every(
+            casilla => casilla.dataset.estado === "En revisión"
+        );
 
-        rechazar.disabled = elegidas.length === 0;
+        rechazar.disabled = !haySeleccion || !elegidas.every(
+            casilla => ["En revisión", "Aprobado"].includes(
+                casilla.dataset.estado
+            )
+        );
+
+        reactivar.disabled = !haySeleccion || !elegidas.every(
+            casilla => casilla.dataset.estado === "Rechazado"
+        );
 
         seleccionarTodos.checked =
             casillas.length > 0 && elegidas.length === casillas.length;
@@ -161,6 +195,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     modal.addEventListener("show.bs.modal", evento => {
         const boton = evento.relatedTarget;
+
         seleccion = casillas
             .filter(casilla => casilla.checked)
             .map(casilla => ({
@@ -170,7 +205,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 version: casilla.dataset.version
             }));
 
-        if (!boton || seleccion.length === 0) {
+        if (!boton || boton.disabled || seleccion.length === 0) {
             evento.preventDefault();
             return;
         }
@@ -179,15 +214,27 @@ document.addEventListener("DOMContentLoaded", () => {
         error.hidden = true;
         error.textContent = "";
 
-        const estado = boton.dataset.decision;
-        const esRechazo = estado === "Rechazado";
-        const cambiaAprobacion = seleccion.some(
+        const accion = boton.dataset.decision;
+        const esReactivacion = accion === "Reactivar";
+        const esRechazo = accion === "Rechazado";
+
+        const cambiaAprobacion = !esReactivacion && seleccion.some(
             informe => informe.estado === "Aprobado"
         );
 
-        document.getElementById("estado-masivo").value = estado;
+        formulario.action = esReactivacion
+            ? formulario.dataset.urlReactivacion
+            : formulario.dataset.urlDecision;
+
+        estadoCampo.disabled = esReactivacion;
+        estadoCampo.value = esReactivacion ? "" : accion;
+
         document.getElementById("titulo-masivo").textContent =
-            esRechazo ? "Rechazar informes" : "Aprobar informes";
+            esReactivacion
+                ? "Reactivar informes"
+                : esRechazo
+                    ? "Rechazar informes"
+                    : "Aprobar informes";
 
         document.getElementById("resumen-masivo").textContent =
             seleccion.length + " informe(s) seleccionado(s).";
@@ -201,10 +248,20 @@ document.addEventListener("DOMContentLoaded", () => {
             lista.appendChild(elemento);
         });
 
-        document.getElementById("grupo-causal-masiva").hidden = !esRechazo;
+        document.getElementById("grupo-motivo-masivo").hidden =
+            !esReactivacion;
+        motivo.required = esReactivacion;
+        motivo.disabled = !esReactivacion;
+
+        document.getElementById("grupo-causal-masiva").hidden =
+            !esRechazo;
         causal.required = esRechazo;
         causal.disabled = !esRechazo;
+
+        document.getElementById("grupo-observacion-masiva").hidden =
+            esReactivacion;
         observacion.required = esRechazo;
+        observacion.disabled = esReactivacion;
 
         document.getElementById("grupo-justificacion-masiva").hidden =
             !cambiaAprobacion;
@@ -218,6 +275,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     formulario.addEventListener("submit", async evento => {
         evento.preventDefault();
+
         if (enviando || !formulario.reportValidity()) return;
 
         const datos = new FormData(formulario);
@@ -242,9 +300,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 credentials: "same-origin"
             });
 
-            const contenido = respuesta.headers.get("content-type") || "";
+            const contenido =
+                respuesta.headers.get("content-type") || "";
 
-            if (respuesta.redirected || !contenido.includes("application/json")) {
+            if (
+                respuesta.redirected ||
+                !contenido.includes("application/json")
+            ) {
                 throw new Error(
                     "No se pudo confirmar la operación. " +
                     "Actualiza la pantalla y comprueba tu sesión."

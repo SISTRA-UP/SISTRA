@@ -97,6 +97,17 @@
         </div>
 
         <div class="card-body border-bottom">
+    <button
+        type="button"
+        id="reactivar-masivo"
+        class="btn btn-outline-warning btn-sm mb-2"
+        data-bs-toggle="modal"
+        data-bs-target="#modal-masivo"
+        data-decision="Reactivar"
+        disabled
+    >
+        Reactivar seleccionados
+    </button>
             <div class="d-flex flex-wrap align-items-center gap-2">
                 <span>
                     Seleccionados:
@@ -159,7 +170,7 @@
                     {% for informe in pagina %}
                         <tr>
                             <td>
-                                {% if informe.puede_decidir %}
+                               {% if informe.puede_decidir or informe.estado == "Rechazado" %}
                                     <input
                                         type="checkbox"
                                         class="form-check-input seleccionar-informe"
@@ -196,6 +207,19 @@
                             </td>
                             <td>
                                 <div class="d-flex gap-2">
+    {% if informe.estado == "Rechazado" %}
+        <button
+            type="button"
+            class="btn btn-outline-warning btn-sm"
+            data-bs-toggle="modal"
+            data-bs-target="#modal-reactivacion"
+            data-url="{% url 'informes:reactivar' informe.pk %}"
+            data-codigo="{{ informe.codigo }}"
+            data-version="{{ informe.version_decision }}"
+        >
+            Reactivar
+        </button>
+    {% endif %}
                                     <button
                                         type="button"
                                         class="btn btn-outline-primary btn-sm text-nowrap"
@@ -279,6 +303,7 @@
 
     {% include "informes/aprobacion/decision.html" %}
     {% include "informes/aprobacion/masiva.html" %}
+{% include "informes/aprobacion/reactivacion.html" %}
 </main>
 {% endblock %}
 

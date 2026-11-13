@@ -1,0 +1,201 @@
+"""SISTRA-07 · Reactivación masiva de informes."""
+
+import logging
+
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+
+from apps.informes.views.aprobacion_auditoria import auditar_intentos
+from apps.informes.forms.aprobacion_reactivacion import (
+    validar_condiciones_reactivacion,
+)
+from apps.informes.forms.aprobacion_reactivacion_masiva import (
+    ReactivacionMasivaInformeForm,
+)
+from apps.informes.views.aprobacion import _informes_del_director
+from apps.propuestas.models import EstadoTramite, Propuesta
+from apps.seguimiento.models import (
+    Auditoria,
+    HistorialEstado,
+    Notificacion,
+)
+
+
+logger = logging.getLogger(__name__)
+
+
+def _error(mensaje, estado=400):
+    return JsonResponse(
+        {"ok": False, "mensaje": mensaje},
+        status=estado,
+    )
+
+
+@login_required
+@require_POST
+@auditar_intentos("reactivacion_masiva_informe")
+def reactivar_masivo(request):
+    """Reactiva toda la selección o no modifica ningún informe."""
+
+    permitidos = _informes_del_director(request.user)
+
+    formulario = ReactivacionMasivaInformeForm(
+        request.POST,
+        informes_permitidos=permitidos,
+    )
+
+    if not formulario.is_valid():
+        return JsonResponse(
+            {
+                "ok": False,
+                "mensaje": "Revisa la selección y el motivo.",
+                "errores": formulario.errors.get_json_data(),
+            },
+            status=400,
+        )
+
+    seleccion = list(formulario.cleaned_data["informes"])
+    ids = sorted(informe.pk for informe in seleccion)
+    propuestas = sorted(
+        {informe.propuesta_id for informe in seleccion}
+    )
+
+    motivo = formulario.cleaned_data["motivo"]
+    versiones = formulario.cleaned_data["versiones"]
+
+    # No se pueden convertir dos informes rechazados de una misma
+    # propuesta en activos al mismo tiempo.
+    if len(propuestas) != len(ids):
+        return _error(
+            "Selecciona como máximo un informe por propuesta. "
+            "No se modificó ninguno.",
+            estado=409,
+        )
+
+    try:
+        with transaction.atomic():
+            # Mismo orden de bloqueo que en la reactivación individual:
+            # primero propuestas y después informes.
+            list(
+                Propuesta.objects.select_for_update()
+                .filter(pk__in=propuestas)
+                .order_by("pk")
+            )
+
+            informes = list(
+                permitidos.filter(pk__in=ids)
+                .select_for_update(of=("self",))
+                .order_by("pk")
+            )
+
+            if len(informes) != len(ids):
+                return _error(
+                    "Algún informe dejó de estar disponible. "
+                    "Actualiza la pantalla. No se modificó ninguno.",
+                    estado=409,
+                )
+
+            # Valida toda la selección antes de guardar.
+            for informe in informes:
+                if (
+                    informe.fecha_actualizacion.isoformat()
+                    != versiones[str(informe.pk)]
+                ):
+                    return _error(
+                        f"El informe {informe.codigo} cambió. "
+                        "Actualiza la pantalla. No se modificó ninguno.",
+                        estado=409,
+                    )
+
+                try:
+                    validar_condiciones_reactivacion(informe)
+                except ValidationError as error:
+                    return _error(
+                        f"{informe.codigo}: "
+                        + " ".join(error.messages)
+                        + " No se modificó ningún informe.",
+                        estado=409,
+                    )
+
+            for informe in informes:
+                informe.estado = EstadoTramite.EN_REVISION
+                informe.save(
+                    update_fields=["estado", "fecha_actualizacion"]
+                )
+
+                # Conserva fecha_envio y version_entrega.
+                # El historial inicia un nuevo intervalo de revisión.
+                HistorialEstado.objects.create(
+                    informe=informe,
+                    usuario=request.user,
+                    estado_anterior=EstadoTramite.RECHAZADO,
+                    estado_nuevo=EstadoTramite.EN_REVISION,
+                    motivo_reactivacion=motivo,
+                    tipo_accion="reactivacion_masiva_informe",
+                )
+
+                estudiante = (
+                    informe.propuesta.proceso
+                    .estudiante_carrera.estudiante.usuario
+                )
+
+                Notificacion.objects.create(
+                    usuario=estudiante,
+                    informe=informe,
+                    tipo="reactivacion_informe",
+                    mensaje=(
+                        f"Tu informe {informe.codigo} fue reactivado "
+                        f"y volvió a En revisión. Motivo: {motivo}"
+                    ),
+                )
+
+                Auditoria.objects.create(
+                    usuario=request.user,
+                    accion="reactivacion_masiva_informe",
+                    tabla_afectada="informe",
+                    id_registro_afectado=informe.pk,
+                    detalle=(
+                        "Estado anterior: Rechazado. "
+                        "Estado nuevo: En revisión. "
+                        f"Motivo: {motivo}. "
+                        f"Selección de {len(informes)} informes."
+                    ),
+                    resultado="Exitoso",
+                )
+
+    except IntegrityError:
+        logger.exception(
+            "Conflicto de integridad en la reactivación masiva."
+        )
+
+        return _error(
+            "Se encontró un conflicto de datos. Comprueba si existe "
+            "otro informe activo y actualiza la pantalla. "
+            "No se guardaron los cambios de esta operación.",
+            estado=409,
+        )
+
+    except Exception:
+        logger.exception(
+            "Error al procesar la reactivación masiva."
+        )
+
+        return _error(
+            "No fue posible completar la reactivación. "
+            "No se guardaron los cambios de esta operación.",
+            estado=500,
+        )
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "cantidad": len(informes),
+            "mensaje": (
+                f"Se reactivaron {len(informes)} informes "
+                "y se notificó a sus estudiantes."
+            ),
+        }
+    )

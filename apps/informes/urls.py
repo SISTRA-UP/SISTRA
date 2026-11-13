@@ -14,6 +14,8 @@ from .views import montaje  # noqa: F401  SISTRA-06
 from .views import aprobacion  # noqa: F401  SISTRA-07
 from .views import aprobacion_decisiones  # noqa: F401 SISTRA-07
 from .views import aprobacion_masiva # noqa: F401 SISTRA-07
+from .views import aprobacion_reactivacion # noqa: F401 SISTRA-07
+from .views import aprobacion_reactivacion_masiva # noqa: F401 SISTRA-07
 
 app_name = 'informes'
 
@@ -36,4 +38,15 @@ urlpatterns = [
         aprobacion_masiva.decidir_masivo,
         name="decidir_masivo",
     ),
+    path(
+        "aprobacion/<int:id_informe>/reactivar/",
+        aprobacion_reactivacion.reactivar,
+        name="reactivar",
+    ),
+     path(
+        "aprobacion/reactivar-masivo/",
+        aprobacion_reactivacion_masiva.reactivar_masivo,
+        name="reactivar_masivo",
+    ),
+
 ]

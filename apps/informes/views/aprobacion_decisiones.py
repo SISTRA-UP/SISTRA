@@ -8,6 +8,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
 
+from apps.informes.views.aprobacion_auditoria import auditar_intentos
 from apps.informes.forms.aprobacion import DecisionInformeForm
 from apps.informes.views.aprobacion import _informes_del_director
 from apps.propuestas.models import EstadoTramite
@@ -30,6 +31,7 @@ def _respuesta_error(mensaje, estado=400):
 
 @login_required
 @require_POST
+@auditar_intentos("decision_informe")
 def decidir(request, id_informe):
     """Procesa una decisión autorizada sobre un informe."""
 
