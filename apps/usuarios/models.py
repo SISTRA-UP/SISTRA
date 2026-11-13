@@ -13,16 +13,8 @@ En el resto del proyecto nunca se importa `Usuario` directamente:
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.db import models, transaction
 from django.utils import timezone
-from django.conf import settings
 
 ROL_ADMINISTRADOR = 'Administrador'
-ROL_ESTUDIANTE = 'Estudiante'
-ROL_DIRECTOR = 'Director'
-PERMISO_PARAMETRIZAR = 'sistema.parametrizar'
-PERMISO_CREAR_USUARIOS = 'crear_usuarios'
-
-
-
 
 
 class Estado(models.TextChoices):
@@ -117,7 +109,6 @@ class Usuario(AbstractBaseUser):
     cedula = models.CharField(max_length=15, unique=True)
     correo_institucional = models.EmailField(max_length=254, unique=True)
     nombre_usuario = models.CharField(max_length=80, unique=True)
-
     # Heredados de AbstractBaseUser, con los nombres de columna del DER.
     password = models.CharField('contraseña', max_length=255, db_column='contrasena_hash')
     last_login = models.DateTimeField('último ingreso', blank=True, null=True, db_column='ultimo_ingreso')
@@ -174,57 +165,3 @@ class Usuario(AbstractBaseUser):
 
     def has_perms(self, perm_list, obj=None):
         return all(self.has_perm(perm, obj) for perm in perm_list)
-
-
-
-class ResultadoFila(models.TextChoices):
-    CREADA = 'Creada', 'Creada'
-    ACTUALIZADA = 'Actualizada', 'Actualizada'
-    ERROR = 'Error', 'Error'
-
-
-
-class CargaMasiva(models.Model):
-    """Una subida de CSV: quién la hizo, cuándo y los totales."""
-    id_carga_masiva = models.BigAutoField(primary_key=True)
-    usuario = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
-        db_column='id_usuario', related_name='cargas_masivas',
-    )
-    nombre_archivo = models.CharField(max_length=200)
-    fecha_carga = models.DateTimeField(default=timezone.now, editable=False)
-    total_filas = models.PositiveIntegerField(default=0)
-    creadas = models.PositiveIntegerField(default=0)
-    actualizadas = models.PositiveIntegerField(default=0)
-    con_error = models.PositiveIntegerField(default=0)
-
-    class Meta:
-        db_table = 'carga_masiva'
-        verbose_name = 'carga masiva'
-        verbose_name_plural = 'cargas masivas'
-
-
-
-
-class CargaMasivaFila(models.Model):
-    """Resultado de cada fila; es la base del log descargable."""
-    id_carga_masiva_fila = models.BigAutoField(primary_key=True)
-    carga = models.ForeignKey(
-        CargaMasiva, on_delete=models.CASCADE,
-        db_column='id_carga_masiva', related_name='filas',
-    )
-    numero_fila = models.PositiveIntegerField()
-    cedula = models.CharField(max_length=40, blank=True)
-    correo_institucional = models.CharField(max_length=254, blank=True)
-    resultado = models.CharField(max_length=15, choices=ResultadoFila)
-    detalle = models.CharField(max_length=255, blank=True)
-
-    class Meta:
-        db_table = 'carga_masiva_fila'
-        constraints = [
-            models.UniqueConstraint(
-                fields=['carga', 'numero_fila'], name='carga_masiva_fila_unica'
-            ),
-        ]
-
-

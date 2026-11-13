@@ -3,7 +3,7 @@ from django.urls import reverse
 
 from apps.parametrizacion import servicios
 from apps.seguimiento.models import Auditoria
-from apps.usuarios.models import ROL_DIRECTOR, Rol, Usuario
+from apps.usuarios.models import Rol, Usuario
 
 
 class AlertasTests(TestCase):
@@ -13,7 +13,7 @@ class AlertasTests(TestCase):
             'admin@unipamplona.edu.co', 'Clave-Segura-123',
             nombre='Admin', cedula='900000001', nombre_usuario='admin',
         )
-        rol_dir, _ = Rol.objects.get_or_create(nombre=ROL_DIRECTOR)
+        rol_dir, _ = Rol.objects.get_or_create(nombre='Director')
         cls.director = Usuario.objects.create_user(
             correo_institucional='diana@unipamplona.edu.co',
             password='Director-Test-1',

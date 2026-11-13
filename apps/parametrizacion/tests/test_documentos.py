@@ -240,3 +240,76 @@ class DescargaPlantillaTests(TestCase):
         self.client.force_login(usuario)
         resp = self.client.get(reverse('parametrizacion:plantilla_csv_estudiantes'))
         self.assertEqual(resp.status_code, 403)
+
+
+class DescargaPlantillaPropuestaEstudianteTests(TestCase):
+    """Tests de la descarga de plantilla de propuesta para Estudiante (SISTRA-01).
+
+    URL: parametrizacion:plantilla_propuesta_estudiante
+    Reglas:
+      - Usuario autenticado → 200 si hay versión vigente, 404 si no hay.
+      - Usuario no autenticado → redirige al login (LoginRequiredMixin).
+    """
+
+    def setUp(self):
+        self.admin = _crear_admin()
+        self.plantilla = Plantilla.objects.create(
+            nombre='Propuesta TG', tipo='propuesta', estado='Activo',
+        )
+
+    def _crear_estudiante(self):
+        rol, _ = Rol.objects.get_or_create(nombre='Estudiante', defaults={'estado': 'Activo'})
+        return Usuario.objects.create_user(
+            correo_institucional='est@unipamplona.edu.co',
+            password='Est-Test-1',
+            nombre='Estudiante Test',
+            cedula='100999001',
+            nombre_usuario='est',
+            rol=rol,
+            requiere_cambio_contrasena=False,
+        )
+
+    def _subir_version_propuesta(self, contenido=b'contenido propuesta', nombre='propuesta.docx'):
+        import os
+        from django.conf import settings
+        directorio = os.path.join(settings.MEDIA_ROOT, 'documentos')
+        os.makedirs(directorio, exist_ok=True)
+        ruta_abs = os.path.join(directorio, nombre)
+        with open(ruta_abs, 'wb') as f:
+            f.write(contenido)
+        return VersionPlantilla.objects.create(
+            plantilla=self.plantilla,
+            usuario=self.admin,
+            numero_version=1,
+            nombre_archivo=nombre,
+            ruta_archivo=os.path.join('documentos', nombre),
+            es_vigente=True,
+        )
+
+    def test_estudiante_descarga_propuesta_vigente(self):
+        """El Estudiante puede descargar la plantilla de propuesta si hay versión vigente."""
+        self._subir_version_propuesta()
+        estudiante = self._crear_estudiante()
+        self.client.force_login(estudiante)
+        resp = self.client.get(reverse('parametrizacion:plantilla_propuesta_estudiante'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('attachment', resp.get('Content-Disposition', ''))
+
+    def test_sin_version_vigente_devuelve_404(self):
+        """Sin versión vigente cargada el Estudiante recibe 404."""
+        estudiante = self._crear_estudiante()
+        self.client.force_login(estudiante)
+        resp = self.client.get(reverse('parametrizacion:plantilla_propuesta_estudiante'))
+        self.assertEqual(resp.status_code, 404)
+
+    def test_no_autenticado_redirige(self):
+        """Sin sesión, redirige al login (no 403)."""
+        resp = self.client.get(reverse('parametrizacion:plantilla_propuesta_estudiante'))
+        self.assertEqual(resp.status_code, 302)
+
+    def test_admo_tambien_puede_descargar(self):
+        """El Administrador también puede acceder (es un usuario autenticado)."""
+        self._subir_version_propuesta(nombre='propuesta_admo.docx')
+        self.client.force_login(self.admin)
+        resp = self.client.get(reverse('parametrizacion:plantilla_propuesta_estudiante'))
+        self.assertEqual(resp.status_code, 200)

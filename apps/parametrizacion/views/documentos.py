@@ -4,7 +4,7 @@ import csv
 import os
 
 from django.contrib import messages
-from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.db import transaction
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -277,3 +277,30 @@ class DescargaPlantillaCsvEstudiantesView(PermissionRequiredMixin, View):
         writer = csv.writer(response)
         writer.writerow(['nombre', 'cedula', 'correo', 'carrera'])
         return response
+
+
+class DescargaPlantillaPropuestaEstudianteView(LoginRequiredMixin, View):
+    """Descarga la versión vigente de la plantilla de propuesta para el Estudiante.
+
+    Accesible a cualquier usuario autenticado (SISTRA-01 necesita que el
+    estudiante baje el Word antes de iniciar su propuesta).
+    Si no hay versión vigente cargada, devuelve 404 para que el módulo
+    de propuestas sepa que aún no hay plantilla disponible.
+    URL: parametrizacion:plantilla_propuesta_estudiante
+    """
+
+    def get(self, request):
+        from django.conf import settings
+        from django.http import Http404
+        plantilla = Plantilla.objects.filter(tipo='propuesta', estado='Activo').first()
+        if plantilla:
+            version = plantilla.versiones.filter(es_vigente=True).first()
+            if version:
+                ruta = os.path.join(settings.MEDIA_ROOT, version.ruta_archivo)
+                if os.path.exists(ruta):
+                    return FileResponse(
+                        open(ruta, 'rb'),
+                        as_attachment=True,
+                        filename=version.nombre_archivo,
+                    )
+        raise Http404('No hay versión vigente de la plantilla de propuesta.')

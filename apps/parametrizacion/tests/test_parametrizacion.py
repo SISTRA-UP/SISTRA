@@ -9,7 +9,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from apps.parametrizacion.models import Carrera
-from apps.usuarios.models import ROL_DIRECTOR, ROL_ESTUDIANTE, Permiso, Rol, RolPermiso, Usuario
+from apps.usuarios.models import Permiso, Rol, RolPermiso, Usuario
 
 
 def _crear_admin():
@@ -34,7 +34,7 @@ def _crear_admin():
 
 def _crear_director(cedula, correo):
     """Crea un Director sin carrera asignada."""
-    rol, _ = Rol.objects.get_or_create(nombre=ROL_DIRECTOR)
+    rol, _ = Rol.objects.get_or_create(nombre='Director')
     return Usuario.objects.create_user(
         correo_institucional=correo,
         password='Director-Test-1',
@@ -47,7 +47,7 @@ def _crear_director(cedula, correo):
 
 
 def _crear_estudiante():
-    rol, _ = Rol.objects.get_or_create(nombre=ROL_ESTUDIANTE)
+    rol, _ = Rol.objects.get_or_create(nombre='Estudiante')
     return Usuario.objects.create_user(
         correo_institucional='est@unipamplona.edu.co',
         password='Estudiante-Test-1',
