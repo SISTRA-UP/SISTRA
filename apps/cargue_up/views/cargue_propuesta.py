@@ -1,99 +1,92 @@
-"""SISTRA-03 · Cargue al sistema de UP: vistas y controladores web.
+"""SISTRA-03 · Cargue en la Plataforma UP: vistas y controladores web.
 
 Implementa los flujos del requerimiento de negocio BR-03 (SISTRA-03):
 - Consulta de estado del proyecto de horas sociales (CA-01, CA-02).
-- Descarga segura y autenticada del documento del proyecto (CA-03, E2).
-- Redirección y auditoría del enlace saliente a la UP (CA-04, E3).
-- Notificación declarativa del cargue en la UP con modal de confirmación (CA-05, E7).
-- Auditoría integral de cada acción (CA-12).
+- Descarga segura y autenticada de la propuesta aprobada (CA-03, E2).
+- Redirección y auditoría del enlace saliente a la Plataforma UP (CA-04, E3).
+- Reactivación de acciones tras Rechazado en UP con observación (FA-02).
+- Auditoría integral de cada acción con vocabulario estandarizado (CA-12).
 """
 
-import mimetypes
 from pathlib import Path
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied, ValidationError
-from django.http import FileResponse, HttpRequest, HttpResponse, JsonResponse
+from django.core.exceptions import PermissionDenied
+from django.http import FileResponse, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_GET
 
 from apps.cargue_up.forms.cargue_propuesta import (
-    MSG_XX_06,
-    MSG_XX_12,
-    MSG_XX_13,
-    MSG_XX_14,
-    MSG_XX_15,
-    MSG_XX_17,
-    NotificarCargueForm,
+    MSG_03_01,
+    MSG_03_04,
+    MSG_03_05,
     registrar_auditoria,
 )
-from apps.cargue_up.models import CargueUp
+from apps.cargue_up.models import CargueUp, EstadoVerificacion
 from apps.parametrizacion.models import Parametro
 from apps.personas.models import DirectorCarrera
 from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.seguimiento.models import HistorialEstado
 
-# URL por defecto si el administrador aún no configura el parámetro en la BD
-URL_UP_FALLBACK = "https://www.unipamplona.edu.co/"
 
-
-def _obtener_url_up() -> tuple[str, bool]:
-    """Obtiene la URL oficial de la UP desde la tabla parametro."""
+def _obtener_url_up() -> tuple[str | None, bool]:
+    """Obtiene la URL oficial de la Plataforma UP desde Parametro con clave 'url_up'."""
     try:
-        param = Parametro.objects.filter(
-            clave__in=["URL_SISTEMA_UP", "url_sistema_up", "URL_UP"]
-        ).first()
+        param = Parametro.objects.filter(clave="url_up").first()
         if param and param.valor and param.valor.strip():
             return param.valor.strip(), True
     except Exception:
         pass
-    return URL_UP_FALLBACK, False
+    return None, False
 
 
-def _obtener_propuesta_estudiante(request: HttpRequest, id_propuesta: int | None = None) -> Propuesta | None:
-    """Busca la propuesta activa del estudiante en sesión o la indicada en modo depuración/admin."""
-    # 1. Caso estándar: Usuario con perfil Estudiante
-    if hasattr(request.user, "estudiante"):
-        qs = Propuesta.objects.filter(
+def _obtener_documento_propuesta_pdf(propuesta: Propuesta) -> tuple[Path | None, str | None]:
+    """Busca el documento PDF oficial de la propuesta aprobada.
+    
+    El documento oficial se genera en PDF a partir de los datos de la propuesta
+    en coordinación con SISTRA-01. Mientras dicha función compartida no exista
+    o el archivo no se encuentre en el servidor, retorna (None, None).
+    """
+    # 1. Si existe una función compartida de generación en SISTRA-01
+    try:
+        from apps.propuestas.servicios import generar_pdf_propuesta  # noqa
+        # Si estuviera implementada en SISTRA-01, se usaría aquí
+    except (ImportError, AttributeError):
+        pass
+
+    # 2. Si existe un archivo PDF asociado en MEDIA_ROOT
+    if hasattr(settings, "MEDIA_ROOT") and settings.MEDIA_ROOT:
+        raiz = Path(settings.MEDIA_ROOT).resolve()
+        posibles_rutas = [
+            raiz / "propuestas" / f"{propuesta.codigo}.pdf",
+            raiz / f"{propuesta.codigo}.pdf",
+        ]
+        for ruta in posibles_rutas:
+            if ruta.is_file():
+                return ruta, f"Propuesta_{propuesta.codigo}.pdf"
+
+    return None, None
+
+
+def _obtener_propuesta_estudiante(request: HttpRequest) -> Propuesta | None:
+    """Busca la propuesta activa exclusivamente del estudiante autenticado en sesión."""
+    if not hasattr(request.user, "estudiante") or not request.user.estudiante:
+        return None
+
+    return (
+        Propuesta.objects.filter(
             proceso__estudiante_carrera__estudiante=request.user.estudiante,
             archivada=False,
-        ).select_related(
-            "proceso__estudiante_carrera__carrera",
-            "version_plantilla",
         )
-        if id_propuesta:
-            return qs.filter(pk=id_propuesta).first()
-        return qs.order_by("-fecha_creacion").first()
-
-    # 2. Soporte para desarrollo o usuarios administradores/docentes probando la vista
-    if request.user.is_staff or request.user.is_superuser or settings.DEBUG:
-        if id_propuesta:
-            return Propuesta.objects.filter(pk=id_propuesta, archivada=False).first()
-        return (
-            Propuesta.objects.filter(archivada=False)
-            .select_related("proceso__estudiante_carrera__carrera", "version_plantilla")
-            .order_by("-fecha_creacion")
-            .first()
-        )
-
-    return None
+        .select_related("proceso__estudiante_carrera__carrera", "version_plantilla")
+        .order_by("-fecha_creacion")
+        .first()
+    )
 
 
-def _asegurar_sesion_estudiante(request: HttpRequest) -> None:
-    """En entorno de desarrollo (DEBUG), si aún no hay sesión iniciada, auto-autentica
-    al estudiante de pruebas para permitir validar la interfaz directamente sin depender de otros módulos."""
-    if not request.user.is_authenticated and settings.DEBUG:
-        from apps.personas.models import Estudiante
-        from django.contrib.auth import login
-
-        est = Estudiante.objects.select_related("usuario").first()
-        if est and est.usuario:
-            login(request, est.usuario)
-
-
+@login_required
 @require_GET
 def inicio(request: HttpRequest) -> HttpResponse:
     """Pantalla principal de Cargue UP (BR-03 / SISTRA-03).
@@ -101,30 +94,43 @@ def inicio(request: HttpRequest) -> HttpResponse:
     Muestra:
     - Estado de su proyecto de horas sociales.
     - Línea de progreso (Stepper de 3 pasos).
-    - Tarjeta de Paso 1 (Descarga + Link a la UP).
-    - Tarjeta de Paso 2 (Ya cargué mi proyecto).
-    - Modal de confirmación.
+    - Tarjeta de Paso 1 (Descarga de propuesta y enlace a la Plataforma UP).
+    - Observaciones del Director si el trámite fue previamente Rechazado en UP (FA-02).
     """
-    _asegurar_sesion_estudiante(request)
-    if not request.user.is_authenticated:
-        return redirect(f"{settings.LOGIN_URL}?next={request.path}")
+    if not hasattr(request.user, "estudiante") or not request.user.estudiante:
+        raise PermissionDenied
 
-    id_solicitado = request.GET.get("propuesta_id")
-    id_num = int(id_solicitado) if id_solicitado and id_solicitado.isdigit() else None
-
-    propuesta = _obtener_propuesta_estudiante(request, id_propuesta=id_num)
-
+    propuesta = _obtener_propuesta_estudiante(request)
     url_up, url_up_configurada = _obtener_url_up()
 
     docente_nombre = "Docente asignado"
     fecha_aprobacion = None
     cargue_existente = None
+    observacion_rechazo_up = None
     puede_cargar = False
     estado_actual = None
+    pdf_disponible = False
 
     if propuesta:
         estado_actual = propuesta.estado
-        cargue_existente = CargueUp.objects.filter(propuesta=propuesta).order_by("-fecha_declaracion").first()
+        pdf_ruta, _ = _obtener_documento_propuesta_pdf(propuesta)
+        pdf_disponible = pdf_ruta is not None
+
+        # Consultar el último cargue en UP registrado para este proyecto
+        ultimo_cargue = (
+            CargueUp.objects.filter(propuesta=propuesta)
+            .order_by("-fecha_declaracion")
+            .first()
+        )
+
+        if ultimo_cargue:
+            if ultimo_cargue.estado_verificacion == EstadoVerificacion.RECHAZADO_EN_UP:
+                # FA-02: Tras Rechazado en UP, la propuesta vuelve a Aprobado y se trata como
+                # si no hubiera cargue activo, habilitando nuevamente las acciones y mostrando la observación
+                cargue_existente = None
+                observacion_rechazo_up = ultimo_cargue.observacion
+            else:
+                cargue_existente = ultimo_cargue
 
         # Determinar docente y fecha de aprobación desde el historial
         historial_aprobado = (
@@ -140,7 +146,6 @@ def inicio(request: HttpRequest) -> HttpResponse:
             docente_nombre = getattr(historial_aprobado.usuario, "nombre", str(historial_aprobado.usuario))
             fecha_aprobacion = historial_aprobado.fecha_hora
         else:
-            # Si no hay historial aún, consultar el Director activo de la carrera
             try:
                 carrera = propuesta.proceso.estudiante_carrera.carrera
                 asig = (
@@ -153,226 +158,145 @@ def inicio(request: HttpRequest) -> HttpResponse:
             except Exception:
                 pass
 
-        # RN-01: Las acciones se habilitan solo cuando el estado es Aprobado
-        # y no existe una notificación de cargue ya registrada (A3 / CA-01)
+        # RN-01: Acciones habilitadas solo cuando el estado es Aprobado y no hay cargue pendiente
         puede_cargar = (estado_actual == EstadoTramite.APROBADO) and (cargue_existente is None)
 
-        # Auditoría de acceso a la pantalla
         registrar_auditoria(
             usuario=request.user,
-            accion="ACCESO_CARGUE_UP",
+            accion="Acceso a pantalla de cargue en UP",
             tabla_afectada="propuesta",
             id_registro=propuesta.pk,
             detalle=f"Estado del proyecto: {estado_actual}",
-            resultado="EXITO",
+            resultado="Éxito",
         )
     else:
         registrar_auditoria(
             usuario=request.user,
-            accion="ACCESO_CARGUE_UP_SIN_PROYECTO",
+            accion="Acceso a pantalla de cargue en UP",
             tabla_afectada="propuesta",
             detalle="Estudiante sin proyecto registrado.",
-            resultado="INFO",
+            resultado="Éxito",
         )
-
-    formulario = NotificarCargueForm(
-        propuesta=propuesta,
-        initial={"fecha_cargue": timezone.localdate()},
-    )
 
     contexto = {
         "propuesta": propuesta,
         "docente_nombre": docente_nombre,
         "fecha_aprobacion": fecha_aprobacion,
         "cargue_existente": cargue_existente,
+        "observacion_rechazo_up": observacion_rechazo_up,
         "puede_cargar": puede_cargar,
         "estado_actual": estado_actual,
         "url_up": url_up,
         "url_up_configurada": url_up_configurada,
-        "formulario": formulario,
+        "pdf_disponible": pdf_disponible,
         "EstadoTramite": EstadoTramite,
     }
 
     return render(request, "cargue_up/cargue_propuesta/inicio.html", contexto)
 
 
+@login_required
 @require_GET
 def descargar_propuesta(request: HttpRequest, id_propuesta: int) -> HttpResponse:
-    """Descarga autenticada del documento de la propuesta (CA-03, E2).
+    """Descarga autenticada del documento PDF de la propuesta aprobada (CA-03, E2).
     
-    - Valida que el estudiante sea el dueño del proyecto (CA-08, RN-04).
+    - Requiere sesión y rol Estudiante (PermissionDenied a otros roles).
+    - Valida que la propuesta pertenezca estrictamente al estudiante en sesión.
     - Valida que el estado permita la descarga (Aprobado o Subido en UP).
-    - No expone rutas internas del servidor.
+    - Mientras la función compartida de generación en PDF con SISTRA-01 no exista,
+      informa al estudiante que el documento está en preparación.
     """
-    _asegurar_sesion_estudiante(request)
-    if not request.user.is_authenticated:
-        return redirect(f"{settings.LOGIN_URL}?next={request.path}")
+    if not hasattr(request.user, "estudiante") or not request.user.estudiante:
+        raise PermissionDenied
 
-    propuesta = get_object_or_404(Propuesta, pk=id_propuesta)
+    propuesta = get_object_or_404(
+        Propuesta,
+        pk=id_propuesta,
+        proceso__estudiante_carrera__estudiante=request.user.estudiante,
+    )
 
-    # Validar autorización por propiedad (CA-08)
-    if hasattr(request.user, "estudiante"):
-        estudiante_propuesta = getattr(propuesta.proceso.estudiante_carrera, "estudiante", None)
-        if estudiante_propuesta != request.user.estudiante:
-            registrar_auditoria(
-                usuario=request.user,
-                accion="DESCARGA_DENEGADA_NO_PROPIETARIO",
-                tabla_afectada="propuesta",
-                id_registro=propuesta.pk,
-                detalle="Intento de descarga de un proyecto de otro estudiante.",
-                resultado="DENEGADO",
-            )
-            messages.error(request, MSG_XX_17)
-            return redirect("cargue_up:cargue_propuesta")
-
-    # Validar estado para descarga
-    if propuesta.estado not in [EstadoTramite.APROBADO, EstadoTramite.SUBIDO_EN_UP, EstadoTramite.APROBADO_EN_UP]:
-        messages.warning(
-            request,
-            "El documento solo está disponible para descarga cuando la propuesta ha sido aprobada.",
-        )
-        return redirect("cargue_up:cargue_propuesta")
-
-    # Intentar resolver el archivo adjunto
-    version = propuesta.version_plantilla
-    if not (version and version.ruta_archivo):
+    # Validar que el estado permita la descarga
+    if propuesta.estado not in [
+        EstadoTramite.APROBADO,
+        EstadoTramite.SUBIDO_EN_UP,
+        EstadoTramite.APROBADO_EN_UP,
+    ]:
         registrar_auditoria(
             usuario=request.user,
-            accion="DESCARGA_FALLIDA_SIN_ARCHIVO",
+            accion="Descargar propuesta",
             tabla_afectada="propuesta",
             id_registro=propuesta.pk,
-            detalle="La propuesta no tiene ruta de archivo asociada en version_plantilla.",
-            resultado="ERROR",
+            detalle=f"Descarga bloqueada: estado actual {propuesta.estado}",
+            resultado="Bloqueado",
         )
-        messages.error(request, MSG_XX_12)
+        messages.warning(request, MSG_03_01)
         return redirect("cargue_up:cargue_propuesta")
 
-    raiz = Path(settings.MEDIA_ROOT).resolve()
-    ruta = (raiz / version.ruta_archivo).resolve()
-
-    if not (ruta.is_relative_to(raiz) and ruta.is_file()):
+    pdf_ruta, pdf_nombre = _obtener_documento_propuesta_pdf(propuesta)
+    if not pdf_ruta or not pdf_ruta.is_file():
         registrar_auditoria(
             usuario=request.user,
-            accion="DESCARGA_FALLIDA_ARCHIVO_INEXISTENTE",
+            accion="Descargar propuesta",
             tabla_afectada="propuesta",
             id_registro=propuesta.pk,
-            detalle=f"Archivo no encontrado en disco: {version.ruta_archivo}",
-            resultado="ERROR",
+            detalle="Descarga no disponible: función generadora de PDF en integración con SISTRA-01.",
+            resultado="Bloqueado",
         )
-        messages.error(request, MSG_XX_12)
-        return redirect("cargue_up:cargue_propuesta")
-
-    try:
-        archivo = open(ruta, "rb")
-    except OSError:
-        registrar_auditoria(
-            usuario=request.user,
-            accion="DESCARGA_FALLIDA_ERROR_LECTURA",
-            tabla_afectada="propuesta",
-            id_registro=propuesta.pk,
-            detalle="Error de lectura del archivo en el sistema operativo.",
-            resultado="ERROR",
-        )
-        messages.error(request, MSG_XX_12)
+        messages.warning(request, MSG_03_04)
         return redirect("cargue_up:cargue_propuesta")
 
     registrar_auditoria(
         usuario=request.user,
-        accion="DESCARGA_PROYECTO_EXITOSA",
+        accion="Descargar propuesta",
         tabla_afectada="propuesta",
         id_registro=propuesta.pk,
-        detalle=f"Archivo: {version.nombre_archivo or ruta.name}",
-        resultado="EXITO",
+        detalle=f"Descarga de propuesta {propuesta.codigo} ({pdf_nombre})",
+        resultado="Éxito",
     )
-
-    nombre = version.nombre_archivo or f"Propuesta_{propuesta.codigo}.pdf"
-    es_pdf = mimetypes.guess_type(nombre)[0] == "application/pdf"
-    return FileResponse(archivo, filename=nombre, as_attachment=not es_pdf)
+    archivo = open(pdf_ruta, "rb")
+    return FileResponse(archivo, filename=pdf_nombre, as_attachment=True, content_type="application/pdf")
 
 
-@require_POST
-def notificar_cargue(request: HttpRequest, id_propuesta: int) -> HttpResponse:
-    """Procesa el formulario modal de 'Ya cargué mi proyecto' (CA-05, RN-04)."""
-    _asegurar_sesion_estudiante(request)
-    if not request.user.is_authenticated:
-        return redirect(f"{settings.LOGIN_URL}?next={request.path}")
-
-    propuesta = get_object_or_404(Propuesta, pk=id_propuesta)
-
-    # Validar propiedad (CA-08)
-    if hasattr(request.user, "estudiante"):
-        estudiante_propuesta = getattr(propuesta.proceso.estudiante_carrera, "estudiante", None)
-        if estudiante_propuesta != request.user.estudiante:
-            registrar_auditoria(
-                usuario=request.user,
-                accion="NOTIFICAR_CARGUE_DENEGADO_NO_PROPIETARIO",
-                tabla_afectada="propuesta",
-                id_registro=propuesta.pk,
-                detalle="Intento de notificar cargue de proyecto ajeno.",
-                resultado="DENEGADO",
-            )
-            messages.error(request, MSG_XX_17)
-            return redirect("cargue_up:cargue_propuesta")
-
-    # Validar que siga en Aprobado (E4)
-    if propuesta.estado != EstadoTramite.APROBADO:
-        messages.warning(request, MSG_XX_14)
-        return redirect("cargue_up:cargue_propuesta")
-
-    formulario = NotificarCargueForm(request.POST, propuesta=propuesta)
-    if formulario.is_valid():
-        try:
-            formulario.procesar(propuesta, request.user)
-            messages.success(request, MSG_XX_06)
-        except ValidationError as e:
-            messages.warning(request, e.messages[0] if hasattr(e, "messages") else str(e))
-        except Exception:
-            registrar_auditoria(
-                usuario=request.user,
-                accion="NOTIFICAR_CARGUE_ERROR_SISTEMA",
-                tabla_afectada="propuesta",
-                id_registro=propuesta.pk,
-                detalle="Fallo inesperado al procesar la notificación de cargue.",
-                resultado="ERROR",
-            )
-            messages.error(request, MSG_XX_13)
-    else:
-        # Extraer primer error de validación para mensaje visible
-        for campo, errores in formulario.errors.items():
-            for error in errores:
-                messages.error(request, error)
-                break
-            break
-
-    return redirect("cargue_up:cargue_propuesta")
-
-
+@login_required
+@require_GET
 def ir_a_up(request: HttpRequest, id_propuesta: int) -> HttpResponse:
-    """Registra la auditoría del clic en 'Ir al sistema de la UP' y redirige a la URL configurada (CA-04, E3)."""
-    _asegurar_sesion_estudiante(request)
-    if not request.user.is_authenticated:
-        return redirect(f"{settings.LOGIN_URL}?next={request.path}")
+    """Registra la auditoría y redirige al estudiante a la Plataforma UP (CA-04, E3).
+    
+    - Requiere sesión y rol Estudiante (PermissionDenied a otros roles).
+    - Valida que la propuesta pertenezca estrictamente al estudiante en sesión.
+    - La URL se obtiene de Parametro con clave 'url_up'. Si no está configurada,
+      se bloquea la acción informando al estudiante.
+    """
+    if not hasattr(request.user, "estudiante") or not request.user.estudiante:
+        raise PermissionDenied
 
-    propuesta = get_object_or_404(Propuesta, pk=id_propuesta)
+    propuesta = get_object_or_404(
+        Propuesta,
+        pk=id_propuesta,
+        proceso__estudiante_carrera__estudiante=request.user.estudiante,
+    )
 
     url_up, configurada = _obtener_url_up()
 
-    registrar_auditoria(
-        usuario=request.user,
-        accion="CLIC_IR_SISTEMA_UP",
-        tabla_afectada="propuesta",
-        id_registro=propuesta.pk,
-        detalle=f"Redirigiendo a URL externa: {url_up} (Configurada en BD: {configurada})",
-        resultado="EXITO",
-    )
-
-    if not configurada and not url_up:
-        messages.error(request, MSG_XX_15)
+    if not configurada or not url_up:
+        registrar_auditoria(
+            usuario=request.user,
+            accion="Ir a la Plataforma UP",
+            tabla_afectada="propuesta",
+            id_registro=propuesta.pk,
+            detalle="Acceso bloqueado: URL de la UP no configurada en la tabla parámetro.",
+            resultado="Bloqueado",
+        )
+        messages.error(request, MSG_03_05)
         return redirect("cargue_up:cargue_propuesta")
 
-    # Si es una petición AJAX (fetch), responder JSON
-    if request.headers.get("x-requested-with") == "XMLHttpRequest":
-        return JsonResponse({"ok": True, "url": url_up})
-
-    # Redirección directa si se abre por enlace
+    registrar_auditoria(
+        usuario=request.user,
+        accion="Ir a la Plataforma UP",
+        tabla_afectada="propuesta",
+        id_registro=propuesta.pk,
+        detalle=f"Redirigiendo a: {url_up}",
+        resultado="Éxito",
+    )
     return redirect(url_up)
+

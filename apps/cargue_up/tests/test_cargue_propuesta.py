@@ -1,30 +1,26 @@
-"""SISTRA-03 · Cargue al sistema de UP: pruebas automatizadas.
+"""SISTRA-03 · Cargue en la Plataforma UP: pruebas automatizadas.
 
-Verifica los criterios de aceptación del requerimiento BR-03 (SISTRA-03):
+Verifica los criterios de aceptación y seguridad del requerimiento BR-03 (SISTRA-03):
+- Control de acceso estricto: solo el Estudiante autenticado accede (Director/ADMO reciben 403).
+- Sin sesión redirige al login incluso con DEBUG=True.
+- Aislamiento por estudiante: un estudiante no puede descargar ni abrir ir-up de propuesta ajena (404).
 - CA-01: Estudiante con proyecto Aprobado ve controles habilitados.
 - CA-02: Proyecto no Aprobado tiene controles deshabilitados.
-- CA-03: Descarga autenticada de su propio proyecto.
-- CA-05: Confirmación de cargue transiciona a SUBIDO_EN_UP y registra CargueUp.
-- CA-08: Aislamiento por estudiante (no puede ver ni notificar proyectos ajenos).
-- CA-09: Bloqueo de notificaciones duplicadas.
-- CA-11: Validación de fechas no futuras en formulario.
+- FA-02: Reactivación de controles y visualización de observaciones tras Rechazado en UP.
+- Redirección 'Ir a la Plataforma UP' con y sin parámetro url_up configurado.
+- Criterios 4 y 5: Comando de recordatorio semanal en plataforma (tabla Notificacion).
 """
 
 from datetime import timedelta
+from io import StringIO
 from django.contrib.auth import get_user_model
-from django.test import Client, SimpleTestCase, TestCase
+from django.core.management import call_command
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.cargue_up.forms.cargue_propuesta import (
-    MSG_XX_09,
-    MSG_XX_10,
-    MSG_XX_11,
-    MSG_XX_14,
-    NotificarCargueForm,
-)
 from apps.cargue_up.models import CargueUp, EstadoVerificacion
-from apps.parametrizacion.models import Carrera, Facultad, PeriodoAcademico
+from apps.parametrizacion.models import Carrera, Facultad, Parametro, PeriodoAcademico
 from apps.personas.models import (
     Director,
     DirectorCarrera,
@@ -40,48 +36,8 @@ from apps.usuarios.models import Rol
 Usuario = get_user_model()
 
 
-class NotificarCargueFormTestCase(SimpleTestCase):
-    """Pruebas unitarias para el formulario de notificación de cargue (sin requerir BD)."""
-
-    def test_formulario_valido(self):
-        form = NotificarCargueForm(
-            data={
-                "fecha_cargue": timezone.localdate().isoformat(),
-                "observaciones": "Cargue realizado en la plataforma de la UP correctamente.",
-            }
-        )
-        self.assertTrue(form.is_valid())
-
-    def test_fecha_cargue_futura_invalida(self):
-        """CA-11: La fecha de cargue no puede ser posterior a hoy."""
-        manana = timezone.localdate() + timedelta(days=1)
-        form = NotificarCargueForm(
-            data={
-                "fecha_cargue": manana.isoformat(),
-                "observaciones": "Intento fecha futura",
-            }
-        )
-        self.assertFalse(form.is_valid())
-        self.assertIn(MSG_XX_09, form.errors.get("fecha_cargue", []))
-
-    def test_fecha_cargue_vacia_invalida(self):
-        form = NotificarCargueForm(data={"fecha_cargue": "", "observaciones": "Sin fecha"})
-        self.assertFalse(form.is_valid())
-        self.assertIn(MSG_XX_10, form.errors.get("fecha_cargue", []))
-
-    def test_observaciones_superan_500_caracteres(self):
-        form = NotificarCargueForm(
-            data={
-                "fecha_cargue": timezone.localdate().isoformat(),
-                "observaciones": "A" * 501,
-            }
-        )
-        self.assertFalse(form.is_valid())
-        self.assertIn(MSG_XX_11, form.errors.get("observaciones", []))
-
-
-class CargueUpViewsTestCase(TestCase):
-    """Pruebas de integración de vistas y reglas de negocio para SISTRA-03."""
+class CargueUpSecurityAndViewsTestCase(TestCase):
+    """Pruebas de seguridad, vistas e integración para SISTRA-03."""
 
     def setUp(self):
         self.client = Client()
@@ -89,6 +45,7 @@ class CargueUpViewsTestCase(TestCase):
         # Roles
         self.rol_estudiante, _ = Rol.objects.get_or_create(nombre="Estudiante")
         self.rol_docente, _ = Rol.objects.get_or_create(nombre="Docente")
+        self.rol_admin, _ = Rol.objects.get_or_create(nombre="Administrador")
 
         # Usuarios
         self.user_estudiante_1 = Usuario.objects.create_user(
@@ -115,8 +72,16 @@ class CargueUpViewsTestCase(TestCase):
             password="Password123!",
             rol=self.rol_docente,
         )
+        self.user_admo = Usuario.objects.create_user(
+            correo_institucional="admo@unipamplona.edu.co",
+            nombre_usuario="admo",
+            nombre="Administrador General",
+            cedula="9988776655",
+            password="Password123!",
+            rol=self.rol_admin,
+        )
 
-        # Entidades académicas
+        # Estructura académica
         self.facultad = Facultad.objects.create(nombre="Facultad de Ingenierías y Arquitectura")
         self.carrera = Carrera.objects.create(
             facultad=self.facultad,
@@ -132,7 +97,7 @@ class CargueUpViewsTestCase(TestCase):
             estado="Vigente",
         )
 
-        # Personas y asignaciones
+        # Personas y perfiles
         self.estudiante_1 = Estudiante.objects.create(usuario=self.user_estudiante_1)
         self.estudiante_2 = Estudiante.objects.create(usuario=self.user_estudiante_2)
         self.director = Director.objects.create(usuario=self.user_docente)
@@ -166,17 +131,25 @@ class CargueUpViewsTestCase(TestCase):
             estado=EstadoAvance.EN_CURSO,
         )
 
-        # Propuesta 1 (Aprobada)
+        # Propuesta 1 (Aprobada hace 10 días)
         self.propuesta_1 = Propuesta.objects.create(
             proceso=self.proceso_1,
             periodo_academico=self.periodo,
             codigo="PROP-2026-001",
             titulo="Sistema de Gestión Comunitaria",
             estado=EstadoTramite.APROBADO,
-            fecha_envio=timezone.now() - timedelta(days=5),
+            fecha_envio=timezone.now() - timedelta(days=12),
+        )
+        HistorialEstado.objects.create(
+            propuesta=self.propuesta_1,
+            usuario=self.user_docente,
+            estado_anterior=EstadoTramite.EN_REVISION,
+            estado_nuevo=EstadoTramite.APROBADO,
+            tipo_accion="Aprobación de propuesta",
+            fecha_hora=timezone.now() - timedelta(days=10),
         )
 
-        # Propuesta 2 (En revisión)
+        # Propuesta 2 (En revisión del Estudiante 2)
         self.propuesta_2 = Propuesta.objects.create(
             proceso=self.proceso_2,
             periodo_academico=self.periodo,
@@ -186,105 +159,171 @@ class CargueUpViewsTestCase(TestCase):
             fecha_envio=timezone.now() - timedelta(days=2),
         )
 
-    def test_ca_01_estudiante_con_propuesta_aprobada(self):
-        """CA-01: Dado un estudiante autenticado con proyecto Aprobado, ve controles habilitados."""
-        self.client.force_login(self.user_estudiante_1)
-        url = reverse("cargue_up:cargue_propuesta")
-        response = self.client.get(url)
+    # ==========================================================================
+    # 1. PRUEBAS DE SEGURIDAD (AUTENTICACIÓN Y ROLES)
+    # ==========================================================================
 
-        self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.context["puede_cargar"])
-        self.assertEqual(response.context["estado_actual"], EstadoTramite.APROBADO)
-        self.assertContains(response, "Mi proyecto de horas sociales")
-        self.assertContains(response, "Ya cargué mi proyecto")
+    @override_settings(DEBUG=True)
+    def test_sin_sesion_redirige_a_login_incluso_en_debug(self):
+        """Seguridad: Un usuario anónimo siempre es redirigido a login, incluso con DEBUG activo."""
+        url_inicio = reverse("cargue_up:cargue_propuesta")
+        url_descargar = reverse("cargue_up:descargar_propuesta", args=[self.propuesta_1.pk])
+        url_ir_up = reverse("cargue_up:ir_a_up", args=[self.propuesta_1.pk])
+
+        res_inicio = self.client.get(url_inicio)
+        self.assertEqual(res_inicio.status_code, 302)
+        self.assertIn("login", res_inicio.url)
+
+        res_descargar = self.client.get(url_descargar)
+        self.assertEqual(res_descargar.status_code, 302)
+        self.assertIn("login", res_descargar.url)
+
+        res_ir_up = self.client.get(url_ir_up)
+        self.assertEqual(res_ir_up.status_code, 302)
+        self.assertIn("login", res_ir_up.url)
+
+    def test_director_o_admo_recibe_403(self):
+        """Seguridad: Solo usuarios con perfil Estudiante pueden acceder a las vistas; Director y ADMO reciben 403."""
+        # Intento como Docente/Director
+        self.client.force_login(self.user_docente)
+
+        res_inicio = self.client.get(reverse("cargue_up:cargue_propuesta"))
+        self.assertEqual(res_inicio.status_code, 403)
+
+        res_descargar = self.client.get(reverse("cargue_up:descargar_propuesta", args=[self.propuesta_1.pk]))
+        self.assertEqual(res_descargar.status_code, 403)
+
+        res_ir_up = self.client.get(reverse("cargue_up:ir_a_up", args=[self.propuesta_1.pk]))
+        self.assertEqual(res_ir_up.status_code, 403)
+
+        # Intento como Administrador (staff)
+        self.client.force_login(self.user_admo)
+        res_admo = self.client.get(reverse("cargue_up:cargue_propuesta"))
+        self.assertEqual(res_admo.status_code, 403)
+
+    def test_estudiante_no_puede_acceder_propuesta_ajena(self):
+        """Seguridad: Un estudiante no puede descargar ni abrir ir-up de una propuesta que no es suya (404)."""
+        self.client.force_login(self.user_estudiante_2)
+
+        # Estudiante 2 intenta acceder a la propuesta 1 (pertenece a Estudiante 1)
+        res_descargar = self.client.get(reverse("cargue_up:descargar_propuesta", args=[self.propuesta_1.pk]))
+        self.assertEqual(res_descargar.status_code, 404)
+
+        res_ir_up = self.client.get(reverse("cargue_up:ir_a_up", args=[self.propuesta_1.pk]))
+        self.assertEqual(res_ir_up.status_code, 404)
+
+    # ==========================================================================
+    # 2. PRUEBAS FUNCIONALES DE VISTA INICIO Y ESTADOS (CA-01, CA-02, FA-02)
+    # ==========================================================================
+
+    def test_ca_01_estudiante_con_propuesta_aprobada(self):
+        """CA-01: Estudiante con propuesta Aprobada ve controles habilitados para cargar en UP."""
+        self.client.force_login(self.user_estudiante_1)
+        res = self.client.get(reverse("cargue_up:cargue_propuesta"))
+
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.context["puede_cargar"])
+        self.assertEqual(res.context["estado_actual"], EstadoTramite.APROBADO)
+        self.assertContains(res, "Mi proyecto de horas sociales")
+        self.assertContains(res, "Cargar el proyecto en la UP")
 
     def test_ca_02_propuesta_no_aprobada_deshabilita_acciones(self):
-        """CA-02: Proyecto con estado distinto de Aprobado tiene acciones deshabilitadas."""
+        """CA-02: Proyecto en estado no Aprobado tiene acciones deshabilitadas."""
         self.client.force_login(self.user_estudiante_2)
-        url = reverse("cargue_up:cargue_propuesta")
-        response = self.client.get(url)
+        res = self.client.get(reverse("cargue_up:cargue_propuesta"))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(response.context["puede_cargar"])
-        self.assertContains(response, "disabled")
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(res.context["puede_cargar"])
+        self.assertContains(res, "disabled")
 
-    def test_ca_05_confirmacion_cargue_exitosa(self):
-        """CA-05: Al confirmar la notificación, cambia a Subido en UP y registra CargueUp y trazabilidad."""
+    def test_fa_02_botones_se_habilitan_otra_vez_tras_rechazado_en_up(self):
+        """FA-02: Tras Rechazado en UP, la propuesta vuelve a Aprobado y se habilitan los botones mostrando la observación."""
+        # Se registra un cargue previo que fue rechazado por el Director en UP
+        CargueUp.objects.create(
+            propuesta=self.propuesta_1,
+            director=self.director,
+            fecha_declaracion=timezone.now() - timedelta(days=3),
+            estado_verificacion=EstadoVerificacion.RECHAZADO_EN_UP,
+            fecha_verificacion=timezone.now() - timedelta(days=2),
+            observacion="Falta adjuntar el oficio de aceptación firmado por la entidad receptora.",
+        )
+
         self.client.force_login(self.user_estudiante_1)
-        url = reverse("cargue_up:notificar_cargue", args=[self.propuesta_1.pk])
+        res = self.client.get(reverse("cargue_up:cargue_propuesta"))
 
-        datos = {
-            "fecha_cargue": timezone.localdate().isoformat(),
-            "observaciones": "Radicado correctamente con número de folio UP-98765.",
-        }
-        response = self.client.post(url, data=datos, follow=True)
+        self.assertEqual(res.status_code, 200)
+        # Los botones vuelven a estar habilitados
+        self.assertTrue(res.context["puede_cargar"])
+        # Se expone la observación del Director
+        self.assertEqual(
+            res.context["observacion_rechazo_up"],
+            "Falta adjuntar el oficio de aceptación firmado por la entidad receptora.",
+        )
+        self.assertContains(res, "Falta adjuntar el oficio de aceptación firmado por la entidad receptora.")
 
-        self.assertEqual(response.status_code, 200)
+    # ==========================================================================
+    # 3. PRUEBAS DE IR A LA PLATAFORMA UP (CON Y SIN PARÁMETRO)
+    # ==========================================================================
 
-        # Verificar actualización del estado de la propuesta
-        self.propuesta_1.refresh_from_db()
-        self.assertEqual(self.propuesta_1.estado, EstadoTramite.SUBIDO_EN_UP)
+    def test_ir_up_con_url_up_configurada(self):
+        """Con clave url_up configurada en Parametro, redirige a dicha URL y audita Éxito."""
+        Parametro.objects.create(
+            clave="url_up",
+            valor="https://portal.unipamplona.edu.co/plataforma",
+            descripcion="URL de la UP",
+            usuario_actualizacion=self.user_admo,
+        )
 
-        # Verificar creación de CargueUp
-        cargue = CargueUp.objects.filter(propuesta=self.propuesta_1).first()
-        self.assertIsNotNone(cargue)
-        self.assertEqual(cargue.estado_verificacion, EstadoVerificacion.PENDIENTE)
-        self.assertEqual(cargue.observacion, datos["observaciones"])
+        self.client.force_login(self.user_estudiante_1)
+        res = self.client.get(reverse("cargue_up:ir_a_up", args=[self.propuesta_1.pk]))
 
-        # Verificar HistorialEstado
-        historial = HistorialEstado.objects.filter(
-            propuesta=self.propuesta_1, estado_nuevo=EstadoTramite.SUBIDO_EN_UP
-        ).first()
-        self.assertIsNotNone(historial)
-        self.assertEqual(historial.usuario, self.user_estudiante_1)
+        self.assertEqual(res.status_code, 302)
+        self.assertEqual(res.url, "https://portal.unipamplona.edu.co/plataforma")
 
-        # Verificar Auditoria
         auditoria = Auditoria.objects.filter(
-            accion="NOTIFICAR_CARGUE_EXITOSO", id_registro_afectado=cargue.pk
+            accion="Ir a la Plataforma UP",
+            id_registro_afectado=self.propuesta_1.pk,
         ).first()
         self.assertIsNotNone(auditoria)
+        self.assertEqual(auditoria.resultado, "Éxito")
 
-        # Verificar Notificación en sistema al docente
-        notif = Notificacion.objects.filter(
-            usuario=self.user_docente, propuesta=self.propuesta_1
-        ).first()
-        self.assertIsNotNone(notif)
-        self.assertIn("notificó que cargó su proyecto", notif.mensaje)
+    def test_ir_up_sin_url_up_configurada(self):
+        """Sin clave url_up configurada, bloquea la acción, audita Bloqueado y redirige a inicio."""
+        Parametro.objects.filter(clave="url_up").delete()
 
-    def test_ca_08_estudiante_no_puede_notificar_proyecto_ajeno(self):
-        """CA-08: Un estudiante no puede notificar el cargue del proyecto de otro estudiante."""
-        # Estudiante 2 intenta notificar la propuesta del Estudiante 1
-        self.client.force_login(self.user_estudiante_2)
-        url = reverse("cargue_up:notificar_cargue", args=[self.propuesta_1.pk])
-
-        datos = {
-            "fecha_cargue": timezone.localdate().isoformat(),
-            "observaciones": "Intento no autorizado",
-        }
-        response = self.client.post(url, data=datos, follow=True)
-
-        self.assertEqual(response.status_code, 200)
-        # La propuesta no debe haber cambiado
-        self.propuesta_1.refresh_from_db()
-        self.assertEqual(self.propuesta_1.estado, EstadoTramite.APROBADO)
-        self.assertFalse(CargueUp.objects.filter(propuesta=self.propuesta_1).exists())
-
-    def test_ca_09_bloqueo_doble_notificacion(self):
-        """CA-09: No es posible registrar dos notificaciones de cargue para el mismo proyecto."""
-        # Primera notificación exitosa
         self.client.force_login(self.user_estudiante_1)
-        url = reverse("cargue_up:notificar_cargue", args=[self.propuesta_1.pk])
+        res = self.client.get(reverse("cargue_up:ir_a_up", args=[self.propuesta_1.pk]), follow=True)
 
-        datos = {
-            "fecha_cargue": timezone.localdate().isoformat(),
-            "observaciones": "Primer cargue",
-        }
-        self.client.post(url, data=datos)
+        self.assertEqual(res.status_code, 200)
 
-        # Segundo intento de notificación sobre el mismo proyecto
-        response = self.client.post(url, data=datos, follow=True)
-        self.assertEqual(response.status_code, 200)
+        auditoria = Auditoria.objects.filter(
+            accion="Ir a la Plataforma UP",
+            id_registro_afectado=self.propuesta_1.pk,
+        ).first()
+        self.assertIsNotNone(auditoria)
+        self.assertEqual(auditoria.resultado, "Bloqueado")
 
-        # Solo debe existir 1 registro de CargueUp
-        total_cargues = CargueUp.objects.filter(propuesta=self.propuesta_1).count()
-        self.assertEqual(total_cargues, 1)
+    # ==========================================================================
+    # 4. PRUEBAS DEL COMANDO DE RECORDATORIO SEMANAL (CRITERIOS 4 Y 5)
+    # ==========================================================================
+
+    def test_comando_recordatorio_semanal(self):
+        """El comando genera notificaciones dentro de la plataforma cada 7 días para propuestas aprobadas."""
+        out = StringIO()
+        # La propuesta 1 fue aprobada hace 10 días (> 7 días), por lo que debe recibir recordatorio
+        call_command("recordatorio_cargue_up", stdout=out)
+
+        notificacion_1 = Notificacion.objects.filter(
+            propuesta=self.propuesta_1,
+            tipo="RECORDATORIO_CARGUE_UP",
+        ).first()
+        self.assertIsNotNone(notificacion_1)
+        self.assertEqual(notificacion_1.usuario, self.user_estudiante_1)
+        self.assertIn("Recordatorio semanal", notificacion_1.mensaje)
+
+        # La propuesta 2 está en revisión, NO debe recibir recordatorio
+        notificacion_2 = Notificacion.objects.filter(
+            propuesta=self.propuesta_2,
+            tipo="RECORDATORIO_CARGUE_UP",
+        ).first()
+        self.assertIsNone(notificacion_2)

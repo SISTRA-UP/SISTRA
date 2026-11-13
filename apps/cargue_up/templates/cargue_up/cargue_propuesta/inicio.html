@@ -37,7 +37,7 @@
         min-height: 100vh;
     }
 
-    /* Header Institucional */
+    /* Header institucional */
     .sistra-header {
         background: linear-gradient(135deg, var(--up-azul) 0%, #004080 100%);
         color: #fff;
@@ -144,17 +144,12 @@
 
     /* Page Header */
     .page-header {
-        margin-bottom: 28px;
+        margin-bottom: 24px;
     }
     .page-header h1 {
         font-size: 1.55rem;
         font-weight: 700;
         color: var(--up-azul);
-        margin-bottom: 4px;
-    }
-    .page-header p {
-        color: var(--up-muted);
-        font-size: 0.95rem;
         margin-bottom: 0;
     }
 
@@ -428,10 +423,6 @@
         background: var(--up-azul-light);
         color: var(--up-azul);
     }
-    .step-number.rojo {
-        background: var(--up-rojo-light);
-        color: var(--up-rojo);
-    }
     .step-number.done {
         background: var(--up-green-light);
         color: var(--up-green);
@@ -483,6 +474,7 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
+        text-decoration: none;
     }
     .btn-up-primary:hover, .btn-up-primary:focus {
         background-color: var(--up-azul-hover);
@@ -491,29 +483,7 @@
     }
     .btn-up-primary:disabled {
         background-color: #94A3B8;
-        cursor: not-allowed;
-        box-shadow: none;
-    }
-    .btn-up-accent {
-        background-color: var(--up-rojo);
         color: #fff;
-        border: none;
-        font-weight: 600;
-        padding: 10px 22px;
-        border-radius: var(--up-radius-sm);
-        font-size: 0.9rem;
-        transition: all 0.2s ease;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .btn-up-accent:hover, .btn-up-accent:focus {
-        background-color: var(--up-rojo-hover);
-        color: #fff;
-        box-shadow: 0 3px 10px rgba(173, 51, 51, 0.25);
-    }
-    .btn-up-accent:disabled {
-        background-color: #94A3B8;
         cursor: not-allowed;
         box-shadow: none;
     }
@@ -529,6 +499,7 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
+        text-decoration: none;
     }
     .btn-up-outline:hover {
         background: #F8FAFC;
@@ -539,30 +510,6 @@
         color: #94A3B8;
         border-color: var(--up-border);
         cursor: not-allowed;
-    }
-    .external-link-hint {
-        font-size: 0.78rem;
-        color: var(--up-muted);
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-    }
-
-    /* Modal */
-    .modal-content { border-radius: var(--up-radius); border: none; }
-    .up-modal-header {
-        padding: 20px 28px 16px;
-        border-bottom: 1px solid var(--up-border);
-    }
-    .up-modal-header .modal-title {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: var(--up-text);
-    }
-    .up-modal-body { padding: 24px 28px; }
-    .up-modal-footer {
-        padding: 16px 28px 20px;
-        border-top: 1px solid var(--up-border);
     }
 
     /* Estado vacío */
@@ -712,6 +659,18 @@
         </div>
     {% else %}
 
+        <!-- Observación de Rechazo en UP (FA-02) -->
+        {% if observacion_rechazo_up %}
+            <div class="up-alert warning mb-4">
+                <i class="bi bi-exclamation-triangle-fill up-alert-icon"></i>
+                <div>
+                    <strong>Atención: Tu trámite anterior fue rechazado en la UP.</strong>
+                    <div class="mt-1"><strong>Observación del Director:</strong> <em>"{{ observacion_rechazo_up }}"</em></div>
+                    <div class="small mt-1 text-muted">Corrige los puntos señalados y vuelve a radicar la propuesta en la Plataforma UP.</div>
+                </div>
+            </div>
+        {% endif %}
+
         <!-- Tarjeta: Mi proyecto -->
         <div class="up-card">
             <div class="up-card-header">
@@ -760,7 +719,7 @@
                 <span class="project-info-label d-block mb-3">Seguimiento del trámite</span>
 
                 <div class="stepper">
-                    <!-- Paso 1 -->
+                    <!-- Paso 1: Aprobado por el docente -->
                     {% if estado_actual == EstadoTramite.APROBADO or estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual == EstadoTramite.APROBADO_EN_UP or cargue_existente %}
                         <div class="stepper-item completed">
                             <div class="step-indicator"><i class="bi bi-check-lg"></i></div>
@@ -779,7 +738,7 @@
                         </div>
                     {% endif %}
 
-                    <!-- Paso 2 -->
+                    <!-- Paso 2: Cargado en la UP -->
                     {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual == EstadoTramite.APROBADO_EN_UP or cargue_existente %}
                         <div class="stepper-item completed">
                             <div class="step-indicator"><i class="bi bi-check-lg"></i></div>
@@ -806,7 +765,7 @@
                         </div>
                     {% endif %}
 
-                    <!-- Paso 3 -->
+                    <!-- Paso 3: Respuesta en la UP -->
                     {% if estado_actual == EstadoTramite.APROBADO_EN_UP %}
                         <div class="stepper-item completed">
                             <div class="step-indicator"><i class="bi bi-check-lg"></i></div>
@@ -840,15 +799,15 @@
                 {% if estado_actual == EstadoTramite.APROBADO and not cargue_existente %}
                     <div class="up-alert info">
                         <i class="bi bi-info-circle-fill up-alert-icon"></i>
-                        <div><strong>Tu proyecto fue aprobado.</strong> Descárgalo y cárgalo en el sistema de la UP. Mientras no notifiques el cargue, recibirás recordatorios periódicos.</div>
+                        <div><strong>Tu proyecto fue aprobado.</strong> Descárgalo y cárgalo en la plataforma de la UP. Mientras no se registre el cargue, recibirás recordatorios periódicos dentro de la plataforma.</div>
                     </div>
                 {% elif estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
                     <div class="up-alert success">
                         <i class="bi bi-check-circle-fill up-alert-icon"></i>
                         <div>
-                            <strong>Notificación enviada.</strong>
-                            {% if cargue_existente %}Notificaste el cargue el <strong>{{ cargue_existente.fecha_declaracion|date:"d/m/Y" }}</strong> a las <strong>{{ cargue_existente.fecha_declaracion|date:"H:i" }}</strong>.{% endif %}
-                            Tu proyecto está a la espera de la verificación oficial en la UP.
+                            <strong>Cargue registrado.</strong>
+                            {% if cargue_existente %}Tu proyecto fue radicado el <strong>{{ cargue_existente.fecha_declaracion|date:"d/m/Y" }}</strong>.{% endif %}
+                            Está a la espera de la verificación oficial en la UP.
                         </div>
                     </div>
                 {% elif estado_actual == EstadoTramite.RECHAZADO %}
@@ -865,7 +824,7 @@
             </div>
         </div>
 
-        <!-- Tarjeta: Paso 1 -->
+        <!-- Tarjeta: Acciones para el cargue en la UP -->
         <div class="up-card">
             <div class="step-card">
                 <div class="step-number {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}done{% else %}azul{% endif %}">
@@ -877,120 +836,55 @@
                 </div>
                 <div class="step-body">
                     <h3><i class="bi bi-cloud-arrow-up me-2" style="color: var(--up-azul);"></i>Cargar el proyecto en la UP</h3>
-                    <p class="step-description">Descarga el documento avalado de tu propuesta y accede a la plataforma de la Universidad de Pamplona para radicarlo.</p>
+                    <p class="step-description">Descarga el documento oficial de tu propuesta y accede a la plataforma de la Universidad de Pamplona para radicarlo.</p>
 
                     <div class="step-actions">
+                        <!-- Botón Descargar propuesta -->
                         {% if puede_cargar or estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual == EstadoTramite.APROBADO_EN_UP %}
-                            <a href="{% url 'cargue_up:descargar_propuesta' propuesta.pk %}" class="btn btn-up-outline">
-                                <i class="bi bi-download"></i>Descargar proyecto
-                            </a>
+                            {% if pdf_disponible %}
+                                <a href="{% url 'cargue_up:descargar_propuesta' propuesta.pk %}" class="btn btn-up-outline">
+                                    <i class="bi bi-download"></i>Descargar propuesta
+                                </a>
+                            {% else %}
+                                <div>
+                                    <button type="button" class="btn btn-up-outline" disabled title="El documento oficial en PDF de la propuesta se encuentra en preparación">
+                                        <i class="bi bi-download"></i>Descargar propuesta
+                                    </button>
+                                    <span class="text-muted small d-block mt-1">
+                                        <i class="bi bi-info-circle me-1"></i>Documento PDF en preparación (SISTRA-01)
+                                    </span>
+                                </div>
+                            {% endif %}
                         {% else %}
                             <button type="button" class="btn btn-up-outline" disabled title="Disponible solo cuando el proyecto está Aprobado">
-                                <i class="bi bi-download"></i>Descargar proyecto
+                                <i class="bi bi-download"></i>Descargar propuesta
                             </button>
                         {% endif %}
 
-                        {% if puede_cargar %}
+                        <!-- Botón Ir a la Plataforma UP -->
+                        {% if puede_cargar and url_up_configurada %}
                             <a href="{% url 'cargue_up:ir_a_up' propuesta.pk %}" target="_blank" rel="noopener noreferrer" class="btn btn-up-primary" id="btn-ir-up">
-                                <i class="bi bi-box-arrow-up-right"></i>Ir al sistema de la UP
+                                <i class="bi bi-box-arrow-up-right"></i>Ir a la Plataforma UP
                             </a>
                         {% else %}
-                            <button type="button" class="btn btn-up-primary" disabled title="Disponible solo cuando el proyecto está Aprobado">
-                                <i class="bi bi-box-arrow-up-right"></i>Ir al sistema de la UP
-                            </button>
+                            <div>
+                                <button type="button" class="btn btn-up-primary" disabled title="{% if not url_up_configurada %}El enlace a la plataforma UP no está configurado{% else %}Disponible solo cuando el proyecto está Aprobado{% endif %}">
+                                    <i class="bi bi-box-arrow-up-right"></i>Ir a la Plataforma UP
+                                </button>
+                                {% if puede_cargar and not url_up_configurada %}
+                                    <span class="text-muted small d-block mt-1">
+                                        <i class="bi bi-exclamation-circle me-1"></i>Enlace a la plataforma UP no disponible actualmente
+                                    </span>
+                                {% endif %}
+                            </div>
                         {% endif %}
                     </div>
 
                     {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
                         <div class="step-complete-msg">
-                            <i class="bi bi-check-circle-fill"></i>Paso completado
+                            <i class="bi bi-check-circle-fill"></i>Etapa de cargue completada
                         </div>
                     {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Tarjeta: Paso 2 -->
-        <div class="up-card">
-            <div class="step-card">
-                <div class="step-number {% if cargue_existente %}done{% else %}rojo{% endif %}">
-                    {% if cargue_existente %}
-                        <i class="bi bi-check-lg"></i>
-                    {% else %}
-                        2
-                    {% endif %}
-                </div>
-                <div class="step-body">
-                    <h3><i class="bi bi-bell me-2" style="color: var(--up-rojo);"></i>Avisar a tu docente</h3>
-                    <p class="step-description">¿Ya cargaste tu proyecto en el sistema de la UP? Avísale a tu docente para dejar de recibir recordatorios y avanzar a la etapa de verificación.</p>
-
-                    <div class="step-actions">
-                        {% if puede_cargar %}
-                            <button type="button" class="btn btn-up-accent" data-bs-toggle="modal" data-bs-target="#modalConfirmarCargue">
-                                <i class="bi bi-check-circle"></i>Ya cargué mi proyecto
-                            </button>
-                        {% else %}
-                            <button type="button" class="btn btn-up-accent" disabled title="{% if cargue_existente %}El cargue ya fue notificado{% else %}Disponible solo cuando el proyecto está Aprobado{% endif %}">
-                                <i class="bi bi-check-circle"></i>Ya cargué mi proyecto
-                            </button>
-                        {% endif %}
-                    </div>
-
-                    {% if cargue_existente %}
-                        <div class="step-complete-msg">
-                            <i class="bi bi-check-circle-fill"></i>
-                            Notificación enviada{% if cargue_existente.fecha_declaracion %} el {{ cargue_existente.fecha_declaracion|date:"d/m/Y" }} a las {{ cargue_existente.fecha_declaracion|date:"H:i" }}{% endif %}
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Modal Confirmación -->
-        <div class="modal fade" id="modalConfirmarCargue" tabindex="-1" aria-labelledby="modalConfirmarCargueLabel" aria-hidden="true" data-bs-backdrop="static">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content shadow">
-                    <form method="post" action="{% url 'cargue_up:notificar_cargue' propuesta.pk %}" id="form-notificar-cargue" novalidate>
-                        {% csrf_token %}
-                        <div class="up-modal-header">
-                            <h2 class="modal-title" id="modalConfirmarCargueLabel">
-                                <i class="bi bi-send-check me-2" style="color: var(--up-azul);"></i>Confirmar notificación de cargue
-                            </h2>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                        </div>
-                        <div class="up-modal-body">
-                            <p class="text-secondary mb-4" style="font-size: 0.9rem; line-height: 1.55;">
-                                ¿Confirmas que ya cargaste tu proyecto en el sistema de la UP? Se notificará a tu docente y dejarás de recibir recordatorios.
-                            </p>
-
-                            <!-- Fecha de cargue -->
-                            <div class="mb-3">
-                                <label for="cup_fecha_cargue" class="form-label fw-semibold text-dark">
-                                    Fecha de cargue en la UP <span class="text-danger">*</span>
-                                </label>
-                                {{ formulario.fecha_cargue }}
-                                <div class="form-text small">La fecha no puede ser futura.</div>
-                            </div>
-
-                            <!-- Observaciones -->
-                            <div class="mb-2">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <label for="cup_observaciones" class="form-label fw-semibold text-dark mb-0">
-                                        Observaciones (opcional)
-                                    </label>
-                                    <span class="text-muted small" id="contador-caracteres">0 / 500</span>
-                                </div>
-                                {{ formulario.observaciones }}
-                            </div>
-                        </div>
-                        <div class="up-modal-footer d-flex justify-content-end gap-2">
-                            <button type="button" class="btn btn-up-outline" data-bs-dismiss="modal">Cancelar</button>
-                            <button type="submit" class="btn btn-up-accent" id="btn-submit-notificar">
-                                <span class="spinner-border spinner-border-sm me-1 d-none" id="spinner-notificar" role="status" aria-hidden="true"></span>
-                                Confirmar y notificar
-                            </button>
-                        </div>
-                    </form>
                 </div>
             </div>
         </div>
@@ -998,49 +892,4 @@
     {% endif %}
 
 </main>
-{% endblock %}
-
-{% block js %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // 1. Contador de caracteres para observaciones (0 / 500)
-    const textareaObs = document.getElementById('cup_observaciones');
-    const contador = document.getElementById('contador-caracteres');
-
-    if (textareaObs && contador) {
-        function actualizarContador() {
-            const longitud = textareaObs.value.length;
-            contador.textContent = `${longitud} / 500`;
-            if (longitud >= 500) {
-                contador.classList.add('text-danger');
-            } else {
-                contador.classList.remove('text-danger');
-            }
-        }
-        textareaObs.addEventListener('input', actualizarContador);
-        actualizarContador();
-    }
-
-    // 2. Prevenir doble envío
-    const formNotificar = document.getElementById('form-notificar-cargue');
-    const btnSubmit = document.getElementById('btn-submit-notificar');
-    const spinner = document.getElementById('spinner-notificar');
-
-    if (formNotificar && btnSubmit) {
-        formNotificar.addEventListener('submit', function() {
-            btnSubmit.disabled = true;
-            if (spinner) {
-                spinner.classList.remove('d-none');
-            }
-        });
-    }
-
-    // 3. Fecha máxima = hoy
-    const inputFecha = document.getElementById('cup_fecha_cargue');
-    if (inputFecha) {
-        const hoy = new Date().toISOString().split('T')[0];
-        inputFecha.setAttribute('max', hoy);
-    }
-});
-</script>
 {% endblock %}
