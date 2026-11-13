@@ -61,6 +61,7 @@ class BaseRoles(TestCase):
             cedula=cedula,
             nombre_usuario=correo.split('@')[0],
             rol=rol or self.rol_administrador,
+            requiere_cambio_contrasena=False,
         )
 
     def crear_rol_con(self, nombre, *permisos):

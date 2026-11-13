@@ -70,6 +70,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.usuarios.middleware.CambioObligatorioContrasenaMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -190,6 +191,15 @@ MEDIA_ROOT = BASE_DIR / 'documentos'
 SESSION_COOKIE_AGE = 10 * 60  # segundos
 
 SESSION_SAVE_EVERY_REQUEST = True
+LOGIN_URL = 'usuarios:login'
+
+
+# Correo institucional usado solo para enviar contraseñas temporales.
+# En desarrollo el backend de consola permite probar el flujo sin credenciales;
+# en producción SMTP debe configurarse mediante variables de entorno.
+DEFAULT_FROM_EMAIL = os.environ.get(
+    'DEFAULT_FROM_EMAIL', 'SISTRA-UP <no-responder@unipamplona.edu.co>'
+)
 
 
 # Seguridad en producción
@@ -203,11 +213,26 @@ if not DEBUG:
     # SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 
-# Email
-# https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
-
+# Django 6.1 configura el correo a través de MAILERS (no EMAIL_BACKEND/EMAIL_HOST).
+SMTP_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').lower() == 'true'
+SMTP_USE_TLS = os.environ.get(
+    'EMAIL_USE_TLS', 'False' if SMTP_USE_SSL else 'True'
+).lower() == 'true'
+SMTP_OPTIONS = {
+    'host': os.environ.get('EMAIL_HOST', 'localhost'),
+    'port': int(os.environ.get('EMAIL_PORT', '587')),
+    'username': os.environ.get('EMAIL_HOST_USER', ''),
+    'password': os.environ.get('EMAIL_HOST_PASSWORD', ''),
+    'use_tls': SMTP_USE_TLS,
+    'use_ssl': SMTP_USE_SSL,
+}
 MAILERS = {
     'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
+        'BACKEND': (
+            'django.core.mail.backends.console.EmailBackend'
+            if DEBUG
+            else 'django.core.mail.backends.smtp.EmailBackend'
+        ),
+        **({'OPTIONS': SMTP_OPTIONS} if not DEBUG else {}),
     },
 }

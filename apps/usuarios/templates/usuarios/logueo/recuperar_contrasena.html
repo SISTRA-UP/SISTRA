@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block titulo %}Recuperar contraseña · SISTRA-UP{% endblock %}
+
+{% block css %}
+<link rel="stylesheet" href="{% static 'usuarios/css/logueo.css' %}">
+{% endblock %}
+
+{% block contenido %}
+<main class="container-fluid login-page min-vh-100 d-flex align-items-center justify-content-center py-4">
+    <section class="access-panel-inner auth-card p-4 p-md-5 border rounded-4 shadow-sm" aria-labelledby="titulo-recuperacion">
+        <a class="brand brand-compact d-inline-flex align-items-center gap-2 text-decoration-none mb-4" href="{% url 'usuarios:login' %}" aria-label="SISTRA-UP, volver al ingreso">
+            <span class="brand-mark" aria-hidden="true"><img src="{% static 'img/escudo-unipamplona.png' %}" alt=""></span>
+            <span class="brand-word"><span class="brand-name">SISTRA<span class="brand-period">.</span></span><small>Universidad de Pamplona</small></span>
+        </a>
+        <p class="eyebrow">ACCESO INSTITUCIONAL</p>
+        <h1 id="titulo-recuperacion" class="h2">Recupera tu acceso</h1>
+        <p class="muted">Escribe el correo institucional con el que te registraron. Si la cuenta está habilitada, enviaremos una contraseña temporal a ese correo.</p>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-info" role="status">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+        {% if form.non_field_errors %}
+            <div class="alert alert-danger" role="alert">{{ form.non_field_errors.0 }}</div>
+        {% endif %}
+
+        <form method="post" action="{% url 'usuarios:recuperar_contrasena' %}" novalidate>
+            {% csrf_token %}
+            <div class="mb-3">
+                <label class="form-label fw-semibold" for="{{ form.correo.id_for_label }}">{{ form.correo.label }}</label>
+                {{ form.correo }}
+                {% if form.correo.errors %}<div class="invalid-feedback d-block" role="alert">{{ form.correo.errors.0 }}</div>{% endif %}
+                {% if not form.correo.errors %}<div class="form-text">Debe terminar en @unipamplona.edu.co.</div>{% endif %}
+            </div>
+            <button class="btn btn-primary w-100 py-3 login-button" type="submit">Enviar</button>
+        </form>
+        <p class="text-center mt-4 mb-0"><a href="{% url 'usuarios:login' %}">Volver al ingreso</a></p>
+    </section>
+</main>
+{% endblock %}
