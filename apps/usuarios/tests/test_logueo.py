@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import SESSION_KEY, get_user_model
 from django.core import mail
+from django.core.cache import cache
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -26,6 +27,7 @@ from apps.usuarios.views.logueo import (
     MENSAJE_INACTIVO,
     MENSAJE_RECUPERACION,
     _HASH_CONTRASENA_RELLENO,
+    _clave_cache_recuperacion,
 )
 
 CONTRASENA_PRUEBA = 'PruebaSegura-2026!'
@@ -54,6 +56,7 @@ class LoginTests(TestCase):
         self.url_cambio = reverse('usuarios:cambiar_contrasena')
         self.url_recuperacion = reverse('usuarios:recuperar_contrasena')
         self.url_logout = reverse('usuarios:logout')
+        cache.delete(_clave_cache_recuperacion(CORREO_PRUEBA))
 
     def crear_usuario(
         self,
@@ -292,6 +295,33 @@ class LoginTests(TestCase):
         respuesta_inicio = self.client.get(self.url_inicio_estudiante)
         self.assertRedirects(respuesta_inicio, self.url_cambio)
 
+    def test_admo_con_cambio_obligatorio_no_puede_abrir_roles_ni_gestion(self):
+        administrador = self.crear_usuario(
+            correo='admo-temporal@unipamplona.edu.co',
+            nombre='ADMO con clave temporal',
+            cedula='1000000010',
+            nombre_usuario='admo_temporal',
+            rol=self.rol_administrador,
+            requiere_cambio_contrasena=True,
+        )
+        respuesta_login = self.enviar_login(
+            correo=administrador.correo_institucional,
+            contrasena=CONTRASENA_PRUEBA,
+        )
+        self.assertRedirects(respuesta_login, self.url_cambio)
+
+        for ruta in ('/usuarios/roles/', '/usuarios/gestion/'):
+            with self.subTest(ruta=ruta):
+                respuesta = self.client.get(ruta)
+                self.assertRedirects(
+                    respuesta,
+                    self.url_cambio,
+                    fetch_redirect_response=False,
+                )
+
+        respuesta_static = self.client.get('/static/usuarios/css/logueo.css')
+        self.assertNotEqual(respuesta_static.status_code, 302)
+
     def test_cambio_obligatorio_guarda_hash_quita_bandera_y_reanuda_next_seguro(self):
         self.usuario.requiere_cambio_contrasena = True
         self.usuario.save(update_fields=['requiere_cambio_contrasena'])
@@ -315,6 +345,20 @@ class LoginTests(TestCase):
             Auditoria.objects.get(accion='Cambiar contraseña').resultado,
             'Éxito',
         )
+
+    def test_pantalla_cambio_obligatorio_ofrece_logout_y_permite_cerrar_sesion(self):
+        self.usuario.requiere_cambio_contrasena = True
+        self.usuario.save(update_fields=['requiere_cambio_contrasena'])
+        self.client.force_login(self.usuario)
+
+        respuesta_pantalla = self.client.get(self.url_cambio)
+        self.assertEqual(respuesta_pantalla.status_code, 200)
+        self.assertContains(respuesta_pantalla, f'action="{self.url_logout}"')
+        self.assertContains(respuesta_pantalla, 'Cerrar sesión')
+
+        respuesta_logout = self.client.post(self.url_logout)
+        self.assertRedirects(respuesta_logout, self.url_login)
+        self.assertNotIn(SESSION_KEY, self.client.session)
 
     def test_cambio_rechaza_contrasena_actual_incorrecta_o_confirmacion_distinta(self):
         self.client.force_login(self.usuario)
@@ -405,6 +449,27 @@ class LoginTests(TestCase):
         auditoria = Auditoria.objects.get(accion='Recuperar contraseña')
         self.assertIsNone(auditoria.usuario)
         self.assertEqual(auditoria.resultado, 'Fallo')
+
+    @override_settings(
+        MAILERS={'default': {'BACKEND': 'django.core.mail.backends.locmem.EmailBackend'}},
+        DEFAULT_FROM_EMAIL='SISTRA-UP <sistra@example.org>',
+    )
+    def test_recuperacion_limita_a_una_solicitud_por_correo_durante_cinco_minutos(self):
+        mail.outbox.clear()
+        cache.delete(_clave_cache_recuperacion(self.usuario.correo_institucional))
+        datos = {'correo': self.usuario.correo_institucional}
+
+        primera = self.client.post(self.url_recuperacion, datos, follow=True)
+        self.assertContains(primera, MENSAJE_RECUPERACION)
+        self.usuario.refresh_from_db()
+        hash_despues_de_primera = self.usuario.password
+        self.assertEqual(len(mail.outbox), 1)
+
+        segunda = self.client.post(self.url_recuperacion, datos, follow=True)
+        self.assertContains(segunda, MENSAJE_RECUPERACION)
+        self.usuario.refresh_from_db()
+        self.assertEqual(self.usuario.password, hash_despues_de_primera)
+        self.assertEqual(len(mail.outbox), 1)
 
     @override_settings(
         MAILERS={'default': {'BACKEND': 'django.core.mail.backends.locmem.EmailBackend'}},

@@ -13,11 +13,12 @@ from django.contrib.auth import (
 )
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.hashers import check_password, make_password
+from django.core.cache import cache
 from django.core.mail import send_mail
 from django.db import transaction
 from django.shortcuts import redirect, render
 from django.utils import timezone
-from django.utils.crypto import get_random_string
+from django.utils.crypto import get_random_string, salted_hmac
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 from django.views.decorators.debug import sensitive_post_parameters
@@ -56,6 +57,7 @@ MENSAJE_CAMBIO_OK = 'Tu contraseña se cambió correctamente.'
 MENSAJE_INGRESO_OK = 'Bienvenido a SISTRA.'
 MAX_INTENTOS_FALLIDOS = 5
 DURACION_BLOQUEO = timedelta(minutes=15)
+DURACION_LIMITE_RECUPERACION = 5 * 60
 CLAVE_NEXT_SESION = 'sistra13_next_seguro'
 # Se verifica este hash PBKDF2 cuando el correo no corresponde a una cuenta
 # compatible, para no responder más rápido a correos inexistentes o de otros roles.
@@ -102,6 +104,14 @@ def _next_seguro(request, destino):
     ):
         return destino
     return None
+
+
+def _clave_cache_recuperacion(correo):
+    """Genera una clave de caché que no expone el correo institucional."""
+    identificador = salted_hmac(
+        'sistra13.recuperacion_contrasena', correo.lower()
+    ).hexdigest()
+    return f'sistra13:recuperacion:{identificador}'
 
 
 def _redirigir_al_inicio(request, usuario, destino=None):
@@ -336,6 +346,20 @@ def recuperar_contrasena(request):
     if request.method == 'POST' and form.is_valid():
         Usuario = get_user_model()
         correo = form.cleaned_data['correo']
+        if not cache.add(
+            _clave_cache_recuperacion(correo),
+            'solicitud-recibida',
+            timeout=DURACION_LIMITE_RECUPERACION,
+        ):
+            _auditar(
+                None,
+                'Recuperar contraseña',
+                'Fallo',
+                'Solicitud repetida limitada temporalmente por caché.',
+            )
+            messages.info(request, MENSAJE_RECUPERACION)
+            return redirect('usuarios:recuperar_contrasena')
+
         resultado = 'Fallo'
         usuario_auditoria = None
 
