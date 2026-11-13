@@ -64,6 +64,7 @@ class BaseRegistro(TestCase):
             cedula=cedula,
             nombre_usuario=correo.split('@')[0],
             rol=rol,
+            requiere_cambio_contrasena=False,
         )
 
     def asignar_carrera(self, usuario, carrera):
