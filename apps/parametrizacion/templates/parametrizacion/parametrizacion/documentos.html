@@ -1,0 +1,110 @@
+{% extends 'parametrizacion/parametrizacion/_pagina.html' %}
+
+{% block titulo %}Documentos y formatos · Parametrización · SISTRA-UP{% endblock %}
+
+{% block principal %}
+<p class="sis-eyebrow">Parametrización · SISTRA-11</p>
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h1 class="sis-titulo">Documentos y formatos</h1>
+        <p class="sis-sub mb-0">Plantillas descargables del sistema. Solo el Administrador puede gestionarlas.</p>
+    </div>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNueva">
+        Nueva plantilla
+    </button>
+</div>
+
+{% if plantillas %}
+<section class="sis-card">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th scope="col">Nombre</th>
+                    <th scope="col">Tipo</th>
+                    <th scope="col">Versión vigente</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col"><span class="visually-hidden">Acciones</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for plantilla in plantillas %}
+                {% with vigente=plantilla.versiones.filter.es_vigente %}
+                <tr>
+                    <td class="fw-semibold">{{ plantilla.nombre }}</td>
+                    <td>{{ plantilla.tipo }}</td>
+                    <td>
+                        {% with v=plantilla.versiones.all %}
+                        {% for ver in v %}{% if ver.es_vigente %}
+                            v{{ ver.numero_version }} — {{ ver.nombre_archivo }}
+                        {% endif %}{% endfor %}
+                        {% if not v %}
+                            <span class="text-muted fst-italic">Sin archivo</span>
+                        {% endif %}
+                        {% endwith %}
+                    </td>
+                    <td>
+                        {% if plantilla.estado == 'Activo' %}
+                        <span class="badge bg-success">Activo</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Inactivo</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-secondary"
+                           href="{% url 'parametrizacion:documentos_editar' plantilla.pk %}">
+                            Editar
+                        </a>
+                        <a class="btn btn-sm btn-outline-primary ms-1"
+                           href="{% url 'parametrizacion:documentos_version' plantilla.pk %}">
+                            Subir versión
+                        </a>
+                    </td>
+                </tr>
+                {% endwith %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% else %}
+<section class="sis-card text-center py-5 text-muted">
+    <p class="mb-3">Todavía no hay plantillas registradas.</p>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNueva">
+        Crear la primera plantilla
+    </button>
+</section>
+{% endif %}
+
+{# Modal: nueva plantilla #}
+<div class="modal fade" id="modalNueva" tabindex="-1" aria-labelledby="modalNuevaLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'parametrizacion:documentos_nueva' %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalNuevaLabel">Nueva plantilla</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    {% for campo in form_plantilla %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="{{ campo.id_for_label }}">
+                            {{ campo.label }}
+                        </label>
+                        {{ campo }}
+                        {% if campo.errors %}
+                        <div class="invalid-feedback d-block">{{ campo.errors|join:', ' }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear plantilla</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
