@@ -266,6 +266,34 @@ class CargueUpSecurityAndViewsTestCase(TestCase):
         )
         self.assertContains(res, "Falta adjuntar el oficio de aceptación firmado por la entidad receptora.")
 
+    def test_enlace_subido_en_up_aparece_solo_con_propuesta_aprobada(self):
+        """El enlace 'Subido en UP' (cargue_up:aviso_propuesta_confirmacion) aparece con propuesta Aprobada y no en otro estado."""
+        # 1. Con propuesta Aprobada (user_estudiante_1): aparece el enlace y la tarjeta
+        self.client.force_login(self.user_estudiante_1)
+        res_aprobada = self.client.get(reverse("cargue_up:cargue_propuesta"))
+        self.assertEqual(res_aprobada.status_code, 200)
+        url_aviso_1 = reverse("cargue_up:aviso_propuesta_confirmacion", args=[self.propuesta_1.pk])
+        self.assertContains(res_aprobada, url_aviso_1)
+        self.assertContains(res_aprobada, "Subido en UP")
+        self.assertContains(res_aprobada, "Avisar a tu Director")
+
+        # 2. Con propuesta En revisión (user_estudiante_2): NO aparece
+        self.client.force_login(self.user_estudiante_2)
+        res_revision = self.client.get(reverse("cargue_up:cargue_propuesta"))
+        self.assertEqual(res_revision.status_code, 200)
+        url_aviso_2 = reverse("cargue_up:aviso_propuesta_confirmacion", args=[self.propuesta_2.pk])
+        self.assertNotContains(res_revision, url_aviso_2)
+        self.assertNotContains(res_revision, "Avisar a tu Director")
+
+        # 3. Con propuesta en Subido en UP: NO aparece
+        self.propuesta_1.estado = EstadoTramite.SUBIDO_EN_UP
+        self.propuesta_1.save(update_fields=["estado"])
+        self.client.force_login(self.user_estudiante_1)
+        res_subido = self.client.get(reverse("cargue_up:cargue_propuesta"))
+        self.assertEqual(res_subido.status_code, 200)
+        self.assertNotContains(res_subido, url_aviso_1)
+        self.assertNotContains(res_subido, "Avisar a tu Director")
+
     # ==========================================================================
     # 3. PRUEBAS DE IR A LA PLATAFORMA UP (CON Y SIN PARÁMETRO)
     # ==========================================================================
