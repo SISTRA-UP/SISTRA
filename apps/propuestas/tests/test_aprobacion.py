@@ -115,6 +115,7 @@ class BaseAprobacionTestCase(TestCase):
             cedula='1098000001',
             nombre_usuario='director.sistemas',
             rol=self.rol_director,
+            requiere_cambio_contrasena=False,
         )
         self.director = Director.objects.create(usuario=self.user_director)
         self.asignacion_director = DirectorCarrera.objects.create(
@@ -152,6 +153,7 @@ class BaseAprobacionTestCase(TestCase):
             cedula=cedula,
             nombre_usuario=correo.split('@')[0],
             rol=self.rol_estudiante,
+            requiere_cambio_contrasena=False,
         )
         estudiante = Estudiante.objects.create(usuario=user)
         inscripcion = EstudianteCarrera.objects.create(
@@ -2169,6 +2171,7 @@ class TestPermisoAprobacion(BaseAprobacionTestCase):
             cedula='1098000099',
             nombre_usuario='admo',
             rol=Rol.objects.get(nombre='Administrador'),
+            requiere_cambio_contrasena=False,
         )
         self.client.force_login(admo)
         self.assertEqual(self.client.get(reverse('propuestas:aprobacion')).status_code, 403)
@@ -2184,6 +2187,7 @@ class TestPermisoAprobacion(BaseAprobacionTestCase):
             cedula='1098000077',
             nombre_usuario='coordinador',
             rol=rol,
+            requiere_cambio_contrasena=False,
         )
         DirectorCarrera.objects.create(
             director=Director.objects.create(usuario=coordinador),

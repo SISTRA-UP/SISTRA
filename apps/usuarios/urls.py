@@ -28,4 +28,11 @@ urlpatterns = [
     path('gestion/<int:id_usuario>/eliminar/', roles.eliminar_usuario, name='usuario_eliminar'),
 
     # SISTRA-13 · Logueo
+    path('login/', logueo.login, name='login'),
+    path('inicio/', logueo.inicio_estudiante, name='inicio_estudiante'),
+    path('inicio/director/', logueo.inicio_director, name='inicio_director'),
+    path('inicio/administrador/', logueo.inicio_administrador, name='inicio_administrador'),
+    path('cambiar-contrasena/', logueo.cambiar_contrasena, name='cambiar_contrasena'),
+    path('recuperar-contrasena/', logueo.recuperar_contrasena, name='recuperar_contrasena'),
+    path('logout/', logueo.logout, name='logout'),
 ]
