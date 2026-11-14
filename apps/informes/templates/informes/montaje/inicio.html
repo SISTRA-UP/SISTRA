@@ -1,0 +1,379 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Montaje de Informe - SISTRA-UP{% endblock %}
+
+{% block contenido %}
+<div class="container py-3 py-md-4">
+
+    {% if sin_acceso %}
+    <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+        <h5 class="alert-heading">Acceso no habilitado</h5>
+        <p class="mb-0">{{ mensaje_error }}</p>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+    </div>
+    {% else %}
+
+    <!-- Encabezado -->
+    <div class="row mb-3 mb-md-4">
+        <div class="col-12">
+            <h1 class="h2 h-md-1 fw-bold text-primary">
+                Montaje de Informe de Trabajo Social
+            </h1>
+            <p class="text-muted lead fs-6">
+                Completa el formulario con los resultados de tu Trabajo Social.
+            </p>
+        </div>
+    </div>
+
+    <!-- Datos de la Propuesta -->
+    <div class="card mb-3 mb-md-4 border-primary-subtle">
+        <div class="card-header bg-primary-subtle text-primary-emphasis fw-semibold">
+            Datos de la Propuesta Aprobada
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <small class="text-muted text-uppercase fw-bold">Código</small>
+                    <p class="mb-0 fw-medium">{{ propuesta.codigo }}</p>
+                </div>
+                <div class="col-12 col-md-6">
+                    <small class="text-muted text-uppercase fw-bold">Título</small>
+                    <p class="mb-0 fw-medium">{{ propuesta.titulo }}</p>
+                </div>
+                <div class="col-12 col-md-6">
+                    <small class="text-muted text-uppercase fw-bold">Entidad</small>
+                    <p class="mb-0 fw-medium">{{ propuesta.entidad }}</p>
+                </div>
+                <div class="col-12 col-md-6">
+                    <small class="text-muted text-uppercase fw-bold">Población Beneficiada</small>
+                    <p class="mb-0 fw-medium">{{ propuesta.poblacion_beneficiada }}</p>
+                </div>
+                <div class="col-12 col-md-6">
+                    <small class="text-muted text-uppercase fw-bold">Zona</small>
+                    <p class="mb-0 fw-medium">{{ propuesta.zona }}</p>
+                </div>
+                <div class="col-12 col-md-6">
+                    <small class="text-muted text-uppercase fw-bold">Periodo Académico</small>
+                    <p class="mb-0 fw-medium">{{ propuesta.periodo_academico.nombre }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estado del Informe -->
+    {% if informe %}
+    <div class="card mb-3 mb-md-4 border-secondary-subtle">
+        <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center flex-wrap gap-2">
+                <span class="fw-semibold text-secondary">Estado del Informe:</span>
+                <span class="badge {{ clase_estado }} fs-6">{{ informe.estado }}</span>
+            </div>
+            {% if informe.version_entrega > 1 %}
+            <div>
+                <span class="fw-semibold text-secondary">Versión:</span>
+                <span class="badge bg-dark fs-6">{{ informe.version_entrega }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Observación del Director -->
+    {% if ultima_observacion and ultima_observacion.observacion %}
+    <div class="alert alert-warning border-warning text-warning-emphasis mb-3 mb-md-4" role="alert">
+        <strong class="d-block mb-1">Observación del Director:</strong>
+        <p class="mb-1">{{ ultima_observacion.observacion }}</p>
+        <small class="text-muted">Recibida el {{ ultima_observacion.fecha_hora|date:"d/m/Y H:i" }}</small>
+    </div>
+    {% endif %}
+
+    <!-- Barra de Avance -->
+    <div class="card mb-3 mb-md-4 border-secondary-subtle">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0 fw-semibold text-primary">Progreso del Informe</h6>
+                <span id="badge-avance" class="badge {{ clase_progreso }}">{{ avance }}%</span>
+            </div>
+            <div class="progress" style="height: 25px;">
+                <div id="barra-progreso"
+                     class="progress-bar {{ clase_progreso }}"
+                     role="progressbar"
+                     style="width: {{ avance }}%"
+                     aria-valuenow="{{ avance }}"
+                     aria-valuemin="0"
+                     aria-valuemax="100">
+                    {{ avance }}%
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulario del Informe -->
+    <div class="card border-primary-subtle">
+        <div class="card-header bg-primary-subtle text-primary-emphasis fw-semibold">
+            Formulario de Informe
+        </div>
+        <div class="card-body">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            {% if bloqueado %}
+                <div class="alert alert-info border-info text-info-emphasis mb-3 mb-md-4" role="alert">
+                    <strong>Informe bloqueado:</strong> Este informe ya fue enviado y se encuentra en estado
+                    <strong>"{{ informe.estado }}"</strong>. No puedes modificarlo hasta que el Director tome una decisión.
+                </div>
+            {% endif %}
+
+            <form method="post" novalidate id="form-informe">
+                {% csrf_token %}
+
+                {% for field in form %}
+                    <div class="mb-4">
+                        <label for="{{ field.id_for_label }}" class="form-label fw-semibold text-primary">
+                            {{ field.label|title }} <span class="text-danger">*</span>
+                        </label>
+                        {% if bloqueado %}
+                            {{ field }}
+                            <script>
+                                document.getElementById('{{ field.id_for_label }}').setAttribute('readonly', true);
+                                document.getElementById('{{ field.id_for_label }}').style.backgroundColor = '#f8f9fa';
+                                document.getElementById('{{ field.id_for_label }}').style.cursor = 'not-allowed';
+                            </script>
+                        {% else %}
+                            {{ field }}
+                        {% endif %}
+
+                        <div id="error-{{ field.id_for_label }}" class="invalid-feedback d-block" style="display: none;">
+                            Completa este campo (mínimo {{ minimo_caracteres }} caracteres).
+                        </div>
+
+                        {% if field.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in field.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+
+                <!-- Botones de Acción -->
+                <div class="d-flex flex-column flex-md-row gap-2 gap-md-3 mt-4 pt-3 border-top">
+                    {% if not bloqueado %}
+                        <button type="submit"
+                                name="accion"
+                                value="guardar_borrador"
+                                id="btn-guardar"
+                                class="btn btn-outline-secondary px-4">
+                            Guardar Borrador
+                        </button>
+
+                        <button type="button"
+                                id="btn-enviar"
+                                class="btn btn-primary px-4"
+                                data-bs-toggle="modal"
+                                data-bs-target="#modalConfirmarEnvio"
+                                {% if avance != 100 %}disabled{% endif %}>
+                            Enviar Informe
+                        </button>
+
+                        <button type="button"
+                                id="btn-cancelar"
+                                class="btn btn-outline-danger px-4">
+                            Cancelar
+                        </button>
+                    {% else %}
+                        <a href="/" class="btn btn-secondary px-4 w-100 w-md-auto">
+                            Regresar al inicio
+                        </a>
+                    {% endif %}
+                </div>
+
+                <!-- Input oculto para enviar la acción -->
+                <input type="hidden" name="accion" id="input-accion" value="">
+            </form>
+        </div>
+    </div>
+
+    {% endif %}
+</div>
+
+<!-- Modal de confirmación antes de enviar -->
+<div class="modal fade" id="modalConfirmarEnvio" tabindex="-1" aria-labelledby="modalConfirmarEnvioLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalConfirmarEnvioLabel">Confirmar envío</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas enviar el informe a revisión?</p>
+                <p class="text-muted small">Una vez enviado, no podrás modificarlo hasta que el Director tome una decisión.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No, revisar</button>
+                <button type="button" class="btn btn-primary" id="btn-confirmar-envio">Sí, enviar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmación para cancelar -->
+<div class="modal fade" id="modalConfirmarCancelar" tabindex="-1" aria-labelledby="modalConfirmarCancelarLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalConfirmarCancelarLabel">Cancelar</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tienes cambios sin guardar. ¿Seguro que deseas cancelar?</p>
+                <p class="text-muted small">Perderás los cambios no guardados.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Volver</button>
+                <button type="button" class="btn btn-danger" id="btn-confirmar-cancelar">Sí, cancelar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const MINIMO = {{ minimo_caracteres }};
+    const MAXIMO = 1000;
+    const campos = ['id_resultados', 'id_conclusiones', 'id_recomendaciones'];
+    const barra = document.getElementById('barra-progreso');
+    const badge = document.getElementById('badge-avance');
+    const btnEnviar = document.getElementById('btn-enviar');
+    const btnGuardar = document.getElementById('btn-guardar');
+    const btnCancel = document.getElementById('btn-cancelar');
+    const inputAccion = document.getElementById('input-accion');
+    const form = document.getElementById('form-informe');
+
+    if (!barra || !badge || !btnEnviar) return;
+
+    // Guardar estado inicial para detectar cambios sin guardar
+    const estadoInicial = {};
+    campos.forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) estadoInicial[id] = el.value;
+    });
+
+    function hayCambiosSinGuardar() {
+        return campos.some(function(id) {
+            const el = document.getElementById(id);
+            return el && el.value !== estadoInicial[id];
+        });
+    }
+
+    function calcularAvance() {
+        let llenos = 0;
+        campos.forEach(function(id) {
+            const el = document.getElementById(id);
+            const errorDiv = document.getElementById('error-' + id);
+            if (!el) return;
+
+            const valor = el.value.trim();
+            if (valor.length >= MINIMO) {
+                llenos++;
+                if (errorDiv) errorDiv.style.display = 'none';
+                el.classList.remove('is-invalid');
+                el.classList.add('is-valid');
+            } else {
+                if (errorDiv) errorDiv.style.display = 'block';
+                el.classList.remove('is-valid');
+                el.classList.add('is-invalid');
+            }
+
+            // Validar máximo
+            if (valor.length > MAXIMO) {
+                if (errorDiv) {
+                    errorDiv.style.display = 'block';
+                    errorDiv.textContent = 'Máximo ' + MAXIMO + ' caracteres.';
+                }
+                el.classList.add('is-invalid');
+            }
+        });
+
+        const avance = Math.round((llenos / campos.length) * 100);
+        barra.style.width = avance + '%';
+        barra.textContent = avance + '%';
+        barra.setAttribute('aria-valuenow', avance);
+        badge.textContent = avance + '%';
+
+        barra.classList.remove('bg-success', 'bg-warning', 'bg-danger');
+        badge.classList.remove('bg-success', 'bg-warning', 'text-dark', 'bg-danger');
+        if (avance === 100) {
+            barra.classList.add('bg-success');
+            badge.classList.add('bg-success');
+        } else if (avance >= 50) {
+            barra.classList.add('bg-warning');
+            badge.classList.add('bg-warning', 'text-dark');
+        } else {
+            barra.classList.add('bg-danger');
+            badge.classList.add('bg-danger');
+        }
+
+        if (avance === 100) {
+            btnEnviar.removeAttribute('disabled');
+        } else {
+            btnEnviar.setAttribute('disabled', 'disabled');
+        }
+    }
+
+    campos.forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', calcularAvance);
+            el.addEventListener('change', calcularAvance);
+        }
+    });
+
+    // Confirmación antes de enviar
+    const btnConfirmarEnvio = document.getElementById('btn-confirmar-envio');
+    if (btnConfirmarEnvio) {
+        btnConfirmarEnvio.addEventListener('click', function() {
+            inputAccion.value = 'enviar';
+            form.submit();
+        });
+    }
+
+    // Cancelar con confirmación si hay cambios
+    if (btnCancel) {
+        btnCancel.addEventListener('click', function() {
+            if (hayCambiosSinGuardar()) {
+                const modal = new bootstrap.Modal(document.getElementById('modalConfirmarCancelar'));
+                modal.show();
+            } else {
+                window.location.href = '/';
+            }
+        });
+    }
+
+    const btnConfirmarCancelar = document.getElementById('btn-confirmar-cancelar');
+    if (btnConfirmarCancelar) {
+        btnConfirmarCancelar.addEventListener('click', function() {
+            window.location.href = '/';
+        });
+    }
+
+    // Guardar borrador sin confirmación
+    if (btnGuardar) {
+        btnGuardar.addEventListener('click', function() {
+            inputAccion.value = 'guardar_borrador';
+        });
+    }
+
+    calcularAvance();
+});
+</script>
+{% endblock %}
