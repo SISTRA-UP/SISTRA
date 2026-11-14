@@ -64,7 +64,6 @@ class EstadosViewTests(TestCase):
         self.assertEqual(resp.status_code, 403)
 
     def test_admin_ve_lista_estados(self):
-        # Usar orden 97 para no colisionar con las etapas sembradas (1-6)
         Actividad.objects.create(
             nombre='Propuesta de Trabajo Social',
             descripcion='Presentación inicial',
@@ -72,7 +71,6 @@ class EstadosViewTests(TestCase):
             obligatoria=True,
             estado='Activo',
         )
-        # Usar nombre único para no colisionar con TipoRechazo sembrados
         TipoRechazo.objects.create(
             nombre='Falta de acta de compromiso',
             descripcion='No adjunta acta',
@@ -86,7 +84,6 @@ class EstadosViewTests(TestCase):
         self.assertNotContains(resp, 'Borrador')
 
     def test_crear_actividad_exitosa(self):
-        # Usar orden 98 para no colisionar con las etapas sembradas (1-6)
         resp = self.client.post(reverse('parametrizacion:actividad_nueva'), {
             'nombre': 'Informe Final',
             'descripcion': 'Entrega de informe al finalizar horas',
@@ -99,7 +96,7 @@ class EstadosViewTests(TestCase):
         self.assertTrue(Auditoria.objects.filter(accion='Crear etapa del proceso').exists())
 
     def test_crear_actividad_orden_duplicado_falla(self):
-        # La siembra ya creó orden=1; intentar crearlo de nuevo debe fallar
+        Actividad.objects.create(nombre='Etapa existente', descripcion='', orden=1, obligatoria=False, estado='Activo')
         resp = self.client.post(reverse('parametrizacion:actividad_nueva'), {
             'nombre': 'Otra etapa con orden 1',
             'descripcion': '',
@@ -111,7 +108,6 @@ class EstadosViewTests(TestCase):
         self.assertContains(resp, 'Ya existe una etapa con el orden 1')
 
     def test_editar_actividad(self):
-        # Usar orden 99 para no colisionar con las etapas sembradas (1-6)
         actividad = Actividad.objects.create(
             nombre='Etapa Inicial', descripcion='', orden=99, obligatoria=True, estado='Activo'
         )
@@ -172,6 +168,18 @@ class EstadosViewTests(TestCase):
         self.assertRedirects(resp, reverse('parametrizacion:estados'))
         self.assertFalse(Actividad.objects.filter(pk=actividad.pk).exists())
         self.assertTrue(Auditoria.objects.filter(accion='Eliminar etapa del proceso').exists())
+
+    def test_get_no_recrea_una_etapa_eliminada(self):
+        actividad = Actividad.objects.create(
+            nombre='Etapa eliminada', descripcion='', orden=9, obligatoria=False, estado='Activo'
+        )
+        actividad.delete()
+
+        resp = self.client.get(reverse('parametrizacion:estados'))
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(Actividad.objects.filter(nombre='Etapa eliminada').exists())
+        self.assertNotContains(resp, 'Etapa eliminada')
 
     def test_eliminar_tipo_rechazo(self):
         tipo = TipoRechazo.objects.create(
