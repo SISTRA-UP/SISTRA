@@ -1,6 +1,7 @@
 """SISTRA-07 · Validaciones para reactivar informes."""
 
 from django import forms
+from apps.propuestas.forms.aprobacion import LONGITUD_MAXIMA_TEXTO
 from django.core.exceptions import ValidationError
 
 from apps.informes.models import Informe
@@ -11,6 +12,7 @@ class ReactivacionInformeForm(forms.Form):
     """Exige un motivo y la versión del informe que se está revisando."""
 
     motivo = forms.CharField(
+        max_length=LONGITUD_MAXIMA_TEXTO,
         label="Motivo de la reactivación",
         required=True,
         strip=True,

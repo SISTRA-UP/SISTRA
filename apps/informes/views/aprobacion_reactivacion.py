@@ -2,6 +2,11 @@
 
 import logging
 
+from apps.propuestas.forms.aprobacion import RESULTADO_EXITO
+from apps.informes.views.aprobacion_mensajes import (
+    MSG_REACTIVACION, MSG_07_05, aviso_decision,
+)
+
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -10,7 +15,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
 from django.utils import timezone
 
-from apps.informes.views.aprobacion_auditoria import auditar_intentos
+from apps.informes.views.aprobacion_auditoria import auditar_intentos, detalle_transicion
 from apps.informes.forms.aprobacion_reactivacion import (
     ReactivacionInformeForm,
     validar_condiciones_reactivacion,
@@ -49,7 +54,7 @@ def reactivar(request, id_informe):
         return JsonResponse(
             {
                 "ok": False,
-                "mensaje": "Revisa los datos de la reactivación.",
+                "mensaje": MSG_07_05,
                 "errores": formulario.errors.get_json_data(),
             },
             status=400,
@@ -87,6 +92,9 @@ def reactivar(request, id_informe):
             estado_anterior = informe.estado
 
             ahora = timezone.now()
+            detalle_auditoria = detalle_transicion(
+                informe, EstadoTramite.EN_REVISION, motivo=motivo, ahora=ahora,
+            )
             # Igual que en propuestas: conserva el plazo, no la pausa.
             # No es una nueva entrega; version_entrega no cambia.
             if informe.fecha_envio is not None:
@@ -117,10 +125,7 @@ def reactivar(request, id_informe):
                 usuario=estudiante,
                 informe=informe,
                 tipo="reactivacion_informe",
-                mensaje=(
-                    f"Tu informe {informe.codigo} fue reactivado "
-                    f"y volvió a En revisión. Motivo: {motivo}"
-                ),
+                mensaje=aviso_decision(EstadoTramite.EN_REVISION, motivo),
             )
 
             Auditoria.objects.create(
@@ -128,12 +133,8 @@ def reactivar(request, id_informe):
                 accion="reactivacion_informe",
                 tabla_afectada="informe",
                 id_registro_afectado=informe.pk,
-                detalle=(
-                    f"Estado anterior: {estado_anterior}. "
-                    f"Estado nuevo: {EstadoTramite.EN_REVISION}. "
-                    f"Motivo: {motivo}"
-                ),
-                resultado="Exitoso",
+                detalle=detalle_auditoria,
+                resultado=RESULTADO_EXITO,
             )
 
             nueva_version = informe.fecha_actualizacion.isoformat()
@@ -175,10 +176,7 @@ def reactivar(request, id_informe):
     return JsonResponse(
         {
             "ok": True,
-            "mensaje": (
-                "El informe volvió a En revisión "
-                "y se notificó al estudiante."
-            ),
+            "mensaje": MSG_REACTIVACION,
             "estado": EstadoTramite.EN_REVISION,
             "fecha_actualizacion": nueva_version,
         }

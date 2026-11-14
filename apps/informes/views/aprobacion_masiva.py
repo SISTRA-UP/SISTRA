@@ -3,12 +3,17 @@
 import json
 import logging
 
+from apps.propuestas.forms.aprobacion import RESULTADO_EXITO
+from apps.informes.views.aprobacion_mensajes import (
+    MENSAJES_DECISION, MSG_07_05, MSG_07_06, aviso_decision,
+)
+
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
-from apps.informes.views.aprobacion_auditoria import auditar_intentos
+from apps.informes.views.aprobacion_auditoria import auditar_intentos, detalle_transicion
 from apps.informes.forms.aprobacion_masiva import (
     DecisionMasivaInformeForm,
 )
@@ -48,7 +53,7 @@ def decidir_masivo(request):
         return JsonResponse(
             {
                 "ok": False,
-                "mensaje": "Revisa la selección y los campos obligatorios.",
+                "mensaje": MSG_07_05,
                 "errores": formulario.errors.get_json_data(),
             },
             status=400,
@@ -85,12 +90,7 @@ def decidir_masivo(request):
     observacion = formulario.cleaned_data["observacion"]
     tipo_rechazo = formulario.cleaned_data["tipo_rechazo"]
 
-    justificacion = request.POST.get("justificacion", "").strip()
-
-    if "\x00" in justificacion:
-        return _error(
-            "La justificación contiene un carácter no permitido."
-        )
+    justificacion = formulario.cleaned_data["justificacion"]
 
     try:
         with transaction.atomic():
@@ -140,15 +140,13 @@ def decidir_masivo(request):
                 if informe.estado == EstadoTramite.APROBADO:
                     if informe.cargues_up.exists():
                         return _error(
-                            f"El informe {informe.codigo} ya tiene "
-                            "un cargue en UP. No se modificó ninguno.",
+                            MSG_07_06,
                             estado=409,
                         )
 
                     if not justificacion:
                         return _error(
-                            "La selección contiene una aprobación. "
-                            "Justifica el cambio antes de confirmar."
+                            MSG_07_05
                         )
 
             # Solo guarda si todos los informes superaron la validación.
@@ -161,6 +159,12 @@ def decidir_masivo(request):
                         f"Justificación del cambio: {justificacion}\n\n"
                         f"Observación para el estudiante: {observacion}"
                     )
+
+                detalle_auditoria = detalle_transicion(
+                    informe, nuevo_estado, tipo_rechazo=tipo_rechazo,
+                    observacion=observacion,
+                    justificacion=justificacion if estado_anterior == EstadoTramite.APROBADO else "",
+                )
 
                 informe.estado = nuevo_estado
                 informe.save(
@@ -182,13 +186,7 @@ def decidir_masivo(request):
                     .estudiante_carrera.estudiante.usuario
                 )
 
-                mensaje = (
-                    f"Tu informe {informe.codigo} cambió a "
-                    f"{nuevo_estado}."
-                )
-
-                if observacion_guardada:
-                    mensaje += f" {observacion_guardada}"
+                mensaje = aviso_decision(nuevo_estado, observacion)
 
                 Notificacion.objects.create(
                     usuario=estudiante,
@@ -202,12 +200,8 @@ def decidir_masivo(request):
                     accion="decision_masiva_informe",
                     tabla_afectada="informe",
                     id_registro_afectado=informe.pk,
-                    detalle=(
-                        f"Estado anterior: {estado_anterior}. "
-                        f"Estado nuevo: {nuevo_estado}. "
-                        f"Operación masiva de {len(informes)} informes."
-                    ),
-                    resultado="Exitoso",
+                    detalle=detalle_auditoria,
+                    resultado=RESULTADO_EXITO,
                 )
 
     except Exception:
@@ -225,9 +219,6 @@ def decidir_masivo(request):
         {
             "ok": True,
             "cantidad": len(informes),
-            "mensaje": (
-                f"Se procesaron {len(informes)} informes "
-                "y se notificó a sus estudiantes."
-            ),
+            "mensaje": MENSAJES_DECISION[nuevo_estado],
         }
     )

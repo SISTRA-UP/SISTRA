@@ -1,5 +1,6 @@
 """SISTRA-07 · Pruebas del guardado de decisiones."""
 
+from apps.propuestas.forms.aprobacion import RESULTADO_EXITO, RESULTADO_FALLO
 from datetime import date
 from unittest.mock import patch
 
@@ -214,7 +215,7 @@ class DecisionInformeTests(TestCase):
             Auditoria.objects.filter(
                 tabla_afectada="informe",
                 id_registro_afectado=self.informe.pk,
-                resultado="Exitoso",
+                resultado=RESULTADO_EXITO,
             ).exists()
         )
 
@@ -346,6 +347,8 @@ class DecisionInformeTests(TestCase):
         )
 
         self.assertEqual(respuesta.status_code, 409)
+        self.assertEqual(respuesta.json()["mensaje"],
+            "No puedes cambiar la decisión: el estudiante ya indicó que subió el informe a la Plataforma UP.")
 
         self.comprobar_sin_cambios(
             EstadoTramite.APROBADO,
@@ -403,7 +406,7 @@ class DecisionInformeTests(TestCase):
             Auditoria.objects.filter(
                 tabla_afectada="informe",
                 id_registro_afectado=self.informe.pk,
-                resultado="Exitoso",
+                resultado=RESULTADO_EXITO,
             ).exists()
         )
 
@@ -921,7 +924,7 @@ class DecisionInformeTests(TestCase):
                         accion="decision_masiva_informe",
                         tabla_afectada="informe",
                         id_registro_afectado=informe.pk,
-                        resultado="Exitoso",
+                        resultado=RESULTADO_EXITO,
                     ).count(),
                     1,
                 )
@@ -1176,9 +1179,16 @@ class DecisionInformeTests(TestCase):
             Auditoria.objects.filter(
                 accion="reactivacion_informe",
                 id_registro_afectado=self.informe.pk,
-                resultado="Exitoso",
+                resultado=RESULTADO_EXITO,
             ).exists()
         )
+
+        registro = Auditoria.objects.get(accion="reactivacion_informe")
+        for texto in (self.estudiante.cedula, self.estudiante.nombre,
+                      "Días semáforo: 10", "Rechazado -> En revisión", datos["motivo"]):
+            self.assertIn(texto, registro.detalle)
+        self.assertEqual(respuesta.json()["mensaje"],
+                         "El informe fue reactivado y quedó en En revisión.")
 
     def test_reactivar_sin_motivo_no_guarda(self):
         datos = self.preparar_rechazado_para_reactivar()
@@ -1438,10 +1448,18 @@ class DecisionInformeTests(TestCase):
                         accion="reactivacion_masiva_informe",
                         tabla_afectada="informe",
                         id_registro_afectado=informe.pk,
-                        resultado="Exitoso",
+                        resultado=RESULTADO_EXITO,
                     ).count(),
                     1,
                 )
+
+        for informe in informes:
+            registro = Auditoria.objects.get(
+                accion="reactivacion_masiva_informe", id_registro_afectado=informe.pk)
+            estudiante = informe.propuesta.proceso.estudiante_carrera.estudiante.usuario
+            for texto in (estudiante.cedula, estudiante.nombre, "Días semáforo: 10",
+                          "Rechazado -> En revisión", datos["motivo"]):
+                self.assertIn(texto, registro.detalle)
 
     def test_reactivacion_masiva_sin_motivo_no_guarda(self):
         informes, datos = self.preparar_dos_rechazados_para_masivo()
@@ -1543,7 +1561,7 @@ class DecisionInformeTests(TestCase):
         )
 
         self.assertEqual(registro.usuario_id, self.director.pk)
-        self.assertEqual(registro.resultado, "Fallido")
+        self.assertEqual(registro.resultado, RESULTADO_FALLO)
         self.assertIn("HTTP 400", registro.detalle)
 
     def test_auditoria_registra_intento_de_estudiante(self):
@@ -1630,3 +1648,109 @@ class DecisionInformeTests(TestCase):
             informe=self.informe, tipo_accion='reactivacion_informe',
         )
         self.assertEqual(self.informe.fecha_envio, evento.fecha_hora - timedelta(days=3))
+
+    def test_textos_decision_excesivos_rechazados_y_auditados(self):
+        for campo in ('observacion', 'justificacion'):
+            for cantidad in (1001, 200000):
+                with self.subTest(campo=campo, cantidad=cantidad):
+                    respuesta = self.client.post(self.url, self.datos_decision(
+                        EstadoTramite.APROBADO, **{campo: 'x' * cantidad},
+                    ))
+                    self.assertEqual(respuesta.status_code, 400)
+                    self.assertIn(campo, respuesta.json()['errores'])
+                    self.comprobar_sin_cambios(EstadoTramite.EN_REVISION)
+        self.assertEqual(Auditoria.objects.filter(
+            accion='intento_decision_informe', resultado=RESULTADO_FALLO,
+        ).count(), 4)
+
+    def test_textos_masivos_excesivos_no_guardan(self):
+        for campo in ('observacion', 'justificacion'):
+            with self.subTest(campo=campo):
+                respuesta = self.client.post(reverse('informes:decidir_masivo'),
+                    self.datos_para_masivo([self.informe], EstadoTramite.APROBADO,
+                                          **{campo: 'x' * 1001}))
+                self.assertEqual(respuesta.status_code, 400)
+                self.assertIn(campo, respuesta.json()['errores'])
+                self.comprobar_sin_cambios(EstadoTramite.EN_REVISION)
+        self.assertEqual(Auditoria.objects.filter(
+            accion='intento_decision_masiva_informe', resultado=RESULTADO_FALLO,
+        ).count(), 2)
+
+    def test_motivo_individual_excesivo_no_reactiva(self):
+        datos = self.preparar_rechazado_para_reactivar()
+        datos['motivo'] = 'x' * 1001
+        respuesta = self.client.post(reverse('informes:reactivar',
+            kwargs={'id_informe': self.informe.pk}), datos)
+        self.assertEqual(respuesta.status_code, 400)
+        self.informe.refresh_from_db()
+        self.assertEqual(self.informe.estado, EstadoTramite.RECHAZADO)
+        self.assertEqual(HistorialEstado.objects.filter(informe=self.informe).count(), 1)
+        self.assertFalse(Notificacion.objects.filter(informe=self.informe).exists())
+        self.assertTrue(Auditoria.objects.filter(
+            accion='intento_reactivacion_informe', resultado=RESULTADO_FALLO).exists())
+
+    def test_motivo_masivo_excesivo_no_reactiva(self):
+        informes, datos = self.preparar_dos_rechazados_para_masivo()
+        datos['motivo'] = 'x' * 1001
+        respuesta = self.client.post(reverse('informes:reactivar_masivo'), datos)
+        self.assertEqual(respuesta.status_code, 400)
+        self.comprobar_reactivacion_masiva_sin_cambios(informes)
+        self.assertTrue(Auditoria.objects.filter(
+            accion='intento_reactivacion_masiva_informe', resultado=RESULTADO_FALLO).exists())
+
+    def test_auditoria_decision_incluye_identidad_plazo_y_causal(self):
+        from datetime import timedelta
+        self.informe.fecha_envio = timezone.now() - timedelta(days=10, hours=1)
+        self.informe.save()
+        respuesta = self.client.post(self.url, self.datos_decision(
+            EstadoTramite.RECHAZADO, tipo_rechazo=self.tipo_rechazo.pk,
+            observacion='Faltan resultados.',
+        ))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.json()['mensaje'],
+                         'El informe fue rechazado y se avisó al estudiante.')
+        registro = Auditoria.objects.get(accion='decision_informe')
+        self.assertEqual(registro.resultado, 'Éxito')
+        for texto in (self.estudiante.cedula, self.estudiante.nombre,
+                      'Días semáforo: 10', 'En revisión -> Rechazado',
+                      self.tipo_rechazo.nombre, 'Faltan resultados.'):
+            self.assertIn(texto, registro.detalle)
+
+    def test_aviso_individual_no_expone_justificacion_interna(self):
+        self.informe.estado = EstadoTramite.APROBADO
+        self.informe.save()
+        respuesta = self.client.post(self.url, self.datos_decision(
+            EstadoTramite.REQUIERE_MODIFICACION, observacion='Corrige el título.',
+            justificacion='Detalle interno reservado.',
+        ))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(Notificacion.objects.get(informe=self.informe).mensaje,
+                         'Tu informe cambió a Requiere modificación. Corrige el título.')
+        self.assertIn('Detalle interno reservado.', HistorialEstado.objects.get(
+            informe=self.informe).observacion)
+        self.assertIn('Detalle interno reservado.', Auditoria.objects.get(
+            accion='decision_informe').detalle)
+
+    def test_aviso_masivo_no_expone_justificacion_interna(self):
+        self.informe.estado = EstadoTramite.APROBADO
+        self.informe.save()
+        respuesta = self.client.post(reverse('informes:decidir_masivo'),
+            self.datos_para_masivo([self.informe], EstadoTramite.RECHAZADO,
+                tipo_rechazo=self.tipo_rechazo.pk, observacion='Revisa los resultados.',
+                justificacion='Detalle interno reservado.'))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(Notificacion.objects.get(informe=self.informe).mensaje,
+                         'Tu informe cambió a Rechazado. Revisa los resultados.')
+        self.assertIn('Detalle interno reservado.', HistorialEstado.objects.get(
+            informe=self.informe).observacion)
+        registro = Auditoria.objects.get(accion='decision_masiva_informe')
+        for texto in (self.estudiante.cedula, self.estudiante.nombre,
+                      'Días semáforo:', self.tipo_rechazo.nombre,
+                      'Detalle interno reservado.'):
+            self.assertIn(texto, registro.detalle)
+
+    def test_observacion_de_mil_caracteres_permitida(self):
+        respuesta = self.client.post(self.url, self.datos_decision(
+            EstadoTramite.APROBADO, observacion='x' * 1000))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.json()['mensaje'], 'El informe fue aprobado.')

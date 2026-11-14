@@ -43,7 +43,7 @@
                         <label for="motivo-masivo" class="form-label">
                             Motivo de la reactivación
                         </label>
-                        <textarea
+                        <textarea maxlength="{{ form_decision.observacion.field.max_length }}"
                             id="motivo-masivo"
                             name="motivo"
                             class="form-control"
@@ -78,7 +78,7 @@
                         <label for="observacion-masiva" class="form-label">
                             Observación común para los estudiantes
                         </label>
-                        <textarea
+                        <textarea maxlength="{{ form_decision.observacion.field.max_length }}"
                             id="observacion-masiva"
                             name="observacion"
                             class="form-control"
@@ -90,7 +90,7 @@
                         <label for="justificacion-masiva" class="form-label">
                             Justificación del cambio de aprobación
                         </label>
-                        <textarea
+                        <textarea maxlength="{{ form_decision.observacion.field.max_length }}"
                             id="justificacion-masiva"
                             name="justificacion"
                             class="form-control"

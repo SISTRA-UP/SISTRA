@@ -7,6 +7,8 @@ from django.core.exceptions import PermissionDenied
 from django.http import Http404
 
 from apps.seguimiento.models import Auditoria
+from apps.propuestas.forms.aprobacion import RESULTADO_FALLO, RESULTADO_BLOQUEADO
+from apps.informes.views.aprobacion_semaforo import tiempo_acumulado_revision
 
 
 logger = logging.getLogger(__name__)
@@ -21,7 +23,7 @@ def _registrar_intento(request, accion, codigo_http, id_informe=None):
         return
 
     bloqueado = codigo_http in (403, 404, 409)
-    resultado = "Bloqueado" if bloqueado else "Fallido"
+    resultado = RESULTADO_BLOQUEADO if bloqueado else RESULTADO_FALLO
 
     descripciones = {
         400: "Solicitud rechazada por datos incompletos o no válidos.",
@@ -105,3 +107,21 @@ def auditar_intentos(accion):
         return ejecutar
 
     return decorar
+
+
+def detalle_transicion(informe, estado_nuevo, tipo_rechazo=None,
+                       observacion="", motivo="", justificacion="", ahora=None):
+    """Captura los datos del BRD antes de cambiar el estado o fecha de envío."""
+    estudiante = informe.propuesta.proceso.estudiante_carrera.estudiante.usuario
+    dias = tiempo_acumulado_revision(informe, ahora=ahora).days
+    partes = [
+        f"Cédula: {estudiante.cedula}",
+        f"Estudiante: {estudiante.nombre}",
+        f"Días semáforo: {dias}",
+        f"Transición: {informe.estado} -> {estado_nuevo}",
+        f"Causal: {tipo_rechazo.nombre if tipo_rechazo else 'No aplica'}",
+        f"Observación: {observacion or motivo}",
+    ]
+    if justificacion:
+        partes.append(f"Justificación del cambio: {justificacion}")
+    return " | ".join(partes)

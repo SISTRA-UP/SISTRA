@@ -100,7 +100,7 @@
                         <label for="justificacion" class="form-label">
                             Justificación del cambio de aprobación
                         </label>
-                        <textarea
+                        <textarea maxlength="{{ form_decision.observacion.field.max_length }}"
                             id="justificacion"
                             name="justificacion"
                             class="form-control"

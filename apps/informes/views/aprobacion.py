@@ -2,7 +2,6 @@
 
 Solo el responsable de este requisito edita este archivo.
 """
-"""SISTRA-07 · Bandeja de aprobación de informes."""
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied

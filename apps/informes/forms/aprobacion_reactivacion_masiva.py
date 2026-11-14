@@ -1,12 +1,14 @@
 """SISTRA-07 · Formulario de reactivación masiva."""
 
 from django import forms
+from apps.propuestas.forms.aprobacion import LONGITUD_MAXIMA_TEXTO
 
 from apps.informes.models import Informe
 
 
 class ReactivacionMasivaInformeForm(forms.Form):
     motivo = forms.CharField(
+        max_length=LONGITUD_MAXIMA_TEXTO,
         required=True,
         strip=True,
         error_messages={

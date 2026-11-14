@@ -1,7 +1,7 @@
-"""SISTRA-07 · Aprobación de informe: formularios."""
 """SISTRA-07 · Formularios para la aprobación de informes."""
 
 from django import forms
+from apps.propuestas.forms.aprobacion import LONGITUD_MAXIMA_TEXTO
 
 from apps.parametrizacion.models import TipoRechazo
 from apps.propuestas.models import EstadoTramite
@@ -45,6 +45,7 @@ class DecisionInformeForm(forms.Form):
     )
 
     observacion = forms.CharField(
+        max_length=LONGITUD_MAXIMA_TEXTO,
         label="Observación",
         required=False,
         strip=True,
@@ -55,6 +56,12 @@ class DecisionInformeForm(forms.Form):
                 "placeholder": "Escribe la observación para el estudiante.",
             }
         ),
+    )
+
+    justificacion = forms.CharField(
+        label="Justificación interna del cambio",
+        required=False, strip=True, max_length=LONGITUD_MAXIMA_TEXTO,
+        widget=forms.Textarea(attrs={"class": "form-control", "rows": 3}),
     )
 
     def __init__(self, *args, **kwargs):
@@ -78,7 +85,7 @@ class DecisionInformeForm(forms.Form):
             EstadoTramite.RECHAZADO,
         )
 
-        if exige_observacion and not observacion:
+        if exige_observacion and not observacion and "observacion" not in self.errors:
             self.add_error(
                 "observacion",
                 "Escribe una observación para explicar la decisión.",

@@ -2,13 +2,18 @@
 
 import logging
 
+from apps.propuestas.forms.aprobacion import RESULTADO_EXITO
+from apps.informes.views.aprobacion_mensajes import (
+    MENSAJES_DECISION, MSG_07_05, MSG_07_06, aviso_decision,
+)
+
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
 
-from apps.informes.views.aprobacion_auditoria import auditar_intentos
+from apps.informes.views.aprobacion_auditoria import auditar_intentos, detalle_transicion
 from apps.informes.forms.aprobacion import DecisionInformeForm
 from apps.informes.views.aprobacion import _informes_del_director
 from apps.propuestas.models import EstadoTramite
@@ -44,7 +49,7 @@ def decidir(request, id_informe):
         return JsonResponse(
             {
                 "ok": False,
-                "mensaje": "Revisa los campos de la decisión.",
+                "mensaje": MSG_07_05,
                 "errores": formulario.errors.get_json_data(),
             },
             status=400,
@@ -62,12 +67,7 @@ def decidir(request, id_informe):
             "Actualiza la pantalla antes de confirmar la decisión."
         )
 
-    justificacion = request.POST.get("justificacion", "").strip()
-
-    if "\x00" in justificacion:
-        return _respuesta_error(
-            "La justificación contiene un carácter no permitido."
-        )
+    justificacion = formulario.cleaned_data["justificacion"]
 
     nuevo_estado = formulario.cleaned_data["nuevo_estado"]
     observacion = formulario.cleaned_data["observacion"]
@@ -112,14 +112,13 @@ def decidir(request, id_informe):
             if estado_anterior == EstadoTramite.APROBADO:
                 if informe.cargues_up.exists():
                     return _respuesta_error(
-                        "No puedes cambiar la decisión: el estudiante "
-                        "ya registró el cargue del informe en UP.",
+                        MSG_07_06,
                         estado=409,
                     )
 
                 if not justificacion:
                     return _respuesta_error(
-                        "Debes justificar el cambio de una aprobación."
+                        MSG_07_05
                     )
 
             observacion_guardada = observacion
@@ -129,6 +128,12 @@ def decidir(request, id_informe):
                     f"Justificación del cambio: {justificacion}\n\n"
                     f"Observación para el estudiante: {observacion}"
                 )
+
+            detalle_auditoria = detalle_transicion(
+                informe, nuevo_estado, tipo_rechazo=tipo_rechazo,
+                observacion=observacion,
+                justificacion=justificacion if estado_anterior == EstadoTramite.APROBADO else "",
+            )
 
             informe.estado = nuevo_estado
             informe.save(
@@ -150,12 +155,7 @@ def decidir(request, id_informe):
                 .estudiante_carrera.estudiante.usuario
             )
 
-            mensaje = (
-                f"Tu informe {informe.codigo} cambió a {nuevo_estado}."
-            )
-
-            if observacion_guardada:
-                mensaje += f" {observacion_guardada}"
+            mensaje = aviso_decision(nuevo_estado, observacion)
 
             Notificacion.objects.create(
                 usuario=estudiante,
@@ -169,12 +169,8 @@ def decidir(request, id_informe):
                 accion="decision_informe",
                 tabla_afectada="informe",
                 id_registro_afectado=informe.pk,
-                detalle=(
-                    f"Estado anterior: {estado_anterior}. "
-                    f"Estado nuevo: {nuevo_estado}. "
-                    f"Historial y notificación registrados."
-                ),
-                resultado="Exitoso",
+                detalle=detalle_auditoria,
+                resultado=RESULTADO_EXITO,
             )
 
             fecha_actualizacion = informe.fecha_actualizacion.isoformat()
@@ -201,7 +197,7 @@ def decidir(request, id_informe):
     return JsonResponse(
         {
             "ok": True,
-            "mensaje": "La decisión se guardó y se notificó al estudiante.",
+            "mensaje": MENSAJES_DECISION[nuevo_estado],
             "estado": nuevo_estado,
             "fecha_actualizacion": fecha_actualizacion,
         }
