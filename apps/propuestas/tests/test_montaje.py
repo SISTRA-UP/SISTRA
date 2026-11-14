@@ -30,6 +30,8 @@ from apps.procesos.models import EstadoAvance, ProcesoTrabajoSocial
 from apps.propuestas.forms.montaje import (
     CAMPOS_OBLIGATORIOS_ENVIO,
     MSG_01_03,
+    MSG_01_04,
+    MSG_01_05,
     CargaPlantillaWordForm,
     PropuestaMontajeForm,
 )
@@ -389,6 +391,85 @@ class TestMontajeVistasYFlujos(BaseMontajeTestCase):
         self.assertIsNotNone(propuesta)
         self.assertEqual(propuesta.version_plantilla, version)
 
+    def test_carga_word_corrupto_rechaza_sin_error_500_y_audita_fallo(self):
+        """Un Word con contenido corrupto se rechaza con MSG-01-03 sin error 500 y se audita Fallo."""
+        self.client.force_login(self.user_estudiante)
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+            z.writestr('word/document.xml', b'<w:document><w:body><unclosed_tag')
+        buf.seek(0)
+        archivo = SimpleUploadedFile('corrupto.docx', buf.getvalue())
+
+        resp = self.client.post(
+            reverse('propuestas:montaje'),
+            {'accion': 'importar_word', 'archivo': archivo},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, MSG_01_03)
+
+        auditoria = Auditoria.objects.filter(
+            usuario=self.user_estudiante,
+            accion='Cargar plantilla',
+            resultado='Fallo',
+        ).first()
+        self.assertIsNotNone(auditoria)
+
+    def test_carga_word_muestra_etiquetas_faltantes(self):
+        """Al subir una plantilla a la que le faltan etiquetas, la pantalla muestra MSG-01-03 y nombra las faltantes."""
+        self.client.force_login(self.user_estudiante)
+        etiquetas_parciales = {
+            'Título de la propuesta': 'Proyecto Parcial',
+            'Entidad': 'Entidad Parcial',
+        }
+        contenido = _docx_con_etiquetas(etiquetas_parciales)
+        archivo = SimpleUploadedFile('incompleto.docx', contenido)
+
+        resp = self.client.post(
+            reverse('propuestas:montaje'),
+            {'accion': 'importar_word', 'archivo': archivo},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, MSG_01_03)
+        self.assertContains(resp, 'Etiquetas no encontradas')
+
+        auditoria = Auditoria.objects.filter(
+            usuario=self.user_estudiante,
+            accion='Cargar plantilla',
+            resultado='Fallo',
+        ).latest('fecha_hora')
+        self.assertIsNotNone(auditoria)
+        self.assertIn('Faltan etiquetas', auditoria.detalle)
+
+    def test_subir_archivo_no_docx_registra_auditoria_fallo(self):
+        """Al subir un archivo que no es .docx queda en auditoría Cargar plantilla / Fallo."""
+        self.client.force_login(self.user_estudiante)
+        archivo = SimpleUploadedFile('documento.pdf', b'contenido pdf no docx')
+
+        resp = self.client.post(
+            reverse('propuestas:montaje'),
+            {'accion': 'importar_word', 'archivo': archivo},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, MSG_01_04)
+
+        auditoria = Auditoria.objects.filter(
+            usuario=self.user_estudiante,
+            accion='Cargar plantilla',
+            resultado='Fallo',
+        ).latest('fecha_hora')
+        self.assertIsNotNone(auditoria)
+        self.assertIn(MSG_01_04, auditoria.detalle)
+
+    def test_enviar_incompleto_muestra_msg_05_en_campos_obligatorios(self):
+        """Al intentar enviar con campos obligatorios vacíos se muestra MSG-01-05 en cada campo."""
+        self.client.force_login(self.user_estudiante)
+        resp = self.client.post(reverse('propuestas:montaje'), {
+            'accion': 'enviar',
+            'titulo': '',
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, MSG_01_05)
+
 
 # ---------------------------------------------------------------------------
 # Pruebas del servicio de plantilla Word
@@ -471,3 +552,36 @@ class TestServicioPlantillaWord(TestCase):
         with self.assertRaises(PlantillaInvalidaError) as ctx:
             extraer_datos_plantilla(buf)
         self.assertIn('Etiquetas no encontradas', str(ctx.exception))
+
+    def test_sector_publico_sin_tilde_o_mayusculas_normaliza_a_valor_oficial(self):
+        """«publico» o «PÚBLICO» en la plantilla queda como el valor oficial «Público»."""
+        # 1. minúsculas sin tilde
+        etiquetas_min = {**ETIQUETAS_COMPLETAS, 'Sector de la entidad': 'publico'}
+        datos_min, avisos_min = extraer_datos_plantilla(io.BytesIO(_docx_con_etiquetas(etiquetas_min)))
+        self.assertEqual(datos_min.get('sector_entidad'), SectorEntidad.PUBLICO)
+        self.assertEqual(datos_min.get('sector_entidad'), 'Público')
+        self.assertEqual(avisos_min, [])
+
+        # 2. mayúsculas con tilde
+        etiquetas_may = {**ETIQUETAS_COMPLETAS, 'Sector de la entidad': 'PÚBLICO'}
+        datos_may, avisos_may = extraer_datos_plantilla(io.BytesIO(_docx_con_etiquetas(etiquetas_may)))
+        self.assertEqual(datos_may.get('sector_entidad'), SectorEntidad.PUBLICO)
+        self.assertEqual(datos_may.get('sector_entidad'), 'Público')
+        self.assertEqual(avisos_may, [])
+
+        # 3. mayúsculas privado
+        etiquetas_priv = {**ETIQUETAS_COMPLETAS, 'Sector de la entidad': 'PRIVADO'}
+        datos_priv, avisos_priv = extraer_datos_plantilla(io.BytesIO(_docx_con_etiquetas(etiquetas_priv)))
+        self.assertEqual(datos_priv.get('sector_entidad'), SectorEntidad.PRIVADO)
+        self.assertEqual(datos_priv.get('sector_entidad'), 'Privado')
+        self.assertEqual(avisos_priv, [])
+
+    def test_word_contenido_corrupto_lanza_plantilla_invalida_error(self):
+        """Un Word con document.xml corrupto lanza PlantillaInvalidaError (no ParseError)."""
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+            z.writestr('word/document.xml', b'<w:document><w:body><unclosed')
+        buf.seek(0)
+
+        with self.assertRaises(PlantillaInvalidaError):
+            extraer_datos_plantilla(buf)

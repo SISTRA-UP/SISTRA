@@ -453,6 +453,8 @@
                 const ok = confirm('Tienes cambios sin guardar. ¿Deseas salir sin guardar?');
                 if (!ok) {
                     e.preventDefault();
+                } else {
+                    formModificado = false;
                 }
             }
         });

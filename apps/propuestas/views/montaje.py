@@ -19,6 +19,7 @@ from apps.propuestas.forms.montaje import (
     MSG_01_01,
     MSG_01_02,
     MSG_01_03,
+    MSG_01_04,
     MSG_01_07,
     MSG_01_08,
     CargaPlantillaWordForm,
@@ -147,15 +148,23 @@ def inicio(request):
                         'Revisa la información y pulsa «Guardar borrador».',
                     )
                 except PlantillaInvalidaError as err:
+                    detalle = getattr(err, 'detalle_auditoria', str(err))
                     _registrar_auditoria(
                         request.user, 'Cargar plantilla', 'Fallo',
                         id_registro=propuesta.pk if propuesta else None,
-                        detalle=str(err),
+                        detalle=detalle,
                     )
-                    messages.error(request, MSG_01_03)
+                    messages.error(request, str(err))
                     form = PropuestaMontajeForm(instance=propuesta)
             else:
-                for err in word_form.errors.get('archivo', []):
+                errores_archivo = word_form.errors.get('archivo', [])
+                motivo = '; '.join(str(e) for e in errores_archivo) or MSG_01_04
+                _registrar_auditoria(
+                    request.user, 'Cargar plantilla', 'Fallo',
+                    id_registro=propuesta.pk if propuesta else None,
+                    detalle=motivo,
+                )
+                for err in errores_archivo:
                     messages.error(request, err)
                 form = PropuestaMontajeForm(instance=propuesta)
 

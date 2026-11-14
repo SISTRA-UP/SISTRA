@@ -153,6 +153,7 @@ class PropuestaMontajeForm(forms.ModelForm):
             for campo in CAMPOS_OBLIGATORIOS_ENVIO:
                 val = cleaned.get(campo)
                 if val is None or (isinstance(val, str) and not val.strip()):
+                    self.add_error(campo, MSG_01_05)
                     label = self.fields[campo].label or campo
                     faltantes.append(label)
             if faltantes:

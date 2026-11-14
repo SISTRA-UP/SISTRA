@@ -8,11 +8,17 @@ import xml.etree.ElementTree as ET
 import zipfile
 from io import BytesIO
 
+from apps.propuestas.forms.montaje import MSG_01_03
 from apps.propuestas.models import SectorEntidad
 
 
 class PlantillaInvalidaError(Exception):
     """El archivo no es la plantilla de SISTRA o su estructura fue modificada."""
+
+    def __init__(self, mensaje: str = MSG_01_03, detalle_auditoria: str | None = None):
+        super().__init__(mensaje)
+        self.mensaje = mensaje
+        self.detalle_auditoria = detalle_auditoria or mensaje
 
 
 # ---------------------------------------------------------------------------
@@ -41,26 +47,24 @@ ETIQUETAS_CAMPOS: dict[str, str] = {
 # Todos los campos que deben estar presentes para que la plantilla sea válida
 CAMPOS_PLANTILLA_REQUERIDOS: frozenset[str] = frozenset(ETIQUETAS_CAMPOS.values())
 
-# Lookup normalizado: texto normalizado -> campo del modelo
-def _norm(t: str) -> str:
-    return unicodedata.normalize('NFKD', t).encode('ASCII', 'ignore').decode().lower().strip()
-
-_LOOKUP: dict[str, str] = {
-    _norm(etiqueta): campo
-    for etiqueta, campo in ETIQUETAS_CAMPOS.items()
-}
-
-# Valores válidos para sector_entidad (SectorEntidad choices)
-_SECTORES_VALIDOS: set[str] = {
-    unicodedata.normalize('NFKD', v).encode('ASCII', 'ignore').decode().lower().strip()
-    for v in [SectorEntidad.PUBLICO, SectorEntidad.PRIVADO]
-}
-
 
 def normalizar_etiqueta(texto: str) -> str:
     """Normaliza texto removiendo tildes, mayúsculas y caracteres de puntuación."""
     t = unicodedata.normalize('NFKD', texto or '').encode('ASCII', 'ignore').decode().lower()
     return re.sub(r'[\s:._\-]+', ' ', t).strip()
+
+
+# Lookup normalizado: texto normalizado -> campo del modelo
+_LOOKUP: dict[str, str] = {
+    normalizar_etiqueta(etiqueta): campo
+    for etiqueta, campo in ETIQUETAS_CAMPOS.items()
+}
+
+# Mapeo normalizado -> valor oficial de SectorEntidad ('Público' / 'Privado')
+_MAPA_SECTORES: dict[str, str] = {
+    normalizar_etiqueta(SectorEntidad.PUBLICO): SectorEntidad.PUBLICO,
+    normalizar_etiqueta(SectorEntidad.PRIVADO): SectorEntidad.PRIVADO,
+}
 
 
 def extraer_datos_plantilla(archivo) -> tuple[dict[str, str], list[str]]:
@@ -70,7 +74,7 @@ def extraer_datos_plantilla(archivo) -> tuple[dict[str, str], list[str]]:
         (datos, avisos): datos extraídos y lista de advertencias (p.ej. sector inválido).
 
     Raises:
-        PlantillaInvalidaError: si el archivo no es la plantilla oficial o faltan etiquetas.
+        PlantillaInvalidaError: si el archivo no es la plantilla oficial, está corrupto o faltan etiquetas.
     """
     if hasattr(archivo, 'read'):
         contenido = archivo.read()
@@ -87,16 +91,37 @@ def _extraer_con_xml(archivo_bytes: BytesIO) -> tuple[dict[str, str], list[str]]
     try:
         with zipfile.ZipFile(archivo_bytes) as z:
             if 'word/document.xml' not in z.namelist():
-                raise PlantillaInvalidaError('Formato .docx no válido: falta word/document.xml')
+                raise PlantillaInvalidaError(
+                    MSG_01_03,
+                    detalle_auditoria='Formato .docx no válido: falta word/document.xml',
+                )
             # Rechazar documentos enormes antes de parsear (5 MB descomprimido)
             info = z.getinfo('word/document.xml')
             if info.file_size > 5 * 1024 * 1024:
-                raise PlantillaInvalidaError('El documento supera el tamaño máximo permitido para su procesamiento.')
+                raise PlantillaInvalidaError(
+                    'El documento supera el tamaño máximo permitido para su procesamiento.',
+                    detalle_auditoria='El tamaño de word/document.xml supera los 5 MB permitidos.',
+                )
             xml_content = z.read('word/document.xml')
+        root = ET.fromstring(xml_content)
+    except PlantillaInvalidaError:
+        raise
     except (zipfile.BadZipFile, KeyError) as e:
-        raise PlantillaInvalidaError('El archivo no es un archivo .docx válido.') from e
+        raise PlantillaInvalidaError(
+            MSG_01_03,
+            detalle_auditoria=f'Archivo .docx corrupto o no válido: {e}',
+        ) from e
+    except ET.ParseError as e:
+        raise PlantillaInvalidaError(
+            MSG_01_03,
+            detalle_auditoria=f'Contenido XML corrupto en document.xml: {e}',
+        ) from e
+    except Exception as e:
+        raise PlantillaInvalidaError(
+            MSG_01_03,
+            detalle_auditoria=f'Error inesperado al leer la plantilla: {e}',
+        ) from e
 
-    root = ET.fromstring(xml_content)
     ns = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
 
     datos: dict[str, str] = {}
@@ -145,8 +170,6 @@ def _extraer_con_xml(archivo_bytes: BytesIO) -> tuple[dict[str, str], list[str]]
     datos = {k: v for k, v in datos.items() if v}
 
     # --- Validar que todas las etiquetas requeridas estén presentes ---
-    campos_encontrados = set(datos.keys()) | {c for c in CAMPOS_PLANTILLA_REQUERIDOS if c in acumulado or c in datos}
-    # Se considera "presente" si la etiqueta apareció aunque el valor esté vacío
     etiquetas_presentes: set[str] = set()
     for tbl in root.findall('.//w:tbl', ns):
         for tr in tbl.findall('.//w:tr', ns):
@@ -166,20 +189,20 @@ def _extraer_con_xml(archivo_bytes: BytesIO) -> tuple[dict[str, str], list[str]]
 
     faltantes = CAMPOS_PLANTILLA_REQUERIDOS - etiquetas_presentes
     if faltantes:
-        # Mapear de vuelta a nombres legibles para el mensaje
         nombre_por_campo = {v: k for k, v in ETIQUETAS_CAMPOS.items()}
         nombres_faltantes = ', '.join(sorted(nombre_por_campo.get(c, c) for c in faltantes))
         raise PlantillaInvalidaError(
-            f'El archivo no corresponde a la plantilla de SISTRA o fue modificada su estructura. '
-            f'Descarga la plantilla de nuevo. '
-            f'(Etiquetas no encontradas: {nombres_faltantes})'
+            f'{MSG_01_03} (Etiquetas no encontradas: {nombres_faltantes})',
+            detalle_auditoria=f'Faltan etiquetas requeridas: {nombres_faltantes}',
         )
 
     # --- Validar sector_entidad ---
     avisos: list[str] = []
     if 'sector_entidad' in datos:
         norm_sector = normalizar_etiqueta(datos['sector_entidad'])
-        if norm_sector not in _SECTORES_VALIDOS:
+        if norm_sector in _MAPA_SECTORES:
+            datos['sector_entidad'] = _MAPA_SECTORES[norm_sector]
+        else:
             avisos.append(
                 f'El valor «{datos["sector_entidad"]}» en «Sector de la entidad» no es válido '
                 f'(debe ser Público o Privado). El campo quedó vacío para que lo selecciones.'
