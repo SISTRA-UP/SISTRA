@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
+from django.utils import timezone
 
 from apps.informes.views.aprobacion_auditoria import auditar_intentos
 from apps.informes.forms.aprobacion_reactivacion import (
@@ -16,6 +17,7 @@ from apps.informes.forms.aprobacion_reactivacion_masiva import (
     ReactivacionMasivaInformeForm,
 )
 from apps.informes.views.aprobacion import _informes_del_director
+from apps.informes.views.aprobacion_semaforo import tiempo_acumulado_revision
 from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.seguimiento.models import (
     Auditoria,
@@ -121,13 +123,18 @@ def reactivar_masivo(request):
                     )
 
             for informe in informes:
+                ahora = timezone.now()
+                # Igual que en propuestas: conserva el plazo, no la pausa.
+                # No es una nueva entrega; version_entrega no cambia.
+                if informe.fecha_envio is not None:
+                    informe.fecha_envio = ahora - tiempo_acumulado_revision(
+                        informe, ahora=ahora,
+                    )
                 informe.estado = EstadoTramite.EN_REVISION
                 informe.save(
-                    update_fields=["estado", "fecha_actualizacion"]
+                    update_fields=["estado", "fecha_envio", "fecha_actualizacion"]
                 )
 
-                # Conserva fecha_envio y version_entrega.
-                # El historial inicia un nuevo intervalo de revisión.
                 HistorialEstado.objects.create(
                     informe=informe,
                     usuario=request.user,
@@ -135,6 +142,7 @@ def reactivar_masivo(request):
                     estado_nuevo=EstadoTramite.EN_REVISION,
                     motivo_reactivacion=motivo,
                     tipo_accion="reactivacion_masiva_informe",
+                    fecha_hora=ahora,
                 )
 
                 estudiante = (

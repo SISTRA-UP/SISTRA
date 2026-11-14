@@ -8,6 +8,7 @@ from django.db import IntegrityError, transaction
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
+from django.utils import timezone
 
 from apps.informes.views.aprobacion_auditoria import auditar_intentos
 from apps.informes.forms.aprobacion_reactivacion import (
@@ -15,6 +16,7 @@ from apps.informes.forms.aprobacion_reactivacion import (
     validar_condiciones_reactivacion,
 )
 from apps.informes.views.aprobacion import _informes_del_director
+from apps.informes.views.aprobacion_semaforo import tiempo_acumulado_revision
 from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.seguimiento.models import (
     Auditoria,
@@ -37,7 +39,7 @@ def _error(mensaje, estado=400):
 @require_POST
 @auditar_intentos("reactivacion_informe")
 def reactivar(request, id_informe):
-    """Reactiva sin borrar el historial ni reiniciar la fecha de envío."""
+    """Reactiva conservando el tiempo de revisión y excluyendo la pausa."""
 
     informes_permitidos = _informes_del_director(request.user)
 
@@ -84,11 +86,16 @@ def reactivar(request, id_informe):
 
             estado_anterior = informe.estado
 
-            # No se cambia fecha_envio ni version_entrega:
-            # el estudiante no está enviando una nueva entrega.
+            ahora = timezone.now()
+            # Igual que en propuestas: conserva el plazo, no la pausa.
+            # No es una nueva entrega; version_entrega no cambia.
+            if informe.fecha_envio is not None:
+                informe.fecha_envio = ahora - tiempo_acumulado_revision(
+                    informe, ahora=ahora,
+                )
             informe.estado = EstadoTramite.EN_REVISION
             informe.save(
-                update_fields=["estado", "fecha_actualizacion"]
+                update_fields=["estado", "fecha_envio", "fecha_actualizacion"]
             )
 
             HistorialEstado.objects.create(
@@ -98,6 +105,7 @@ def reactivar(request, id_informe):
                 estado_nuevo=EstadoTramite.EN_REVISION,
                 motivo_reactivacion=motivo,
                 tipo_accion="reactivacion_informe",
+                fecha_hora=ahora,
             )
 
             estudiante = (

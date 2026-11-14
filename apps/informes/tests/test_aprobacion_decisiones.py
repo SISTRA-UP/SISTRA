@@ -1126,7 +1126,7 @@ class DecisionInformeTests(TestCase):
             self.informe.estado,
             EstadoTramite.EN_REVISION,
         )
-        self.assertEqual(self.informe.fecha_envio, fecha_original)
+        self.assertGreater(self.informe.fecha_envio, fecha_original)
         self.assertEqual(self.informe.version_entrega, entrega_original)
 
         self.assertEqual(
@@ -1152,6 +1152,12 @@ class DecisionInformeTests(TestCase):
         self.assertEqual(
             reactivacion.estado_nuevo,
             EstadoTramite.EN_REVISION,
+        )
+
+        from datetime import timedelta
+        self.assertEqual(
+            self.informe.fecha_envio,
+            reactivacion.fecha_hora - timedelta(days=10),
         )
 
         aviso = Notificacion.objects.get(informe=self.informe)
@@ -1373,7 +1379,7 @@ class DecisionInformeTests(TestCase):
                     informe.estado,
                     EstadoTramite.EN_REVISION,
                 )
-                self.assertEqual(
+                self.assertGreater(
                     informe.fecha_envio,
                     fechas_originales[informe.pk],
                 )
@@ -1403,6 +1409,12 @@ class DecisionInformeTests(TestCase):
                 self.assertEqual(
                     evento.estado_nuevo,
                     EstadoTramite.EN_REVISION,
+                )
+
+                from datetime import timedelta
+                self.assertEqual(
+                    informe.fecha_envio,
+                    evento.fecha_hora - timedelta(days=10),
                 )
 
                 aviso = Notificacion.objects.get(informe=informe)
@@ -1553,3 +1565,68 @@ class DecisionInformeTests(TestCase):
         self.assertEqual(registro.usuario_id, self.estudiante.pk)
         self.assertEqual(registro.resultado, "Bloqueado")
         self.assertIn("HTTP 403", registro.detalle)
+
+    def test_segunda_reactivacion_conserva_solo_revision_y_no_pausas(self):
+        from datetime import timedelta
+        from apps.informes.views.aprobacion_semaforo import tiempo_acumulado_revision
+
+        datos = self.preparar_rechazado_para_reactivar()
+        url = reverse('informes:reactivar', kwargs={'id_informe': self.informe.pk})
+        respuesta = self.client.post(url, datos)
+        self.assertEqual(respuesta.status_code, 200)
+        self.informe.refresh_from_db()
+        primera = HistorialEstado.objects.get(
+            informe=self.informe, tipo_accion='reactivacion_informe',
+        ).fecha_hora
+        # Pasan 2 días de revisión y luego 5 días rechazado.
+        self.informe.estado = EstadoTramite.RECHAZADO
+        self.informe.save()
+        HistorialEstado.objects.create(
+            informe=self.informe, usuario=self.director,
+            estado_anterior=EstadoTramite.EN_REVISION,
+            estado_nuevo=EstadoTramite.RECHAZADO,
+            fecha_hora=primera + timedelta(days=2), tipo_accion='decision_informe',
+        )
+        segunda = primera + timedelta(days=7)
+        datos['fecha_actualizacion'] = self.informe.fecha_actualizacion.isoformat()
+        with patch('apps.informes.views.aprobacion_reactivacion.timezone.now', return_value=segunda):
+            # Renueva la sesión: el reloj avanzó siete días.
+            self.client.force_login(self.director)
+            respuesta = self.client.post(url, datos)
+        self.assertEqual(respuesta.status_code, 200)
+        self.informe.refresh_from_db()
+        self.assertEqual(self.informe.fecha_envio, segunda - timedelta(days=12))
+        self.assertEqual(
+            tiempo_acumulado_revision(self.informe, ahora=segunda),
+            timedelta(days=12),
+        )
+
+    def test_reactivar_despues_de_reenvio_no_recupera_plazo_anterior(self):
+        from datetime import timedelta
+
+        ahora = timezone.now()
+        self.informe.estado = EstadoTramite.RECHAZADO
+        self.informe.fecha_envio = ahora - timedelta(days=4)
+        self.informe.save()
+        for dias, anterior, nuevo in [
+            (20, EstadoTramite.BORRADOR, EstadoTramite.EN_REVISION),
+            (10, EstadoTramite.EN_REVISION, EstadoTramite.REQUIERE_MODIFICACION),
+            (4, EstadoTramite.REQUIERE_MODIFICACION, EstadoTramite.EN_REVISION),
+            (1, EstadoTramite.EN_REVISION, EstadoTramite.RECHAZADO),
+        ]:
+            HistorialEstado.objects.create(
+                informe=self.informe, usuario=self.director,
+                estado_anterior=anterior, estado_nuevo=nuevo,
+                fecha_hora=ahora - timedelta(days=dias), tipo_accion='prueba_ciclo',
+            )
+        respuesta = self.client.post(
+            reverse('informes:reactivar', kwargs={'id_informe': self.informe.pk}),
+            {'motivo': 'Rechazo por error.',
+             'fecha_actualizacion': self.informe.fecha_actualizacion.isoformat()},
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        self.informe.refresh_from_db()
+        evento = HistorialEstado.objects.get(
+            informe=self.informe, tipo_accion='reactivacion_informe',
+        )
+        self.assertEqual(self.informe.fecha_envio, evento.fecha_hora - timedelta(days=3))
