@@ -8,7 +8,7 @@ from datetime import date
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.parametrizacion.models import Carrera
+from apps.parametrizacion.models import Actividad, Carrera, Plantilla
 from apps.usuarios.models import Permiso, Rol, RolPermiso, Usuario
 
 
@@ -77,6 +77,13 @@ class AccesoModuloTests(TestCase):
         cls.admin = _crear_admin()
         cls.director = _crear_director('900000002', 'dir@unipamplona.edu.co')
         cls.estudiante = _crear_estudiante()
+        cls.actividad = Actividad.objects.create(
+            nombre='Etapa de acceso', descripcion='', orden=999,
+            obligatoria=False, estado='Activo',
+        )
+        cls.plantilla = Plantilla.objects.create(
+            nombre='Plantilla de acceso', tipo='otro', estado='Activo',
+        )
 
     def test_sin_sesion_redirige(self):
         for nombre in URLS_SOLO_ADMIN:
@@ -97,6 +104,30 @@ class AccesoModuloTests(TestCase):
             with self.subTest(url=nombre):
                 resp = self.client.get(reverse(nombre))
                 self.assertEqual(resp.status_code, 403, msg=f'Estudiante debe recibir 403 en {nombre}')
+
+    def test_director_recibe_403_en_operaciones_de_escritura_y_descarga(self):
+        self.client.force_login(self.director)
+        operaciones = [
+            ('POST', reverse('parametrizacion:actividad_nueva'), {
+                'nombre': 'Etapa no autorizada', 'descripcion': '', 'orden': 1000,
+                'obligatoria': False, 'estado': 'Activo',
+            }),
+            ('POST', reverse('parametrizacion:actividad_editar', args=[self.actividad.pk]), {
+                'nombre': 'Etapa modificada', 'descripcion': '', 'orden': 999,
+                'obligatoria': False, 'estado': 'Activo',
+            }),
+            ('POST', reverse('parametrizacion:actividad_eliminar', args=[self.actividad.pk]), {}),
+            ('POST', reverse('parametrizacion:documentos_version', args=[self.plantilla.pk]), {}),
+            ('GET', reverse('parametrizacion:documentos_descargar', args=[self.plantilla.pk]), {}),
+        ]
+
+        for metodo, url, datos in operaciones:
+            with self.subTest(metodo=metodo, url=url):
+                if metodo == 'POST':
+                    resp = self.client.post(url, datos)
+                else:
+                    resp = self.client.get(url)
+                self.assertEqual(resp.status_code, 403)
 
     def test_administrador_accede_al_inicio(self):
         self.client.force_login(self.admin)
