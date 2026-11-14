@@ -1,0 +1,517 @@
+{% extends 'base.html' %}
+
+{% block titulo %}SISTRA-04 · Subido en UP{% endblock %}
+
+{% block css %}
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+    :root {
+        --sistra-blue: #1B3A8A;
+        --sistra-dark: #1F2430;
+        --sistra-muted: #4B5263;
+        --sistra-border: #E3E6EC;
+        --sistra-border-dark: #B9BFCC;
+        --sistra-bg: #F5F6F9;
+        --sistra-green: #1E7D3E;
+        --sistra-yellow: #F2B01E;
+        --sistra-red: #B42318;
+    }
+
+    body {
+        margin: 0;
+        font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+        color: var(--sistra-dark);
+        background-color: var(--sistra-bg);
+    }
+
+    .sistra-contenedor {
+        width: min(920px, 100%);
+        margin: 0 auto;
+        padding: 40px 24px 56px;
+        box-sizing: border-box;
+    }
+
+    .volver {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 20px;
+        color: var(--sistra-muted);
+        font-size: 13px;
+        font-weight: 500;
+        text-decoration: none;
+    }
+
+    .volver:hover {
+        color: var(--sistra-blue);
+    }
+
+    .subtitulo-modulo {
+        margin: 0;
+        color: var(--sistra-muted);
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    .titulo-modulo {
+        margin: 4px 0 8px;
+        color: var(--sistra-dark);
+        font-size: 28px;
+        font-weight: 600;
+        line-height: 1.2;
+    }
+
+    .descripcion-modulo {
+        margin: 0;
+        color: var(--sistra-muted);
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
+    .card-propuesta {
+        margin-top: 24px;
+        overflow: hidden;
+        background: #fff;
+        border: 1px solid var(--sistra-border);
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(20, 24, 40, .04);
+    }
+
+    .card-encabezado {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: flex-start;
+        justify-content: space-between;
+        padding: 22px 24px;
+        border-bottom: 1px solid var(--sistra-border);
+    }
+
+    .codigo-propuesta {
+        margin: 0 0 4px;
+        color: var(--sistra-muted);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    .titulo-propuesta {
+        margin: 0;
+        color: var(--sistra-dark);
+        font-size: 18px;
+        font-weight: 600;
+        line-height: 1.35;
+    }
+
+    .estado-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 11px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .estado-badge::before {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+        content: '';
+    }
+
+    .estado-aprobado {
+        background: #E7F6EC;
+        color: var(--sistra-green);
+    }
+
+    .estado-revision {
+        background: #FFF1C2;
+        color: #6B4A00;
+    }
+
+    .estado-rechazado {
+        background: #FBE3E0;
+        color: var(--sistra-red);
+    }
+
+    .estado-up {
+        background: #E8EEFC;
+        color: var(--sistra-blue);
+    }
+
+    .card-cuerpo {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 24px;
+    }
+
+    .detalle-aviso {
+        max-width: 560px;
+        margin: 0;
+        color: var(--sistra-muted);
+        font-size: 14px;
+        line-height: 1.65;
+    }
+
+    .nota-bloqueo {
+        margin: 0 24px 24px;
+        padding: 12px 14px;
+        background: #FFF8E1;
+        border: 1px solid #F2D48A;
+        border-radius: 8px;
+        color: #6B4A00;
+        font-size: 13px;
+        line-height: 1.55;
+    }
+
+    .btn-accion {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        padding: 9px 20px;
+        background: var(--sistra-blue);
+        border: 1px solid var(--sistra-blue);
+        border-radius: 8px;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+        transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+    }
+
+    .btn-accion:hover:not(:disabled) {
+        background: #153073;
+        border-color: #153073;
+        box-shadow: 0 4px 12px rgba(27, 58, 138, .22);
+    }
+
+    .btn-accion:focus-visible {
+        outline: 3px solid rgba(27, 58, 138, .25);
+        outline-offset: 2px;
+    }
+
+    .btn-accion:disabled {
+        background: #D7DBE5;
+        border-color: #D7DBE5;
+        color: #7A8191;
+        cursor: not-allowed;
+        box-shadow: none;
+    }
+
+    .btn-secundario {
+        min-height: 42px;
+        padding: 9px 20px;
+        background: #fff;
+        border: 1px solid var(--sistra-border-dark);
+        border-radius: 8px;
+        color: var(--sistra-dark);
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .btn-secundario:hover {
+        background: #F5F6F9;
+        border-color: var(--sistra-muted);
+    }
+
+    .alerta-aviso {
+        margin-top: 20px;
+        padding: 14px 16px;
+        border: 1px solid transparent;
+        border-radius: 9px;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1.5;
+    }
+
+    .alerta-success {
+        background: #E7F6EC;
+        border-color: #A9DDB7;
+        color: #145C2D;
+    }
+
+    .alerta-info {
+        background: #E8EEFC;
+        border-color: #B7C7EF;
+        color: #17357D;
+    }
+
+    .alerta-danger {
+        background: #FBE3E0;
+        border-color: #E7B4AE;
+        color: var(--sistra-red);
+    }
+
+    .modal-content {
+        border: 0;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(20, 24, 40, .25);
+    }
+
+    .modal-header,
+    .modal-body,
+    .modal-footer {
+        padding-right: 24px;
+        padding-left: 24px;
+    }
+
+    .modal-header {
+        padding-top: 22px;
+        padding-bottom: 10px;
+        border-bottom: 0;
+    }
+
+    .modal-title {
+        color: var(--sistra-dark);
+        font-size: 20px;
+        font-weight: 600;
+    }
+
+    .modal-body {
+        color: var(--sistra-muted);
+        font-size: 14px;
+        line-height: 1.65;
+    }
+
+    .modal-footer {
+        padding-top: 8px;
+        padding-bottom: 22px;
+        border-top: 0;
+    }
+
+    .modal-resumen {
+        padding: 12px 14px;
+        background: var(--sistra-bg);
+        border: 1px solid var(--sistra-border);
+        border-radius: 8px;
+        color: var(--sistra-dark);
+        font-weight: 600;
+    }
+
+    @media (max-width: 575.98px) {
+        .sistra-contenedor {
+            padding: 28px 16px 40px;
+        }
+
+        .titulo-modulo {
+            font-size: 24px;
+        }
+
+        .card-cuerpo {
+            align-items: stretch;
+        }
+
+        .btn-accion,
+        .btn-secundario {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block contenido %}
+<main class="sistra-contenedor">
+    <a class="volver" href="{% url 'usuarios:inicio_estudiante' %}">
+        <span aria-hidden="true">&larr;</span> Volver al inicio
+    </a>
+
+    <header>
+        <p class="subtitulo-modulo">SISTRA-04 · Notificación de cargue UP</p>
+        <h1 class="titulo-modulo">Confirmar «Subido en UP»</h1>
+        <p class="descripcion-modulo">
+            Informa que la propuesta ya fue cargada en la Plataforma UP. El director
+            de carrera recibirá el aviso correspondiente.
+        </p>
+    </header>
+
+    <section class="card-propuesta" aria-labelledby="titulo-propuesta">
+        <div class="card-encabezado">
+            <div>
+                <p class="codigo-propuesta">Código de la propuesta</p>
+                <h2 class="titulo-propuesta" id="titulo-propuesta">
+                    {{ propuesta.codigo }}
+                    {% if propuesta.titulo %}
+                        <span class="d-block fw-normal text-secondary mt-1" style="font-size: 14px;">
+                            {{ propuesta.titulo }}
+                        </span>
+                    {% endif %}
+                </h2>
+            </div>
+            <span
+                id="estado-propuesta"
+                class="estado-badge
+                {% if propuesta.estado == 'Aprobado' %}estado-aprobado
+                {% elif propuesta.estado == 'Rechazado' %}estado-rechazado
+                {% elif propuesta.estado == 'Subido en UP' or propuesta.estado == 'Aprobado en UP' %}estado-up
+                {% else %}estado-revision{% endif %}"
+            >
+                {{ propuesta.estado }}
+            </span>
+        </div>
+
+        <div class="card-cuerpo">
+            {% if propuesta.estado != 'Subido en UP' %}
+                <p class="detalle-aviso">
+                    {% if puede_avisar %}
+                        La propuesta está aprobada y lista para avisar su cargue en UP.
+                        Al confirmar, el estado cambiará a «Subido en UP» y se notificará
+                        al director de carrera.
+                    {% else %}
+                        El aviso solo está disponible cuando la propuesta se encuentra en
+                        estado «Aprobado». Revisa el estado actual antes de continuar.
+                    {% endif %}
+                </p>
+            {% endif %}
+
+            {% if puede_avisar %}
+                <button
+                    type="button"
+                    class="btn-accion"
+                    id="btn-abrir-aviso"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modal-confirmar-aviso"
+                >
+                    Subido en UP
+                </button>
+            {% else %}
+                <button
+                    type="button"
+                    class="btn-accion"
+                    id="btn-abrir-aviso"
+                    disabled
+                    aria-disabled="true"
+                >
+                    Subido en UP
+                </button>
+            {% endif %}
+        </div>
+
+        {% if mensaje_bloqueo %}
+            <p class="nota-bloqueo" role="status">{{ mensaje_bloqueo }}</p>
+        {% endif %}
+    </section>
+
+    <div id="aviso-mensajes" class="alerta-aviso" role="alert" aria-live="polite" hidden></div>
+</main>
+
+<div class="modal fade" id="modal-confirmar-aviso" tabindex="-1" aria-labelledby="modal-aviso-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modal-aviso-titulo">Confirmar cargue en UP</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-3">
+                    ¿Confirmas que ya subiste esta propuesta a la Plataforma UP?
+                </p>
+                <p class="modal-resumen mb-3">
+                    {{ propuesta.codigo }}{% if propuesta.titulo %} · {{ propuesta.titulo }}{% endif %}
+                </p>
+                <p class="mb-0">
+                    Esta acción registrará el aviso y notificará al director de carrera.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <form id="form-aviso" method="post" action="{% url 'cargue_up:aviso_propuesta_registrar' propuesta.pk %}" class="d-flex flex-wrap gap-2 justify-content-end w-100">
+                    {% csrf_token %}
+                    <button type="button" class="btn-secundario" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-accion" id="btn-confirmar-aviso">Sí, subí la propuesta</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+    const formularioAviso = document.getElementById('form-aviso');
+    const modalAviso = document.getElementById('modal-confirmar-aviso');
+    const botonConfirmar = document.getElementById('btn-confirmar-aviso');
+    const contenedorMensajes = document.getElementById('aviso-mensajes');
+    const estadoPropuesta = document.getElementById('estado-propuesta');
+    const botonAbrirAviso = document.getElementById('btn-abrir-aviso');
+
+    function mostrarMensaje(mensaje, tipo) {
+        contenedorMensajes.textContent = mensaje;
+        contenedorMensajes.className = 'alerta-aviso alerta-' + tipo;
+        contenedorMensajes.hidden = false;
+    }
+
+    function marcarAvisoRegistrado(estado) {
+        if (estadoPropuesta) {
+            estadoPropuesta.textContent = estado || 'Subido en UP';
+            estadoPropuesta.className = 'estado-badge estado-up';
+        }
+        if (botonAbrirAviso) {
+            botonAbrirAviso.disabled = true;
+            botonAbrirAviso.setAttribute('aria-disabled', 'true');
+        }
+    }
+
+    if (formularioAviso && botonConfirmar) {
+        formularioAviso.addEventListener('submit', async function (evento) {
+            evento.preventDefault();
+
+            const textoOriginal = botonConfirmar.textContent;
+            botonConfirmar.disabled = true;
+            botonConfirmar.textContent = 'Registrando…';
+
+            try {
+                const token = formularioAviso.querySelector('[name="csrfmiddlewaretoken"]');
+                const respuesta = await fetch(formularioAviso.action, {
+                    method: 'POST',
+                    body: new FormData(formularioAviso),
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-CSRFToken': token ? token.value : '',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                let datos = {};
+                try {
+                    datos = await respuesta.json();
+                } catch (error) {
+                    datos = {};
+                }
+
+                if (respuesta.ok && datos.ok) {
+                    if (datos.duplicado) {
+                        mostrarMensaje(datos.mensaje || 'El aviso ya estaba registrado.', 'info');
+                    } else {
+                        mostrarMensaje(datos.mensaje || 'El aviso se registró correctamente.', 'success');
+                    }
+                    marcarAvisoRegistrado(datos.estado);
+                } else {
+                    mostrarMensaje(
+                        datos.mensaje || 'No fue posible registrar el aviso de cargue en UP.',
+                        'danger'
+                    );
+                }
+            } catch (error) {
+                mostrarMensaje(
+                    'No fue posible registrar el aviso de cargue en UP. Intenta nuevamente.',
+                    'danger'
+                );
+            } finally {
+                botonConfirmar.disabled = false;
+                botonConfirmar.textContent = textoOriginal;
+                const modal = bootstrap.Modal.getInstance(modalAviso);
+                if (modal) {
+                    modal.hide();
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}
