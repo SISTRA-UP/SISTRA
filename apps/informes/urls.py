@@ -19,6 +19,5 @@ urlpatterns = [
     # SISTRA-06 · Montaje de informe – Trabajo Social
     path('montaje/', montaje.inicio, name='montaje'),
     
-
     # SISTRA-07 · Aprobación de informe
 ]
