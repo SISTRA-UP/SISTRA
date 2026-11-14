@@ -12,15 +12,16 @@ from django.urls import path  # noqa: F401
 
 from .views import montaje  # noqa: F401  SISTRA-06
 from .views import aprobacion  # noqa: F401  SISTRA-07
-from .views import aprobacion_decisiones  # noqa: F401 SISTRA-07
-from .views import aprobacion_masiva # noqa: F401 SISTRA-07
-from .views import aprobacion_reactivacion # noqa: F401 SISTRA-07
-from .views import aprobacion_reactivacion_masiva # noqa: F401 SISTRA-07
+from .views import aprobacion_decisiones  # noqa: F401  SISTRA-07
+from .views import aprobacion_masiva  # noqa: F401  SISTRA-07
+from .views import aprobacion_reactivacion  # noqa: F401  SISTRA-07
+from .views import aprobacion_reactivacion_masiva  # noqa: F401  SISTRA-07
 
 app_name = 'informes'
 
 urlpatterns = [
     # SISTRA-06 · Montaje de informe – Trabajo Social
+    path('montaje/', montaje.inicio, name='montaje'),
 
     # SISTRA-07 · Aprobación de informe
     path(
@@ -33,7 +34,7 @@ urlpatterns = [
         aprobacion_decisiones.decidir,
         name="decidir",
     ),
-     path(
+    path(
         "aprobacion/masiva/",
         aprobacion_masiva.decidir_masivo,
         name="decidir_masivo",
@@ -43,10 +44,9 @@ urlpatterns = [
         aprobacion_reactivacion.reactivar,
         name="reactivar",
     ),
-     path(
+    path(
         "aprobacion/reactivar-masivo/",
         aprobacion_reactivacion_masiva.reactivar_masivo,
         name="reactivar_masivo",
     ),
-
 ]
