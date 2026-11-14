@@ -43,6 +43,18 @@ class PlantillaForm(forms.ModelForm):
             'estado':      'Estado',
         }
 
+    def clean(self):
+        cleaned_data = super().clean()
+        tipo = cleaned_data.get('tipo')
+        estado = cleaned_data.get('estado')
+        if tipo and estado == 'Activo':
+            existentes = Plantilla.objects.filter(tipo=tipo, estado='Activo')
+            if self.instance.pk:
+                existentes = existentes.exclude(pk=self.instance.pk)
+            if existentes.exists():
+                self.add_error('tipo', 'Ya existe una plantilla activa de este tipo.')
+        return cleaned_data
+
 
 class VersionPlantillaForm(forms.Form):
     """Subir una nueva versión de archivo para una plantilla existente.

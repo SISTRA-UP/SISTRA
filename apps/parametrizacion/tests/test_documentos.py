@@ -73,6 +73,33 @@ class DocumentosViewTests(TestCase):
         })
         self.assertFalse(Plantilla.objects.filter(nombre='Estado inválido').exists())
 
+    def test_no_permite_otra_plantilla_activa_de_propuesta_ni_csv(self):
+        for tipo in ('propuesta', 'csv'):
+            Plantilla.objects.create(nombre=f'{tipo} existente', tipo=tipo, estado='Activo')
+
+            self.client.post(reverse('parametrizacion:documentos_nueva'), {
+                'nombre': f'{tipo} duplicada',
+                'tipo': tipo,
+                'descripcion': '',
+                'estado': 'Activo',
+            })
+
+            self.assertFalse(Plantilla.objects.filter(nombre=f'{tipo} duplicada').exists())
+
+    def test_editar_plantilla_activa_excluye_su_instancia(self):
+        plantilla = Plantilla.objects.create(
+            nombre='Propuesta existente', tipo='propuesta', estado='Activo'
+        )
+
+        resp = self.client.post(
+            reverse('parametrizacion:documentos_editar', args=[plantilla.pk]),
+            {'nombre': 'Propuesta actualizada', 'tipo': 'propuesta', 'descripcion': '', 'estado': 'Activo'},
+        )
+
+        self.assertRedirects(resp, reverse('parametrizacion:documentos'))
+        plantilla.refresh_from_db()
+        self.assertEqual(plantilla.nombre, 'Propuesta actualizada')
+
     def test_editar_plantilla(self):
         plantilla = Plantilla.objects.create(
             nombre='Vieja', tipo='otro', descripcion='', estado='Activo'

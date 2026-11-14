@@ -67,7 +67,7 @@ class DocumentosView(ParametrizarRequeridoMixin, View):
     def get(self, request):
         plantillas = (
             Plantilla.objects.prefetch_related('versiones')
-            .order_by('tipo', 'nombre')
+            .order_by('tipo', 'nombre', 'pk')
         )
         return render(request, self.template_name, {
             **contexto_menu(request.user),
@@ -151,7 +151,7 @@ class SubirVersionView(ParametrizarRequeridoMixin, View):
             'seccion': 'documentos',
             'plantilla': plantilla,
             'form': VersionPlantillaForm(),
-            'versiones': plantilla.versiones.order_by('-numero_version'),
+            'versiones': plantilla.versiones.order_by('-numero_version', 'pk'),
         })
 
     def post(self, request, pk):
@@ -163,7 +163,7 @@ class SubirVersionView(ParametrizarRequeridoMixin, View):
                 'seccion': 'documentos',
                 'plantilla': plantilla,
                 'form': form,
-                'versiones': plantilla.versiones.order_by('-numero_version'),
+                'versiones': plantilla.versiones.order_by('-numero_version', 'pk'),
             })
 
         archivo = form.cleaned_data['archivo']
@@ -177,7 +177,7 @@ class SubirVersionView(ParametrizarRequeridoMixin, View):
                 'seccion': 'documentos',
                 'plantilla': plantilla,
                 'form': form,
-                'versiones': plantilla.versiones.order_by('-numero_version'),
+                'versiones': plantilla.versiones.order_by('-numero_version', 'pk'),
             })
 
         # Validación de tamaño según parámetro del sistema
@@ -189,10 +189,10 @@ class SubirVersionView(ParametrizarRequeridoMixin, View):
                 'seccion': 'documentos',
                 'plantilla': plantilla,
                 'form': form,
-                'versiones': plantilla.versiones.order_by('-numero_version'),
+                'versiones': plantilla.versiones.order_by('-numero_version', 'pk'),
             })
 
-        ultimo = plantilla.versiones.order_by('-numero_version').first()
+        ultimo = plantilla.versiones.order_by('-numero_version', 'pk').first()
         numero = (ultimo.numero_version + 1) if ultimo else 1
 
         try:
@@ -234,7 +234,7 @@ class DescargaPlantillaView(ParametrizarRequeridoMixin, View):
     def get(self, request, pk):
         from django.conf import settings
         plantilla = get_object_or_404(Plantilla, pk=pk)
-        version = plantilla.versiones.filter(es_vigente=True).first()
+        version = plantilla.versiones.filter(es_vigente=True).order_by('-numero_version', 'pk').first()
         if not version:
             messages.error(request, 'Esta plantilla no tiene versión vigente.')
             return redirect('parametrizacion:documentos')
@@ -259,9 +259,9 @@ class DescargaPlantillaCsvEstudiantesView(PermissionRequiredMixin, View):
 
     def get(self, request):
         from django.conf import settings
-        plantilla = Plantilla.objects.filter(tipo='csv', estado='Activo').first()
+        plantilla = Plantilla.objects.filter(tipo='csv', estado='Activo').order_by('pk').first()
         if plantilla:
-            version = plantilla.versiones.filter(es_vigente=True).first()
+            version = plantilla.versiones.filter(es_vigente=True).order_by('-numero_version', 'pk').first()
             if version:
                 ruta = os.path.join(settings.MEDIA_ROOT, version.ruta_archivo)
                 if os.path.exists(ruta):
@@ -292,9 +292,9 @@ class DescargaPlantillaPropuestaEstudianteView(LoginRequiredMixin, View):
     def get(self, request):
         from django.conf import settings
         from django.http import Http404
-        plantilla = Plantilla.objects.filter(tipo='propuesta', estado='Activo').first()
+        plantilla = Plantilla.objects.filter(tipo='propuesta', estado='Activo').order_by('pk').first()
         if plantilla:
-            version = plantilla.versiones.filter(es_vigente=True).first()
+            version = plantilla.versiones.filter(es_vigente=True).order_by('-numero_version', 'pk').first()
             if version:
                 ruta = os.path.join(settings.MEDIA_ROOT, version.ruta_archivo)
                 if os.path.exists(ruta):
