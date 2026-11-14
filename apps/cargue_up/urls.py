@@ -25,6 +25,16 @@ urlpatterns = [
     path('ir-up/<int:id_propuesta>/', cargue_propuesta.ir_a_up, name='ir_a_up'),
 
     # SISTRA-04 · Notificación de cargue UP
+    path(
+        'avisar/propuesta/<int:id_propuesta>/',
+        aviso_propuesta.confirmacion,
+        name='aviso_propuesta_confirmacion',
+    ),
+    path(
+        'avisar/propuesta/<int:id_propuesta>/registrar/',
+        aviso_propuesta.registrar,
+        name='aviso_propuesta_registrar',
+    ),
 
     # SISTRA-05 · Notificación de cargue UP – Director
 

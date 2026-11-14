@@ -1,0 +1,185 @@
+<div
+    class="modal fade"
+    id="detalle-informe-{{ informe.pk }}"
+    tabindex="-1"
+    aria-labelledby="titulo-detalle-{{ informe.pk }}"
+    aria-hidden="true"
+>
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h2
+                    class="modal-title fs-5"
+                    id="titulo-detalle-{{ informe.pk }}"
+                >
+                    Informe {{ informe.codigo }}
+                </h2>
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal"
+                    aria-label="Cerrar"
+                ></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    Consulta de solo lectura.
+                    Aquí no se modifica el contenido del estudiante.
+                </div>
+
+                <h3 class="h5 text-primary">Información general</h3>
+
+                <dl class="row">
+                    <dt class="col-sm-3">Estudiante</dt>
+                    <dd class="col-sm-9">
+                        {{ informe.propuesta.proceso.estudiante_carrera.estudiante.usuario.nombre }}
+                    </dd>
+
+                    <dt class="col-sm-3">Cédula</dt>
+                    <dd class="col-sm-9">
+                        {{ informe.propuesta.proceso.estudiante_carrera.estudiante.usuario.cedula }}
+                    </dd>
+
+                    <dt class="col-sm-3">Carrera</dt>
+                    <dd class="col-sm-9">
+                        {{ informe.propuesta.proceso.estudiante_carrera.carrera.nombre }}
+                    </dd>
+
+                    <dt class="col-sm-3">Periodo del informe</dt>
+                    <dd class="col-sm-9">
+                        {{ informe.periodo_academico.nombre }}
+                    </dd>
+
+                    <dt class="col-sm-3">Estado del informe</dt>
+                    <dd class="col-sm-9">
+                        {{ informe.get_estado_display }}
+                    </dd>
+
+                    <dt class="col-sm-3">Versión de entrega</dt>
+                    <dd class="col-sm-9">
+                        {{ informe.version_entrega }}
+                    </dd>
+
+                    <dt class="col-sm-3">Fecha de envío</dt>
+                    <dd class="col-sm-9">
+                        {{ informe.fecha_envio|date:"d/m/Y H:i"|default:"Sin fecha" }}
+                    </dd>
+                </dl>
+
+                <hr>
+
+                <h3 class="h5 text-primary">Contenido del informe</h3>
+
+                <h4 class="h6 mt-3">Resultados</h4>
+                <div class="border rounded p-3 text-break">
+                    {{ informe.resultados|default:"Sin registrar"|linebreaksbr }}
+                </div>
+
+                <h4 class="h6 mt-3">Conclusiones</h4>
+                <div class="border rounded p-3 text-break">
+                    {{ informe.conclusiones|default:"Sin registrar"|linebreaksbr }}
+                </div>
+
+                <h4 class="h6 mt-3">Recomendaciones</h4>
+                <div class="border rounded p-3 text-break">
+                    {{ informe.recomendaciones|default:"Sin registrar"|linebreaksbr }}
+                </div>
+
+                <hr class="my-4">
+
+                {% with propuesta=informe.propuesta %}
+                    <h3 class="h5 text-primary">Propuesta asociada</h3>
+
+                    <dl class="row">
+                        <dt class="col-sm-3">Código</dt>
+                        <dd class="col-sm-9">{{ propuesta.codigo }}</dd>
+
+                        <dt class="col-sm-3">Título</dt>
+                        <dd class="col-sm-9">
+                            {{ propuesta.titulo|default:"Sin registrar" }}
+                        </dd>
+
+                        <dt class="col-sm-3">Estado</dt>
+                        <dd class="col-sm-9">
+                            {{ propuesta.get_estado_display }}
+                        </dd>
+
+                        <dt class="col-sm-3">Entidad</dt>
+                        <dd class="col-sm-9">
+                            {{ propuesta.entidad|default:"Sin registrar" }}
+                        </dd>
+
+                        <dt class="col-sm-3">Sector de la entidad</dt>
+                        <dd class="col-sm-9">
+                            {{ propuesta.get_sector_entidad_display|default:"Sin registrar" }}
+                        </dd>
+
+                        <dt class="col-sm-3">Fecha de inicio</dt>
+                        <dd class="col-sm-9">
+                            {{ propuesta.fecha_inicio|date:"d/m/Y"|default:"Sin fecha" }}
+                        </dd>
+
+                        <dt class="col-sm-3">Fecha de finalización</dt>
+                        <dd class="col-sm-9">
+                            {{ propuesta.fecha_fin|date:"d/m/Y"|default:"Sin fecha" }}
+                        </dd>
+                    </dl>
+
+                    <div class="text-break">
+                        <h4 class="h6 mt-3">Reseña histórica</h4>
+                        <p>{{ propuesta.resena_historica|default:"Sin registrar"|linebreaksbr }}</p>
+
+                        <h4 class="h6 mt-3">Identificación de la necesidad</h4>
+                        <p>{{ propuesta.identificacion_necesidad|default:"Sin registrar"|linebreaksbr }}</p>
+
+                        <h4 class="h6 mt-3">Justificación</h4>
+                        <p>{{ propuesta.justificacion|default:"Sin registrar"|linebreaksbr }}</p>
+
+                        <h4 class="h6 mt-3">Objetivos</h4>
+                        <p>{{ propuesta.objetivos|default:"Sin registrar"|linebreaksbr }}</p>
+
+                        <h4 class="h6 mt-3">Referente teórico</h4>
+                        <p>{{ propuesta.referente_teorico|default:"Sin registrar"|linebreaksbr }}</p>
+
+                        <h4 class="h6 mt-3">Impacto social</h4>
+                        <p>{{ propuesta.impacto_social|default:"Sin registrar"|linebreaksbr }}</p>
+
+                        <h4 class="h6 mt-3">Identificación de la población</h4>
+                        <p>{{ propuesta.identificacion_poblacion|default:"Sin registrar"|linebreaksbr }}</p>
+
+                        <h4 class="h6 mt-3">Población beneficiada</h4>
+                        <p>{{ propuesta.poblacion_beneficiada|default:"Sin registrar"|linebreaksbr }}</p>
+
+                        <h4 class="h6 mt-3">Propuesta social</h4>
+                        <p>{{ propuesta.propuesta_social|default:"Sin registrar"|linebreaksbr }}</p>
+
+                        <h4 class="h6 mt-3">Zona</h4>
+                        <p>{{ propuesta.zona|default:"Sin registrar"|linebreaksbr }}</p>
+
+                        <h4 class="h6 mt-3">Área</h4>
+                        <p>{{ propuesta.area|default:"Sin registrar"|linebreaksbr }}</p>
+
+                        <h4 class="h6 mt-3">Sector</h4>
+                        <p>{{ propuesta.sector|default:"Sin registrar"|linebreaksbr }}</p>
+
+                        <h4 class="h6 mt-3">Unidad</h4>
+                        <p>{{ propuesta.unidad|default:"Sin registrar"|linebreaksbr }}</p>
+                    </div>
+                {% endwith %}
+            </div>
+
+            <div class="modal-footer">
+                <button
+                    type="button"
+                    class="btn btn-secondary"
+                    data-bs-dismiss="modal"
+                >
+                    Cerrar
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
