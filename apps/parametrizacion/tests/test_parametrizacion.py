@@ -8,7 +8,13 @@ from datetime import date
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.parametrizacion.models import Actividad, Carrera, Plantilla
+from apps.parametrizacion.models import (
+    Actividad,
+    Carrera,
+    PeriodoAcademico,
+    Plantilla,
+    TipoRechazo,
+)
 from apps.usuarios.models import Permiso, Rol, RolPermiso, Usuario
 
 
@@ -84,6 +90,17 @@ class AccesoModuloTests(TestCase):
         cls.plantilla = Plantilla.objects.create(
             nombre='Plantilla de acceso', tipo='otro', estado='Activo',
         )
+        cls.periodo = PeriodoAcademico.objects.create(
+            nombre='2025-1',
+            fecha_inicio=date(2025, 1, 1),
+            fecha_fin=date(2025, 12, 20),
+            fecha_cierre_propuesta=date(2025, 6, 15),
+            fecha_cierre_informe=date(2025, 6, 30),
+            estado='Cerrado',
+        )
+        cls.tipo_rechazo = TipoRechazo.objects.create(
+            nombre='Causal para acceso', descripcion='', estado='Activo',
+        )
 
     def test_sin_sesion_redirige(self):
         for nombre in URLS_SOLO_ADMIN:
@@ -119,6 +136,34 @@ class AccesoModuloTests(TestCase):
             ('POST', reverse('parametrizacion:actividad_eliminar', args=[self.actividad.pk]), {}),
             ('POST', reverse('parametrizacion:documentos_version', args=[self.plantilla.pk]), {}),
             ('GET', reverse('parametrizacion:documentos_descargar', args=[self.plantilla.pk]), {}),
+            ('POST', reverse('parametrizacion:periodo_nuevo'), {
+                'nombre': '2026-2',
+                'fecha_inicio': '2026-01-01',
+                'fecha_fin': '2026-12-20',
+                'fecha_cierre_propuesta': '2026-06-15',
+                'fecha_cierre_informe': '2026-06-30',
+                'estado': 'Cerrado',
+            }),
+            ('POST', reverse('parametrizacion:periodo_editar', args=[self.periodo.pk]), {
+                'nombre': '2025-1',
+                'fecha_inicio': '2025-01-01',
+                'fecha_fin': '2025-12-20',
+                'fecha_cierre_propuesta': '2025-06-15',
+                'fecha_cierre_informe': '2025-06-30',
+                'estado': 'Cerrado',
+            }),
+            ('POST', reverse('parametrizacion:documentos_nueva'), {
+                'nombre': 'Nueva plantilla', 'tipo': 'propuesta',
+                'descripcion': 'Plantilla válida.', 'estado': 'Activo',
+            }),
+            ('POST', reverse('parametrizacion:documentos_editar', args=[self.plantilla.pk]), {
+                'nombre': 'Plantilla editada', 'tipo': 'otro',
+                'descripcion': 'Plantilla válida.', 'estado': 'Activo',
+            }),
+            ('POST', reverse('parametrizacion:rechazo_editar', args=[self.tipo_rechazo.pk]), {
+                'nombre': 'Causal editada', 'descripcion': 'Descripción válida.', 'estado': 'Activo',
+            }),
+            ('POST', reverse('parametrizacion:rechazo_eliminar', args=[self.tipo_rechazo.pk]), {}),
         ]
 
         for metodo, url, datos in operaciones:
