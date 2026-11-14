@@ -10,7 +10,9 @@ from django.conf import settings
 from django.test import TestCase
 from django.urls import reverse
 
-from apps.parametrizacion.models import Plantilla, VersionPlantilla
+from apps.parametrizacion import servicios
+from apps.parametrizacion.models import Parametro, Plantilla, VersionPlantilla
+from apps.seguimiento.models import Auditoria
 from apps.usuarios.models import Estado, Permiso, Rol, RolPermiso, Usuario
 
 
@@ -39,6 +41,77 @@ class DocumentosViewTests(TestCase):
     def setUp(self):
         self.admin = _crear_admin()
         self.client.force_login(self.admin)
+
+    def parametros_documentos(self, **cambios):
+        datos = {
+            'max_mb_docx': '10',
+            'max_mb_csv': '2',
+            'maximo_filas_csv': '100',
+        }
+        datos.update(cambios)
+        return datos
+
+    def test_valores_invalidos_de_limites_no_se_guardan(self):
+        limites = {
+            'max_mb_docx': 50,
+            'max_mb_csv': 50,
+            'maximo_filas_csv': 5000,
+        }
+        for campo, maximo in limites.items():
+            for valor in ('0', '-1', 'texto', str(maximo + 1)):
+                with self.subTest(campo=campo, valor=valor):
+                    respuesta = self.client.post(
+                        reverse('parametrizacion:documentos'),
+                        self.parametros_documentos(**{campo: valor}),
+                    )
+                    self.assertEqual(respuesta.status_code, 200)
+                    self.assertFalse(Parametro.objects.filter(
+                        clave={
+                            'max_mb_docx': 'propuesta.max_mb_docx',
+                            'max_mb_csv': 'registro_estudiantes.max_mb_csv',
+                            'maximo_filas_csv': 'registro_estudiantes.maximo_filas_csv',
+                        }[campo]
+                    ).exists())
+        self.assertFalse(Auditoria.objects.filter(accion='Modificar parámetro').exists())
+
+    def test_guarda_limites_validos_y_audita_cada_clave(self):
+        respuesta = self.client.post(
+            reverse('parametrizacion:documentos'),
+            self.parametros_documentos(
+                max_mb_docx='20', max_mb_csv='15', maximo_filas_csv='2500'
+            ),
+        )
+
+        self.assertRedirects(respuesta, reverse('parametrizacion:documentos'))
+        esperados = {
+            'propuesta.max_mb_docx': ('20', 20),
+            'registro_estudiantes.max_mb_csv': ('15', 15),
+            'registro_estudiantes.maximo_filas_csv': ('2500', 2500),
+        }
+        registros = Auditoria.objects.filter(accion='Modificar parámetro')
+        self.assertEqual(registros.count(), len(esperados))
+        for clave, (valor, valor_entero) in esperados.items():
+            with self.subTest(clave=clave):
+                parametro = Parametro.objects.get(clave=clave)
+                self.assertEqual(parametro.valor, valor)
+                self.assertEqual(servicios.obtener_entero(clave), valor_entero)
+                self.assertTrue(registros.filter(detalle__contains=clave).exists())
+
+    def test_director_recibe_403_al_guardar_limites(self):
+        rol, _ = Rol.objects.get_or_create(nombre='Director', defaults={'estado': Estado.ACTIVO})
+        director = Usuario.objects.create_user(
+            correo_institucional='director.limites@unipamplona.edu.co',
+            password='Director-Test-1', nombre='Director Límites', cedula='999000091',
+            nombre_usuario='director.limites', rol=rol, requiere_cambio_contrasena=False,
+        )
+        self.client.force_login(director)
+
+        respuesta = self.client.post(
+            reverse('parametrizacion:documentos'), self.parametros_documentos(max_mb_docx='20')
+        )
+
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertFalse(Parametro.objects.exists())
 
     def test_lista_vacia(self):
         resp = self.client.get(reverse('parametrizacion:documentos'))
