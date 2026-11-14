@@ -18,7 +18,7 @@ from apps.parametrizacion.permisos import (
 )
 from apps.parametrizacion import servicios as param_servicios
 
-from ..forms.documentos import PlantillaForm, VersionPlantillaForm
+from ..forms.documentos import DocumentosParametrosForm, PlantillaForm, VersionPlantillaForm
 from ..models import Plantilla, VersionPlantilla
 
 # Extensiones permitidas según tipo de plantilla
@@ -67,8 +67,35 @@ class DocumentosView(ParametrizarRequeridoMixin, View):
     """Lista todas las plantillas con su versión vigente."""
 
     template_name = 'parametrizacion/parametrizacion/documentos.html'
+    PARAMETROS_A_CAMPOS = {
+        'max_mb_docx': 'propuesta.max_mb_docx',
+        'max_mb_csv': 'registro_estudiantes.max_mb_csv',
+        'maximo_filas_csv': 'registro_estudiantes.maximo_filas_csv',
+    }
 
     def get(self, request):
+        iniciales = {
+            campo: param_servicios.obtener_entero(clave)
+            for campo, clave in self.PARAMETROS_A_CAMPOS.items()
+        }
+        return self._mostrar(request, DocumentosParametrosForm(initial=iniciales))
+
+    def post(self, request):
+        form = DocumentosParametrosForm(request.POST)
+        if form.is_valid():
+            with transaction.atomic():
+                cambios = sum(
+                    param_servicios.guardar(clave, form.cleaned_data[campo], request.user)
+                    for campo, clave in self.PARAMETROS_A_CAMPOS.items()
+                )
+            if cambios:
+                messages.success(request, 'Los parámetros se guardaron correctamente.')
+            else:
+                messages.success(request, 'No hubo cambios que guardar.')
+            return redirect('parametrizacion:documentos')
+        return self._mostrar(request, form)
+
+    def _mostrar(self, request, form_parametros):
         plantillas = (
             Plantilla.objects.prefetch_related('versiones')
             .order_by('tipo', 'nombre', 'pk')
@@ -78,6 +105,7 @@ class DocumentosView(ParametrizarRequeridoMixin, View):
             'seccion': 'documentos',
             'plantillas': plantillas,
             'form_plantilla': PlantillaForm(),
+            'form_parametros': form_parametros,
         })
 
 

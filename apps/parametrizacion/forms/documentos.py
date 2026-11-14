@@ -17,6 +17,41 @@ ESTADOS_PLANTILLA = [
 ]
 
 
+class DocumentosParametrosForm(forms.Form):
+    """Límites de carga para documentos y formatos administrados en SISTRA-11."""
+
+    max_mb_docx = forms.IntegerField(
+        label='Tamaño máximo de propuesta (.docx)', min_value=1, max_value=50,
+        error_messages={
+            'required': 'Este campo es obligatorio.',
+            'invalid': 'Ingrese un número entero entre 1 y 50.',
+            'min_value': 'El valor debe ser mayor que 0.',
+            'max_value': 'El valor máximo permitido es 50.',
+        },
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 50}),
+    )
+    max_mb_csv = forms.IntegerField(
+        label='Tamaño máximo de estudiantes (.csv)', min_value=1, max_value=50,
+        error_messages={
+            'required': 'Este campo es obligatorio.',
+            'invalid': 'Ingrese un número entero entre 1 y 50.',
+            'min_value': 'El valor debe ser mayor que 0.',
+            'max_value': 'El valor máximo permitido es 50.',
+        },
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 50}),
+    )
+    maximo_filas_csv = forms.IntegerField(
+        label='Máximo de filas por CSV de estudiantes', min_value=1, max_value=5000,
+        error_messages={
+            'required': 'Este campo es obligatorio.',
+            'invalid': 'Ingrese un número entero entre 1 y 5000.',
+            'min_value': 'El valor debe ser mayor que 0.',
+            'max_value': 'El valor máximo permitido es 5000.',
+        },
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 5000}),
+    )
+
+
 class PlantillaForm(forms.ModelForm):
     """Crear o editar una plantilla (sin archivo — el archivo va en VersionPlantillaForm)."""
 
