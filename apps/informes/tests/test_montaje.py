@@ -12,7 +12,7 @@ from apps.propuestas.models import Propuesta, EstadoTramite
 from apps.procesos.models import ProcesoTrabajoSocial
 from apps.informes.models import Informe
 from apps.seguimiento.models import Auditoria
-#  Importar las constantes desde aprobacion
+# Importar las constantes desde aprobacion
 from apps.propuestas.forms.aprobacion import RESULTADO_EXITO, RESULTADO_BLOQUEADO
 
 
@@ -182,7 +182,7 @@ class MontajeInformeTests(TestCase):
         self.assertEqual(informe.estado, EstadoTramite.EN_REVISION)
         self.assertEqual(informe.resultados, texto_original)
 
-        # ⬅️ Usar la constante importada
+        # Usar la constante importada
         auditoria = Auditoria.objects.filter(
             id_registro_afectado=informe.id_informe,
             resultado=RESULTADO_BLOQUEADO,
@@ -204,6 +204,13 @@ class MontajeInformeTests(TestCase):
 
         informe.refresh_from_db()
         self.assertEqual(informe.estado, EstadoTramite.APROBADO)
+
+        # Verificar que la auditoría quede con RESULTADO_BLOQUEADO
+        auditoria = Auditoria.objects.filter(
+            id_registro_afectado=informe.id_informe,
+            resultado=RESULTADO_BLOQUEADO,
+        ).exists()
+        self.assertTrue(auditoria)
 
     def test_formulario_bloqueado_si_esta_en_revision(self):
         self._login()

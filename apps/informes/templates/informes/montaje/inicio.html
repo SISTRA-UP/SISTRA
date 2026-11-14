@@ -136,8 +136,10 @@
                 {% for field in form %}
                     <div class="mb-4">
                         <label for="{{ field.id_for_label }}" class="form-label fw-semibold text-primary">
-                            {{ field.label|title }} <span class="text-danger">*</span>
+                            {{ field.label|title }}
                         </label>
+                        <small class="text-muted d-block mb-2">Obligatorio al enviar (mínimo 50 caracteres). Puedes guardar borrador con campos vacíos.</small>
+                        
                         {% if bloqueado %}
                             {{ field }}
                             <script>
@@ -149,7 +151,7 @@
                             {{ field }}
                         {% endif %}
 
-                        <div id="error-{{ field.id_for_label }}" class="invalid-feedback d-block" style="display: none;">
+                        <div id="error-{{ field.id_for_label }}" class="invalid-feedback" style="display: none;">
                             Completa este campo (mínimo {{ minimo_caracteres }} caracteres).
                         </div>
 
@@ -283,24 +285,43 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!el) return;
 
             const valor = el.value.trim();
+            
+            // El avance SIEMPRE se calcula según el contenido real del campo
             if (valor.length >= MINIMO) {
                 llenos++;
-                if (errorDiv) errorDiv.style.display = 'none';
-                el.classList.remove('is-invalid');
-                el.classList.add('is-valid');
-            } else {
-                if (errorDiv) errorDiv.style.display = 'block';
-                el.classList.remove('is-valid');
-                el.classList.add('is-invalid');
             }
 
-            // Validar máximo
-            if (valor.length > MAXIMO) {
-                if (errorDiv) {
-                    errorDiv.style.display = 'block';
-                    errorDiv.textContent = 'Máximo ' + MAXIMO + ' caracteres.';
+            // La validación visual (rojo/verde) depende de si el usuario interactuó
+            if (el.classList.contains('touched')) {
+                // El usuario interactuó: aplicar validación estricta
+                if (valor.length >= MINIMO && valor.length <= MAXIMO) {
+                    if (errorDiv) errorDiv.style.display = 'none';
+                    el.classList.remove('is-invalid');
+                    el.classList.add('is-valid');
+                } else {
+                    if (errorDiv) {
+                        errorDiv.style.display = 'block';
+                        if (valor.length > MAXIMO) {
+                            errorDiv.textContent = 'Máximo ' + MAXIMO + ' caracteres.';
+                        } else {
+                            errorDiv.textContent = 'Completa este campo (mínimo ' + MINIMO + ' caracteres).';
+                        }
+                    }
+                    el.classList.remove('is-valid');
+                    el.classList.add('is-invalid');
                 }
-                el.classList.add('is-invalid');
+            } else {
+                // El usuario NO ha interactuado aún en esta sesión
+                if (errorDiv) errorDiv.style.display = 'none';
+                
+                // Si ya viene con contenido válido del servidor, mostrarlo como válido (verde)
+                if (valor.length >= MINIMO && valor.length <= MAXIMO) {
+                    el.classList.add('is-valid');
+                    el.classList.remove('is-invalid');
+                } else {
+                    // Si está vacío o incompleto, no mostrar rojo hasta que lo toque
+                    el.classList.remove('is-valid', 'is-invalid');
+                }
             }
         });
 
@@ -330,11 +351,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Agregar clase 'touched' al interactuar para activar la validación visual
     campos.forEach(function(id) {
         const el = document.getElementById(id);
         if (el) {
-            el.addEventListener('input', calcularAvance);
-            el.addEventListener('change', calcularAvance);
+            el.addEventListener('input', function() {
+                el.classList.add('touched');
+                calcularAvance();
+            });
+            el.addEventListener('change', function() {
+                el.classList.add('touched');
+                calcularAvance();
+            });
         }
     });
 
@@ -373,6 +401,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Calcular avance inicial al cargar la página (esto ahora leerá el contenido guardado)
     calcularAvance();
 });
 </script>

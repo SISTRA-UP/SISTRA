@@ -28,7 +28,7 @@ MAXIMO_CARACTERES = 1000
 class InformeForm(forms.ModelForm):
     """Formulario para diligenciar el informe de Trabajo Social."""
 
-    # ⬅ Sobrescribir los campos con max_length explícito
+    # Sobrescribir los campos con max_length explícito
     resultados = forms.CharField(
         widget=forms.Textarea(
             attrs={

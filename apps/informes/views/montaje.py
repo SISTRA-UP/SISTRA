@@ -24,7 +24,7 @@ from apps.informes.forms.montaje import (
 from apps.informes.models import Informe
 from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.seguimiento.models import Auditoria, HistorialEstado, Notificacion
-#  Importar las constantes desde el módulo de aprobacion (SISTRA-02)
+# Importar las constantes desde el módulo de aprobacion (SISTRA-02)
 from apps.propuestas.forms.aprobacion import RESULTADO_EXITO, RESULTADO_BLOQUEADO
 
 
@@ -61,7 +61,7 @@ def _registrar_auditoria(usuario, informe, accion, resultado, detalle):
         usuario=usuario,
         accion=accion,
         tabla_afectada='informe',
-        id_registro_afectado=informe.id_informe,  # ⬅️ Nombre correcto del campo
+        id_registro_afectado=informe.id_informe,  # Nombre correcto del campo
         detalle=detalle,
         resultado=resultado,
         fecha_hora=timezone.now(),
@@ -115,7 +115,7 @@ def inicio(request):
             usuario,
             informe,
             'Crear informe',
-            RESULTADO_EXITO,  #  Constante importada
+            RESULTADO_EXITO,  # Constante importada
             f'Código: {informe.codigo} | Versión: {informe.version_entrega}',
         )
 
@@ -131,14 +131,14 @@ def inicio(request):
 
     # --- Manejo de POST ---
     if request.method == 'POST':
-        #  CRÍTICO: Validar bloqueo en el servidor
+        # CRÍTICO: Validar bloqueo en el servidor
         if informe.estado not in ESTADOS_EDITABLES:
             messages.error(request, MSG_06_04)
             _registrar_auditoria(
                 usuario,
                 informe,
                 'Editar informe',
-                RESULTADO_BLOQUEADO,  #  Constante importada
+                RESULTADO_BLOQUEADO,  # Constante importada
                 f'Intento de edición en estado: {informe.estado}',
             )
             return redirect('informes:montaje')
@@ -149,7 +149,7 @@ def inicio(request):
 
         if form.is_valid():
             if accion == 'guardar_borrador':
-                #  NO cambia el estado. Solo guarda los textos.
+                # NO cambia el estado. Solo guarda los textos.
                 informe = form.save()
 
                 _registrar_auditoria(
