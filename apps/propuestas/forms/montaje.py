@@ -7,6 +7,21 @@ from django.core.exceptions import ValidationError
 
 from apps.propuestas.models import EstadoTramite, Propuesta, SectorEntidad
 
+# ---------------------------------------------------------------------------
+# Mensajes oficiales del BRD SISTRA-01
+# ---------------------------------------------------------------------------
+MSG_01_01 = 'Tu propuesta se guardó como borrador.'
+MSG_01_02 = 'Tu propuesta se envió y quedó en revisión. Te avisaremos cuando tu Director la revise.'
+MSG_01_03 = 'El archivo no corresponde a la plantilla de SISTRA o fue modificada su estructura. Descarga la plantilla de nuevo.'
+MSG_01_04 = 'El archivo debe ser .docx y no superar el tamaño permitido.'
+MSG_01_05 = 'Completa este campo.'
+MSG_01_06 = 'La fecha de fin no puede ser anterior a la de inicio.'
+MSG_01_07 = 'No pudimos guardar tu propuesta. Inténtalo de nuevo.'
+MSG_01_08 = 'Ya tienes una propuesta activa. Solo puedes crear otra si la actual fue rechazada.'
+
+# ---------------------------------------------------------------------------
+# Campos y estados
+# ---------------------------------------------------------------------------
 CAMPOS_OBLIGATORIOS_ENVIO = (
     'titulo',
     'entidad',
@@ -32,6 +47,8 @@ ESTADOS_EDITABLES = (
     EstadoTramite.BORRADOR,
     EstadoTramite.REQUIERE_MODIFICACION,
 )
+
+MAX_UPLOAD_MB = 10
 
 
 class PropuestaMontajeForm(forms.ModelForm):
@@ -84,23 +101,24 @@ class PropuestaMontajeForm(forms.ModelForm):
             'fecha_inicio': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'fecha_fin': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
         }
+        # Labels exactos de la tabla de campos del BRD SISTRA-01
         labels = {
             'titulo': 'Título de la propuesta',
-            'entidad': 'Entidad o institución receptora',
+            'entidad': 'Entidad',
             'sector_entidad': 'Sector de la entidad',
-            'sector': 'Sector de intervención',
+            'sector': 'Sector',
             'zona': 'Zona',
             'area': 'Área',
-            'unidad': 'Unidad / Barrio / Vereda',
+            'unidad': 'Unidad',
             'poblacion_beneficiada': 'Población beneficiada',
             'identificacion_poblacion': 'Identificación de la población',
             'resena_historica': 'Reseña histórica',
-            'identificacion_necesidad': 'Identificación de la necesidad / Problema',
+            'identificacion_necesidad': 'Identificación de la necesidad',
             'justificacion': 'Justificación',
-            'objetivos': 'Objetivos (General y específicos)',
-            'referente_teorico': 'Referente teórico / Marco conceptual',
-            'propuesta_social': 'Propuesta social / Metodología',
-            'impacto_social': 'Impacto social esperado',
+            'objetivos': 'Objetivos',
+            'referente_teorico': 'Referente teórico',
+            'propuesta_social': 'Propuesta social',
+            'impacto_social': 'Impacto social',
             'fecha_inicio': 'Fecha estimada de inicio',
             'fecha_fin': 'Fecha estimada de finalización',
         }
@@ -128,7 +146,7 @@ class PropuestaMontajeForm(forms.ModelForm):
         inicio = cleaned.get('fecha_inicio')
         fin = cleaned.get('fecha_fin')
         if inicio and fin and fin < inicio:
-            self.add_error('fecha_fin', 'La fecha de finalización no puede ser anterior a la fecha de inicio.')
+            self.add_error('fecha_fin', MSG_01_06)
 
         if self.accion == 'enviar':
             faltantes = []
@@ -166,7 +184,6 @@ class PropuestaMontajeForm(forms.ModelForm):
 class CargaPlantillaWordForm(forms.Form):
     """Carga de plantilla Word (.docx) para autocompletar el formulario (BRD SISTRA-01)."""
 
-    MAX_MB = 10
     archivo = forms.FileField(
         label='Plantilla Word (.docx)',
         widget=forms.ClearableFileInput(attrs={'accept': '.docx', 'class': 'form-control'}),
@@ -174,8 +191,6 @@ class CargaPlantillaWordForm(forms.Form):
 
     def clean_archivo(self):
         archivo = self.cleaned_data['archivo']
-        if not archivo.name.lower().endswith('.docx'):
-            raise ValidationError('Solo se aceptan archivos Word con formato .docx.')
-        if archivo.size > self.MAX_MB * 1024 * 1024:
-            raise ValidationError(f'El archivo supera el tamaño máximo permitido ({self.MAX_MB} MB).')
+        if not archivo.name.lower().endswith('.docx') or archivo.size > MAX_UPLOAD_MB * 1024 * 1024:
+            raise ValidationError(MSG_01_04)
         return archivo

@@ -1,43 +1,59 @@
 """SISTRA-01 · Montaje de propuesta: servicio de extracción de plantilla Word.
 
-Soporta lectura mediante python-docx si está disponible, o mediante parseo
-nativo de document.xml (zipfile) para entornos donde python-docx no esté instalado.
+Solo el lector XML (zipfile) se usa; python-docx no está en pyproject.toml.
 """
-from io import BytesIO
 import re
 import unicodedata
 import xml.etree.ElementTree as ET
 import zipfile
+from io import BytesIO
+
+from apps.propuestas.models import SectorEntidad
 
 
 class PlantillaInvalidaError(Exception):
-    """El archivo no es una plantilla Word (.docx) válida o legible."""
+    """El archivo no es la plantilla de SISTRA o su estructura fue modificada."""
 
 
-# Mapeo de campos del modelo Propuesta a etiquetas en español usadas en la plantilla
-ETIQUETAS_CAMPOS = {
-    'titulo': ['titulo', 'titulo de la propuesta', 'nombre del proyecto', 'proyecto'],
-    'entidad': ['entidad', 'entidad beneficiaria', 'institucion', 'organizacion', 'empresa'],
-    'sector_entidad': ['sector entidad', 'tipo entidad', 'sector institucional'],
-    'sector': ['sector', 'sector social', 'area social'],
-    'zona': ['zona', 'ubicacion zona'],
-    'area': ['area', 'area tematica'],
-    'unidad': ['unidad', 'unidad ejecutora', 'barrio', 'comuna'],
-    'poblacion_beneficiada': ['poblacion beneficiada', 'poblacion beneficiaria', 'beneficiarios', 'numero de beneficiarios'],
-    'identificacion_poblacion': ['identificacion de la poblacion', 'poblacion objetivo', 'caracteristicas de la poblacion'],
-    'resena_historica': ['resena historica', 'antecedentes', 'contexto historico'],
-    'identificacion_necesidad': ['identificacion de la necesidad', 'descripcion del problema', 'planteamiento del problema', 'problema'],
-    'justificacion': ['justificacion', 'porque se realiza el proyecto'],
-    'objetivos': ['objetivos', 'objetivo general', 'objetivos especificos'],
-    'referente_teorico': ['referente teorico', 'marco teorico', 'marco conceptual'],
-    'propuesta_social': ['propuesta social', 'metodologia', 'plan de trabajo', 'actividades'],
-    'impacto_social': ['impacto social', 'impacto esperado', 'resultados esperados'],
+# ---------------------------------------------------------------------------
+# Etiquetas exactas del BRD SISTRA-01 (tabla de campos)
+# Una sola etiqueta por campo — coincidencia estricta con la plantilla oficial.
+# ---------------------------------------------------------------------------
+ETIQUETAS_CAMPOS: dict[str, str] = {
+    'Título de la propuesta': 'titulo',
+    'Entidad': 'entidad',
+    'Sector de la entidad': 'sector_entidad',
+    'Población beneficiada': 'poblacion_beneficiada',
+    'Identificación de la población': 'identificacion_poblacion',
+    'Reseña histórica': 'resena_historica',
+    'Identificación de la necesidad': 'identificacion_necesidad',
+    'Justificación': 'justificacion',
+    'Objetivos': 'objetivos',
+    'Referente teórico': 'referente_teorico',
+    'Propuesta social': 'propuesta_social',
+    'Impacto social': 'impacto_social',
+    'Zona': 'zona',
+    'Área': 'area',
+    'Sector': 'sector',
+    'Unidad': 'unidad',
 }
 
-_LOOKUP = {
-    _norm: campo
-    for campo, variantes in ETIQUETAS_CAMPOS.items()
-    for _norm in [unicodedata.normalize('NFKD', v).encode('ASCII', 'ignore').decode().lower().strip() for v in variantes]
+# Todos los campos que deben estar presentes para que la plantilla sea válida
+CAMPOS_PLANTILLA_REQUERIDOS: frozenset[str] = frozenset(ETIQUETAS_CAMPOS.values())
+
+# Lookup normalizado: texto normalizado -> campo del modelo
+def _norm(t: str) -> str:
+    return unicodedata.normalize('NFKD', t).encode('ASCII', 'ignore').decode().lower().strip()
+
+_LOOKUP: dict[str, str] = {
+    _norm(etiqueta): campo
+    for etiqueta, campo in ETIQUETAS_CAMPOS.items()
+}
+
+# Valores válidos para sector_entidad (SectorEntidad choices)
+_SECTORES_VALIDOS: set[str] = {
+    unicodedata.normalize('NFKD', v).encode('ASCII', 'ignore').decode().lower().strip()
+    for v in [SectorEntidad.PUBLICO, SectorEntidad.PRIVADO]
 }
 
 
@@ -47,85 +63,35 @@ def normalizar_etiqueta(texto: str) -> str:
     return re.sub(r'[\s:._\-]+', ' ', t).strip()
 
 
-def extraer_datos_plantilla(archivo) -> dict[str, str]:
-    """Extrae pares campo -> texto desde un archivo .docx."""
+def extraer_datos_plantilla(archivo) -> tuple[dict[str, str], list[str]]:
+    """Extrae pares campo -> texto desde un .docx de la plantilla oficial SISTRA.
+
+    Returns:
+        (datos, avisos): datos extraídos y lista de advertencias (p.ej. sector inválido).
+
+    Raises:
+        PlantillaInvalidaError: si el archivo no es la plantilla oficial o faltan etiquetas.
+    """
     if hasattr(archivo, 'read'):
         contenido = archivo.read()
         archivo_bytes = BytesIO(contenido)
     else:
         archivo_bytes = archivo
 
-    # Intentar con python-docx si está instalado
-    try:
-        from docx import Document
-        return _extraer_con_docx(archivo_bytes)
-    except ImportError:
-        return _extraer_con_xml(archivo_bytes)
-    except Exception as exc:
-        # Fallback a XML directo ante cualquier error de python-docx
-        try:
-            archivo_bytes.seek(0)
-            return _extraer_con_xml(archivo_bytes)
-        except Exception:
-            raise PlantillaInvalidaError('El archivo no es una plantilla .docx legible.') from exc
+    return _extraer_con_xml(archivo_bytes)
 
 
-def _extraer_con_docx(archivo_bytes) -> dict[str, str]:
-    from docx import Document
-    archivo_bytes.seek(0)
-    doc = Document(archivo_bytes)
-    datos: dict[str, str] = {}
-
-    # 1. Búsqueda en tablas (columna 1: etiqueta, columna 2: contenido)
-    for tabla in doc.tables:
-        for fila in tabla.rows:
-            celdas = [c.text.strip() for c in fila.cells]
-            if len(celdas) >= 2:
-                clave = normalizar_etiqueta(celdas[0])
-                if clave in _LOOKUP:
-                    campo = _LOOKUP[clave]
-                    valor = celdas[1].strip()
-                    if valor:
-                        datos.setdefault(campo, valor)
-
-    # 2. Búsqueda en párrafos
-    clave_actual = None
-    acumulado: dict[str, list[str]] = {}
-    for p in doc.paragraphs:
-        texto = p.text.strip()
-        if not texto:
-            continue
-        norm = normalizar_etiqueta(texto)
-        if norm in _LOOKUP:
-            clave_actual = _LOOKUP[norm]
-            acumulado.setdefault(clave_actual, [])
-            continue
-
-        izq, sep, der = texto.partition(':')
-        if sep and len(izq) <= 60 and normalizar_etiqueta(izq) in _LOOKUP:
-            clave_actual = _LOOKUP[normalizar_etiqueta(izq)]
-            acumulado.setdefault(clave_actual, [])
-            if der.strip():
-                acumulado[clave_actual].append(der.strip())
-            continue
-
-        if clave_actual:
-            acumulado[clave_actual].append(texto)
-
-    for campo, lineas in acumulado.items():
-        if lineas:
-            datos.setdefault(campo, '\n'.join(lineas).strip())
-
-    return {k: v for k, v in datos.items() if v}
-
-
-def _extraer_con_xml(archivo_bytes) -> dict[str, str]:
+def _extraer_con_xml(archivo_bytes: BytesIO) -> tuple[dict[str, str], list[str]]:
     """Parseador directo de word/document.xml sin dependencias externas."""
     archivo_bytes.seek(0)
     try:
         with zipfile.ZipFile(archivo_bytes) as z:
             if 'word/document.xml' not in z.namelist():
                 raise PlantillaInvalidaError('Formato .docx no válido: falta word/document.xml')
+            # Rechazar documentos enormes antes de parsear (5 MB descomprimido)
+            info = z.getinfo('word/document.xml')
+            if info.file_size > 5 * 1024 * 1024:
+                raise PlantillaInvalidaError('El documento supera el tamaño máximo permitido para su procesamiento.')
             xml_content = z.read('word/document.xml')
     except (zipfile.BadZipFile, KeyError) as e:
         raise PlantillaInvalidaError('El archivo no es un archivo .docx válido.') from e
@@ -135,7 +101,7 @@ def _extraer_con_xml(archivo_bytes) -> dict[str, str]:
 
     datos: dict[str, str] = {}
 
-    # Tablas
+    # --- Tablas (columna 1: etiqueta, columna 2: contenido) ---
     for tbl in root.findall('.//w:tbl', ns):
         for tr in tbl.findall('.//w:tr', ns):
             tcs = tr.findall('.//w:tc', ns)
@@ -148,8 +114,8 @@ def _extraer_con_xml(archivo_bytes) -> dict[str, str]:
                     if val:
                         datos.setdefault(campo, val)
 
-    # Párrafos
-    clave_actual = None
+    # --- Párrafos con patrón "Etiqueta: valor" o etiqueta sola seguida de contenido ---
+    clave_actual: str | None = None
     acumulado: dict[str, list[str]] = {}
     for p in root.findall('.//w:p', ns):
         texto = ''.join(p.itertext()).strip()
@@ -176,5 +142,48 @@ def _extraer_con_xml(archivo_bytes) -> dict[str, str]:
         if lineas:
             datos.setdefault(campo, '\n'.join(lineas).strip())
 
-    return {k: v for k, v in datos.items() if v}
+    datos = {k: v for k, v in datos.items() if v}
 
+    # --- Validar que todas las etiquetas requeridas estén presentes ---
+    campos_encontrados = set(datos.keys()) | {c for c in CAMPOS_PLANTILLA_REQUERIDOS if c in acumulado or c in datos}
+    # Se considera "presente" si la etiqueta apareció aunque el valor esté vacío
+    etiquetas_presentes: set[str] = set()
+    for tbl in root.findall('.//w:tbl', ns):
+        for tr in tbl.findall('.//w:tr', ns):
+            tcs = tr.findall('.//w:tc', ns)
+            if tcs:
+                norm = normalizar_etiqueta(''.join(tcs[0].itertext()).strip())
+                if norm in _LOOKUP:
+                    etiquetas_presentes.add(_LOOKUP[norm])
+    for p in root.findall('.//w:p', ns):
+        texto = ''.join(p.itertext()).strip()
+        norm = normalizar_etiqueta(texto)
+        if norm in _LOOKUP:
+            etiquetas_presentes.add(_LOOKUP[norm])
+        izq, sep, _ = texto.partition(':')
+        if sep and normalizar_etiqueta(izq) in _LOOKUP:
+            etiquetas_presentes.add(_LOOKUP[normalizar_etiqueta(izq)])
+
+    faltantes = CAMPOS_PLANTILLA_REQUERIDOS - etiquetas_presentes
+    if faltantes:
+        # Mapear de vuelta a nombres legibles para el mensaje
+        nombre_por_campo = {v: k for k, v in ETIQUETAS_CAMPOS.items()}
+        nombres_faltantes = ', '.join(sorted(nombre_por_campo.get(c, c) for c in faltantes))
+        raise PlantillaInvalidaError(
+            f'El archivo no corresponde a la plantilla de SISTRA o fue modificada su estructura. '
+            f'Descarga la plantilla de nuevo. '
+            f'(Etiquetas no encontradas: {nombres_faltantes})'
+        )
+
+    # --- Validar sector_entidad ---
+    avisos: list[str] = []
+    if 'sector_entidad' in datos:
+        norm_sector = normalizar_etiqueta(datos['sector_entidad'])
+        if norm_sector not in _SECTORES_VALIDOS:
+            avisos.append(
+                f'El valor «{datos["sector_entidad"]}» en «Sector de la entidad» no es válido '
+                f'(debe ser Público o Privado). El campo quedó vacío para que lo selecciones.'
+            )
+            del datos['sector_entidad']
+
+    return datos, avisos

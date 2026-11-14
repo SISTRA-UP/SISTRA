@@ -77,7 +77,6 @@
                 </div>
                 <div class="d-flex justify-content-between align-items-center mt-1">
                     <small class="text-muted">Se requiere 100% de avance para enviar a revisión.</small>
-                    <small id="estado-guardado" class="text-secondary fw-semibold"></small>
                 </div>
             </div>
         </div>
@@ -339,12 +338,21 @@
             {% if not bloqueado %}
                 <div class="card shadow-sm mb-5 border-0 bg-light">
                     <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
-                        <button type="submit" name="accion" value="guardar" class="btn btn-outline-secondary px-4">
-                            Guardar borrador
-                        </button>
-                        <button type="submit" name="accion" value="enviar" id="btn-enviar" class="btn btn-success px-4" {% if progreso < 100 %}disabled{% endif %}>
-                            Enviar propuesta a revisión
-                        </button>
+                        <!-- Cancelar (FA-04): pide confirmación si hay cambios -->
+                        <a href="{% url 'propuestas:montaje' %}" id="btn-cancelar" class="btn btn-outline-secondary px-4">
+                            Cancelar
+                        </a>
+                        <div class="d-flex gap-2">
+                            <button type="submit" name="accion" value="guardar" class="btn btn-outline-primary px-4">
+                                Guardar borrador
+                            </button>
+                            <!-- Enviar: abre modal de confirmación (paso 7 del flujo) -->
+                            <button type="button" id="btn-abrir-modal-enviar"
+                                    class="btn btn-success px-4" {% if progreso < 100 %}disabled{% endif %}
+                                    data-bs-toggle="modal" data-bs-target="#modalConfirmarEnvio">
+                                Enviar propuesta
+                            </button>
+                        </div>
                     </div>
                     <div class="card-footer bg-transparent border-0 text-muted small pt-0">
                         <span class="text-danger">*</span> Campos obligatorios para enviar a revisión. El botón de envío se activa automáticamente al completar el 100%.
@@ -356,6 +364,28 @@
 
     {% endif %}
 
+</div>
+
+<!-- Modal de confirmación de envío (BRD paso 7) -->
+<div class="modal fade" id="modalConfirmarEnvio" tabindex="-1" aria-labelledby="modalEnvioLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalEnvioLabel">Confirmar envío de propuesta</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                ¿Estás seguro de que deseas enviar tu propuesta a revisión del Director de Carrera?
+                Una vez enviada no podrás editarla hasta que el Director la revise.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Revisar antes</button>
+                <button type="button" id="btn-confirmar-envio" class="btn btn-success">
+                    Sí, enviar propuesta
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -369,8 +399,7 @@
     const requeridos = Array.from(form.querySelectorAll('[data-required]'));
     const barra = document.getElementById('progreso-barra');
     const texto = document.getElementById('progreso-texto');
-    const btnEnviar = document.getElementById('btn-enviar');
-    const estadoGuardado = document.getElementById('estado-guardado');
+    const btnEnviar = document.getElementById('btn-abrir-modal-enviar');
     const BLOQUEADO = {{ bloqueado|yesno:"true,false" }};
 
     function calcularAvance() {
@@ -401,53 +430,48 @@
 
     if (BLOQUEADO) return;
 
-    // Autoguardado debounced (3 segundos tras último cambio)
-    let temporizador = null;
-    let guardando = false;
+    // FA-04: confirmación antes de salir si hay cambios sin guardar
+    let formModificado = false;
+    form.addEventListener('input', () => { formModificado = true; });
+    form.addEventListener('change', () => { formModificado = true; });
 
-    function programarAutoguardado() {
-        if (temporizador) clearTimeout(temporizador);
-        temporizador = setTimeout(ejecutarAutoguardado, 3000);
-    }
+    // Al guardar/enviar, limpiar el flag para no bloquear la navegación
+    form.addEventListener('submit', () => { formModificado = false; });
 
-    async function ejecutarAutoguardado() {
-        if (guardando) return;
-        // Evitar autoguardar si todos los campos están totalmente vacíos
-        const algunDato = requeridos.some(el => el.value.trim() !== '');
-        if (!algunDato) return;
-
-        guardando = true;
-        if (estadoGuardado) estadoGuardado.textContent = 'Guardando borrador…';
-
-        try {
-            const formData = new FormData(form);
-            formData.set('accion', 'autoguardar');
-
-            const resp = await fetch('{% url "propuestas:autoguardar" %}', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            });
-
-            if (resp.ok) {
-                const data = await resp.json();
-                if (estadoGuardado) {
-                    estadoGuardado.textContent = 'Borrador autoguardado a las ' + new Date().toLocaleTimeString();
-                }
-            } else {
-                if (estadoGuardado) estadoGuardado.textContent = 'No se pudo autoguardar.';
-            }
-        } catch (err) {
-            if (estadoGuardado) estadoGuardado.textContent = 'Sin conexión para autoguardar.';
-        } finally {
-            guardando = false;
+    window.addEventListener('beforeunload', (e) => {
+        if (formModificado) {
+            e.preventDefault();
+            e.returnValue = '';
         }
+    });
+
+    // Cancelar también pide confirmación si hay cambios
+    const btnCancelar = document.getElementById('btn-cancelar');
+    if (btnCancelar) {
+        btnCancelar.addEventListener('click', (e) => {
+            if (formModificado) {
+                const ok = confirm('Tienes cambios sin guardar. ¿Deseas salir sin guardar?');
+                if (!ok) {
+                    e.preventDefault();
+                }
+            }
+        });
     }
 
-    form.addEventListener('input', programarAutoguardado);
+    // Modal de confirmación de envío: al confirmar, envía el formulario
+    const btnConfirmarEnvio = document.getElementById('btn-confirmar-envio');
+    if (btnConfirmarEnvio) {
+        btnConfirmarEnvio.addEventListener('click', () => {
+            formModificado = false; // Evitar el beforeunload
+            // Crear input oculto con la acción y enviar
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'accion';
+            input.value = 'enviar';
+            form.appendChild(input);
+            form.submit();
+        });
+    }
 })();
 </script>
 {% endblock %}
-
