@@ -19,6 +19,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.cargue_up.forms.cargue_propuesta import MSG_03_03, MSG_03_06
 from apps.cargue_up.models import CargueUp, EstadoVerificacion
 from apps.parametrizacion.models import Carrera, Facultad, Parametro, PeriodoAcademico
 from apps.personas.models import (
@@ -44,10 +45,10 @@ class CargueUpSecurityAndViewsTestCase(TestCase):
 
         # Roles
         self.rol_estudiante, _ = Rol.objects.get_or_create(nombre="Estudiante")
-        self.rol_docente, _ = Rol.objects.get_or_create(nombre="Docente")
+        self.rol_director, _ = Rol.objects.get_or_create(nombre="Director")
         self.rol_admin, _ = Rol.objects.get_or_create(nombre="Administrador")
 
-        # Usuarios
+        # Usuarios (sin cambio de contraseña obligatorio, para no ser redirigidos por SISTRA-13)
         self.user_estudiante_1 = Usuario.objects.create_user(
             correo_institucional="estudiante1@unipamplona.edu.co",
             nombre_usuario="estudiante1",
@@ -55,6 +56,7 @@ class CargueUpSecurityAndViewsTestCase(TestCase):
             cedula="1098765432",
             password="Password123!",
             rol=self.rol_estudiante,
+            requiere_cambio_contrasena=False,
         )
         self.user_estudiante_2 = Usuario.objects.create_user(
             correo_institucional="estudiante2@unipamplona.edu.co",
@@ -63,14 +65,16 @@ class CargueUpSecurityAndViewsTestCase(TestCase):
             cedula="1098765433",
             password="Password123!",
             rol=self.rol_estudiante,
+            requiere_cambio_contrasena=False,
         )
         self.user_docente = Usuario.objects.create_user(
-            correo_institucional="docente@unipamplona.edu.co",
-            nombre_usuario="docente",
+            correo_institucional="director@unipamplona.edu.co",
+            nombre_usuario="director",
             nombre="Prof. Carlos Ruiz",
             cedula="9876543210",
             password="Password123!",
-            rol=self.rol_docente,
+            rol=self.rol_director,
+            requiere_cambio_contrasena=False,
         )
         self.user_admo = Usuario.objects.create_user(
             correo_institucional="admo@unipamplona.edu.co",
@@ -79,6 +83,7 @@ class CargueUpSecurityAndViewsTestCase(TestCase):
             cedula="9988776655",
             password="Password123!",
             rol=self.rol_admin,
+            requiere_cambio_contrasena=False,
         )
 
         # Estructura académica
@@ -303,6 +308,56 @@ class CargueUpSecurityAndViewsTestCase(TestCase):
         self.assertIsNotNone(auditoria)
         self.assertEqual(auditoria.resultado, "Bloqueado")
 
+    def test_ir_up_con_propuesta_en_revision_queda_bloqueado(self):
+        """BTN-IR-UP / EX-03: con la propuesta En revisión no redirige a la UP y queda auditado Bloqueado."""
+        Parametro.objects.create(
+            clave="url_up",
+            valor="https://portal.unipamplona.edu.co/plataforma",
+            descripcion="URL de la UP",
+            usuario_actualizacion=self.user_admo,
+        )
+
+        # propuesta_2 (En revisión) pertenece al estudiante 2
+        self.client.force_login(self.user_estudiante_2)
+        res = self.client.get(reverse("cargue_up:ir_a_up", args=[self.propuesta_2.pk]))
+
+        self.assertEqual(res.status_code, 302)
+        self.assertEqual(res.url, reverse("cargue_up:cargue_propuesta"))
+        self.assertNotIn("portal.unipamplona.edu.co", res.url)
+
+        auditoria = Auditoria.objects.filter(
+            accion="Ir a la Plataforma UP",
+            id_registro_afectado=self.propuesta_2.pk,
+        ).first()
+        self.assertIsNotNone(auditoria)
+        self.assertEqual(auditoria.resultado, "Bloqueado")
+
+        # El mensaje MSG-03-06 se muestra en la pantalla de cargue
+        res_inicio = self.client.get(res.url)
+        self.assertContains(res_inicio, MSG_03_06)
+
+    # ==========================================================================
+    # 3b. PRUEBAS DE DESCARGA DE PROPUESTA (SOLO CON APROBADO)
+    # ==========================================================================
+
+    def test_descargar_con_propuesta_subido_en_up_queda_bloqueado(self):
+        """BTN-DESCARGAR: «Solo con Aprobado». En Subido en UP la descarga queda bloqueada y auditada."""
+        self.propuesta_1.estado = EstadoTramite.SUBIDO_EN_UP
+        self.propuesta_1.save(update_fields=["estado"])
+
+        self.client.force_login(self.user_estudiante_1)
+        res = self.client.get(reverse("cargue_up:descargar_propuesta", args=[self.propuesta_1.pk]))
+
+        self.assertEqual(res.status_code, 302)
+        self.assertEqual(res.url, reverse("cargue_up:cargue_propuesta"))
+
+        auditoria = Auditoria.objects.filter(
+            accion="Descargar propuesta",
+            id_registro_afectado=self.propuesta_1.pk,
+        ).first()
+        self.assertIsNotNone(auditoria)
+        self.assertEqual(auditoria.resultado, "Bloqueado")
+
     # ==========================================================================
     # 4. PRUEBAS DEL COMANDO DE RECORDATORIO SEMANAL (CRITERIOS 4 Y 5)
     # ==========================================================================
@@ -319,7 +374,7 @@ class CargueUpSecurityAndViewsTestCase(TestCase):
         ).first()
         self.assertIsNotNone(notificacion_1)
         self.assertEqual(notificacion_1.usuario, self.user_estudiante_1)
-        self.assertIn("Recordatorio semanal", notificacion_1.mensaje)
+        self.assertEqual(notificacion_1.mensaje, MSG_03_03)
 
         # La propuesta 2 está en revisión, NO debe recibir recordatorio
         notificacion_2 = Notificacion.objects.filter(

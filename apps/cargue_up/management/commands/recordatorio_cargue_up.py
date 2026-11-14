@@ -12,6 +12,7 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
+from apps.cargue_up.forms.cargue_propuesta import MSG_03_03
 from apps.cargue_up.models import CargueUp, EstadoVerificacion
 from apps.parametrizacion.models import Parametro
 from apps.propuestas.models import EstadoTramite, Propuesta
@@ -108,18 +109,12 @@ class Command(BaseCommand):
                 if (ahora - fecha_base) < timedelta(days=frecuencia_dias):
                     continue
 
-            # Crear notificación dentro de la plataforma
-            titulo_prop = propuesta.titulo or propuesta.codigo
-            mensaje = (
-                f"Recordatorio semanal: Tu propuesta «{titulo_prop}» fue aprobada. "
-                "Recuerda radicarla en la Plataforma UP para continuar con tu proceso de horas sociales."
-            )
-
+            # Crear notificación dentro de la plataforma (texto oficial MSG-03-03)
             notif = Notificacion.objects.create(
                 usuario=usuario_estudiante,
                 propuesta=propuesta,
                 tipo=TIPO_NOTIFICACION,
-                mensaje=mensaje,
+                mensaje=MSG_03_03,
                 fecha_creacion=ahora,
             )
 

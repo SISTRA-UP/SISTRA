@@ -799,7 +799,7 @@
                 {% if estado_actual == EstadoTramite.APROBADO and not cargue_existente %}
                     <div class="up-alert info">
                         <i class="bi bi-info-circle-fill up-alert-icon"></i>
-                        <div><strong>Tu proyecto fue aprobado.</strong> Descárgalo y cárgalo en la plataforma de la UP. Mientras no se registre el cargue, recibirás recordatorios periódicos dentro de la plataforma.</div>
+                        <div>{{ msg_aprobada }}</div>
                     </div>
                 {% elif estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
                     <div class="up-alert success">
@@ -813,12 +813,12 @@
                 {% elif estado_actual == EstadoTramite.RECHAZADO %}
                     <div class="up-alert warning">
                         <i class="bi bi-exclamation-triangle-fill up-alert-icon"></i>
-                        <div><strong>Proyecto no aprobado.</strong> Tu docente no aprobó tu proyecto, por lo que aún no puedes cargarlo en la UP. Consulta la respuesta de tu docente.</div>
+                        <div>{{ msg_no_aprobada }}</div>
                     </div>
                 {% else %}
                     <div class="up-alert neutral">
                         <i class="bi bi-clock-history up-alert-icon"></i>
-                        <div>Tu proyecto aún no ha sido aprobado por tu docente (Estado: <strong>{{ estado_actual }}</strong>). Podrás cargarlo en el sistema de la UP cuando su estado sea Aprobado.</div>
+                        <div>{{ msg_no_aprobada }}</div>
                     </div>
                 {% endif %}
             </div>
@@ -839,46 +839,53 @@
                     <p class="step-description">Descarga el documento oficial de tu propuesta y accede a la plataforma de la Universidad de Pamplona para radicarlo.</p>
 
                     <div class="step-actions">
-                        <!-- Botón Descargar propuesta -->
-                        {% if puede_cargar or estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual == EstadoTramite.APROBADO_EN_UP %}
+                        <!-- Botón Descargar propuesta (solo con Aprobado) -->
+                        {% if puede_cargar %}
                             {% if pdf_disponible %}
                                 <a href="{% url 'cargue_up:descargar_propuesta' propuesta.pk %}" class="btn btn-up-outline">
                                     <i class="bi bi-download"></i>Descargar propuesta
                                 </a>
                             {% else %}
                                 <div>
-                                    <button type="button" class="btn btn-up-outline" disabled title="El documento oficial en PDF de la propuesta se encuentra en preparación">
+                                    <button type="button" class="btn btn-up-outline" disabled title="Descarga no disponible por ahora">
                                         <i class="bi bi-download"></i>Descargar propuesta
                                     </button>
                                     <span class="text-muted small d-block mt-1">
-                                        <i class="bi bi-info-circle me-1"></i>Documento PDF en preparación (SISTRA-01)
+                                        <i class="bi bi-info-circle me-1"></i>Descarga no disponible por ahora
                                     </span>
                                 </div>
                             {% endif %}
                         {% else %}
-                            <button type="button" class="btn btn-up-outline" disabled title="Disponible solo cuando el proyecto está Aprobado">
+                            <button type="button" class="btn btn-up-outline" disabled title="{{ msg_no_aprobada }}">
                                 <i class="bi bi-download"></i>Descargar propuesta
                             </button>
                         {% endif %}
 
                         <!-- Botón Ir a la Plataforma UP -->
                         {% if puede_cargar and url_up_configurada %}
-                            <a href="{% url 'cargue_up:ir_a_up' propuesta.pk %}" target="_blank" rel="noopener noreferrer" class="btn btn-up-primary" id="btn-ir-up">
+                            <a href="{% url 'cargue_up:ir_a_up' propuesta.pk %}" target="_blank" rel="noopener noreferrer" class="btn btn-up-primary" id="btn-ir-up" onclick="document.getElementById('alerta-nueva-pestana').classList.remove('d-none');">
                                 <i class="bi bi-box-arrow-up-right"></i>Ir a la Plataforma UP
                             </a>
                         {% else %}
                             <div>
-                                <button type="button" class="btn btn-up-primary" disabled title="{% if not url_up_configurada %}El enlace a la plataforma UP no está configurado{% else %}Disponible solo cuando el proyecto está Aprobado{% endif %}">
+                                <button type="button" class="btn btn-up-primary" disabled title="{% if not url_up_configurada %}{{ msg_enlace_no_disponible }}{% else %}{{ msg_no_aprobada }}{% endif %}">
                                     <i class="bi bi-box-arrow-up-right"></i>Ir a la Plataforma UP
                                 </button>
                                 {% if puede_cargar and not url_up_configurada %}
                                     <span class="text-muted small d-block mt-1">
-                                        <i class="bi bi-exclamation-circle me-1"></i>Enlace a la plataforma UP no disponible actualmente
+                                        <i class="bi bi-exclamation-circle me-1"></i>{{ msg_enlace_no_disponible }}
                                     </span>
                                 {% endif %}
                             </div>
                         {% endif %}
                     </div>
+
+                    {% if puede_cargar and url_up_configurada %}
+                        <div id="alerta-nueva-pestana" class="up-alert info mt-3 d-none">
+                            <i class="bi bi-window up-alert-icon"></i>
+                            <div>{{ msg_nueva_pestana }}</div>
+                        </div>
+                    {% endif %}
 
                     {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
                         <div class="step-complete-msg">

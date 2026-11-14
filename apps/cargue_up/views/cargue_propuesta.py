@@ -20,8 +20,10 @@ from django.views.decorators.http import require_GET
 
 from apps.cargue_up.forms.cargue_propuesta import (
     MSG_03_01,
+    MSG_03_02,
     MSG_03_04,
     MSG_03_05,
+    MSG_03_06,
     registrar_auditoria,
 )
 from apps.cargue_up.models import CargueUp, EstadoVerificacion
@@ -45,19 +47,10 @@ def _obtener_url_up() -> tuple[str | None, bool]:
 def _obtener_documento_propuesta_pdf(propuesta: Propuesta) -> tuple[Path | None, str | None]:
     """Busca el documento PDF oficial de la propuesta aprobada.
     
-    El documento oficial se genera en PDF a partir de los datos de la propuesta
-    en coordinación con SISTRA-01. Mientras dicha función compartida no exista
-    o el archivo no se encuentre en el servidor, retorna (None, None).
+    Solo busca el archivo en MEDIA_ROOT. Cuando SISTRA-01 (Deyson) tenga la función
+    compartida que genera el PDF, se conecta aquí. Si no hay archivo, retorna (None, None).
     """
-    # 1. Si existe una función compartida de generación en SISTRA-01
-    try:
-        from apps.propuestas.servicios import generar_pdf_propuesta  # noqa
-        # Si estuviera implementada en SISTRA-01, se usaría aquí
-    except (ImportError, AttributeError):
-        pass
-
-    # 2. Si existe un archivo PDF asociado en MEDIA_ROOT
-    if hasattr(settings, "MEDIA_ROOT") and settings.MEDIA_ROOT:
+    if getattr(settings, "MEDIA_ROOT", None):
         raiz = Path(settings.MEDIA_ROOT).resolve()
         posibles_rutas = [
             raiz / "propuestas" / f"{propuesta.codigo}.pdf",
@@ -190,6 +183,10 @@ def inicio(request: HttpRequest) -> HttpResponse:
         "url_up_configurada": url_up_configurada,
         "pdf_disponible": pdf_disponible,
         "EstadoTramite": EstadoTramite,
+        "msg_aprobada": MSG_03_01,
+        "msg_nueva_pestana": MSG_03_02,
+        "msg_enlace_no_disponible": MSG_03_05,
+        "msg_no_aprobada": MSG_03_06,
     }
 
     return render(request, "cargue_up/cargue_propuesta/inicio.html", contexto)
@@ -202,9 +199,9 @@ def descargar_propuesta(request: HttpRequest, id_propuesta: int) -> HttpResponse
     
     - Requiere sesión y rol Estudiante (PermissionDenied a otros roles).
     - Valida que la propuesta pertenezca estrictamente al estudiante en sesión.
-    - Valida que el estado permita la descarga (Aprobado o Subido en UP).
+    - Valida que el estado de la propuesta sea Aprobado (BTN-DESCARGAR: «Solo con Aprobado»).
     - Mientras la función compartida de generación en PDF con SISTRA-01 no exista,
-      informa al estudiante que el documento está en preparación.
+      informa al estudiante que no se pudo descargar.
     """
     if not hasattr(request.user, "estudiante") or not request.user.estudiante:
         raise PermissionDenied
@@ -215,12 +212,8 @@ def descargar_propuesta(request: HttpRequest, id_propuesta: int) -> HttpResponse
         proceso__estudiante_carrera__estudiante=request.user.estudiante,
     )
 
-    # Validar que el estado permita la descarga
-    if propuesta.estado not in [
-        EstadoTramite.APROBADO,
-        EstadoTramite.SUBIDO_EN_UP,
-        EstadoTramite.APROBADO_EN_UP,
-    ]:
+    # Validar en servidor que el estado permita la descarga: solo Aprobado
+    if propuesta.estado != EstadoTramite.APROBADO:
         registrar_auditoria(
             usuario=request.user,
             accion="Descargar propuesta",
@@ -229,7 +222,7 @@ def descargar_propuesta(request: HttpRequest, id_propuesta: int) -> HttpResponse
             detalle=f"Descarga bloqueada: estado actual {propuesta.estado}",
             resultado="Bloqueado",
         )
-        messages.warning(request, MSG_03_01)
+        messages.warning(request, MSG_03_06)
         return redirect("cargue_up:cargue_propuesta")
 
     pdf_ruta, pdf_nombre = _obtener_documento_propuesta_pdf(propuesta)
@@ -264,6 +257,7 @@ def ir_a_up(request: HttpRequest, id_propuesta: int) -> HttpResponse:
     
     - Requiere sesión y rol Estudiante (PermissionDenied a otros roles).
     - Valida que la propuesta pertenezca estrictamente al estudiante en sesión.
+    - Valida en servidor que la propuesta esté Aprobada (BTN-IR-UP, EX-03).
     - La URL se obtiene de Parametro con clave 'url_up'. Si no está configurada,
       se bloquea la acción informando al estudiante.
     """
@@ -275,6 +269,18 @@ def ir_a_up(request: HttpRequest, id_propuesta: int) -> HttpResponse:
         pk=id_propuesta,
         proceso__estudiante_carrera__estudiante=request.user.estudiante,
     )
+
+    if propuesta.estado != EstadoTramite.APROBADO:
+        registrar_auditoria(
+            usuario=request.user,
+            accion="Ir a la Plataforma UP",
+            tabla_afectada="propuesta",
+            id_registro=propuesta.pk,
+            detalle=f"Acceso bloqueado: estado actual {propuesta.estado}",
+            resultado="Bloqueado",
+        )
+        messages.warning(request, MSG_03_06)
+        return redirect("cargue_up:cargue_propuesta")
 
     url_up, configurada = _obtener_url_up()
 
