@@ -1,6 +1,6 @@
 """Permisos y mixins propios del módulo parametrización."""
 
-from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 
 PERMISO_PARAMETRIZAR = 'sistema.parametrizar'
 
@@ -19,6 +19,19 @@ class ParametrizarRequeridoMixin(PermissionRequiredMixin):
         if self.request.user.is_authenticated:
             self.raise_exception = True
         return super().handle_no_permission()
+
+
+class EstudianteOAdministradorMixin(LoginRequiredMixin, PermissionRequiredMixin):
+    """Permite la descarga a estudiantes y al ADMO con permiso de parametrización."""
+
+    permission_required = PERMISO_PARAMETRIZAR
+
+    def has_permission(self):
+        usuario = self.request.user
+        return (
+            usuario.rol.nombre == 'Estudiante'
+            or (usuario.es_administrador and usuario.has_perm(self.permission_required))
+        )
 
 
 def contexto_menu(usuario):

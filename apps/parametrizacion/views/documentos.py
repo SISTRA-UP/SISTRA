@@ -4,14 +4,18 @@ import csv
 import os
 
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db import transaction
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
 from apps.seguimiento.models import Auditoria
-from apps.parametrizacion.permisos import ParametrizarRequeridoMixin, contexto_menu
+from apps.parametrizacion.permisos import (
+    EstudianteOAdministradorMixin,
+    ParametrizarRequeridoMixin,
+    contexto_menu,
+)
 from apps.parametrizacion import servicios as param_servicios
 
 from ..forms.documentos import PlantillaForm, VersionPlantillaForm
@@ -279,11 +283,10 @@ class DescargaPlantillaCsvEstudiantesView(PermissionRequiredMixin, View):
         return response
 
 
-class DescargaPlantillaPropuestaEstudianteView(LoginRequiredMixin, View):
+class DescargaPlantillaPropuestaEstudianteView(EstudianteOAdministradorMixin, View):
     """Descarga la versión vigente de la plantilla de propuesta para el Estudiante.
 
-    Accesible a cualquier usuario autenticado (SISTRA-01 necesita que el
-    estudiante baje el Word antes de iniciar su propuesta).
+    Accesible al Estudiante y al Administrador (ADMO).
     Si no hay versión vigente cargada, devuelve 404 para que el módulo
     de propuestas sepa que aún no hay plantilla disponible.
     URL: parametrizacion:plantilla_propuesta_estudiante

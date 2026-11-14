@@ -292,7 +292,8 @@ class DescargaPlantillaPropuestaEstudianteTests(TestCase):
 
     URL: parametrizacion:plantilla_propuesta_estudiante
     Reglas:
-      - Usuario autenticado → 200 si hay versión vigente, 404 si no hay.
+      - Estudiante o Administrador → 200 si hay versión vigente, 404 si no hay.
+      - Otros roles autenticados → 403.
       - Usuario no autenticado → redirige al login (LoginRequiredMixin).
     """
 
@@ -310,6 +311,18 @@ class DescargaPlantillaPropuestaEstudianteTests(TestCase):
             nombre='Estudiante Test',
             cedula='100999001',
             nombre_usuario='est',
+            rol=rol,
+            requiere_cambio_contrasena=False,
+        )
+
+    def _crear_director(self):
+        rol, _ = Rol.objects.get_or_create(nombre='Director', defaults={'estado': 'Activo'})
+        return Usuario.objects.create_user(
+            correo_institucional='dir.propuesta@unipamplona.edu.co',
+            password='Director-Test-1',
+            nombre='Director Test',
+            cedula='100999002',
+            nombre_usuario='dir.propuesta',
             rol=rol,
             requiere_cambio_contrasena=False,
         )
@@ -353,8 +366,16 @@ class DescargaPlantillaPropuestaEstudianteTests(TestCase):
         self.assertEqual(resp.status_code, 302)
 
     def test_admo_tambien_puede_descargar(self):
-        """El Administrador también puede acceder (es un usuario autenticado)."""
+        """El Administrador puede acceder con el permiso de parametrización."""
         self._subir_version_propuesta(nombre='propuesta_admo.docx')
         self.client.force_login(self.admin)
         resp = self.client.get(reverse('parametrizacion:plantilla_propuesta_estudiante'))
         self.assertEqual(resp.status_code, 200)
+
+    def test_director_recibe_403(self):
+        director = self._crear_director()
+        self.client.force_login(director)
+
+        resp = self.client.get(reverse('parametrizacion:plantilla_propuesta_estudiante'))
+
+        self.assertEqual(resp.status_code, 403)
