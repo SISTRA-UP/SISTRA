@@ -55,6 +55,24 @@ class DocumentosViewTests(TestCase):
         self.assertRedirects(resp, reverse('parametrizacion:documentos'))
         self.assertTrue(Plantilla.objects.filter(nombre='Formato propuesta').exists())
 
+    def test_tipo_fuera_de_opciones_no_se_guarda(self):
+        self.client.post(reverse('parametrizacion:documentos_nueva'), {
+            'nombre': 'Tipo inválido',
+            'tipo': 'cualquiera',
+            'descripcion': '',
+            'estado': 'Activo',
+        })
+        self.assertFalse(Plantilla.objects.filter(nombre='Tipo inválido').exists())
+
+    def test_estado_fuera_de_opciones_no_se_guarda(self):
+        self.client.post(reverse('parametrizacion:documentos_nueva'), {
+            'nombre': 'Estado inválido',
+            'tipo': 'propuesta',
+            'descripcion': '',
+            'estado': 'Borrado',
+        })
+        self.assertFalse(Plantilla.objects.filter(nombre='Estado inválido').exists())
+
     def test_editar_plantilla(self):
         plantilla = Plantilla.objects.create(
             nombre='Vieja', tipo='otro', descripcion='', estado='Activo'

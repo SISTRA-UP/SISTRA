@@ -20,16 +20,21 @@ ESTADOS_PLANTILLA = [
 class PlantillaForm(forms.ModelForm):
     """Crear o editar una plantilla (sin archivo — el archivo va en VersionPlantillaForm)."""
 
+    tipo = forms.ChoiceField(
+        choices=TIPOS_PLANTILLA,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    estado = forms.ChoiceField(
+        choices=ESTADOS_PLANTILLA,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
     class Meta:
         model = Plantilla
         fields = ['nombre', 'tipo', 'descripcion', 'estado']
         widgets = {
             'nombre':      forms.TextInput(attrs={'class': 'form-control'}),
-            'tipo':        forms.Select(attrs={'class': 'form-select'},
-                                        choices=TIPOS_PLANTILLA),
             'descripcion': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'estado':      forms.Select(attrs={'class': 'form-select'},
-                                        choices=ESTADOS_PLANTILLA),
         }
         labels = {
             'nombre':      'Nombre',
