@@ -35,7 +35,7 @@ def quitar(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('parametrizacion', '0003_siembra_etapas_y_rechazos_por_defecto'),
+        ('parametrizacion', '0002_siembra_carrera_derecho'),
         ('usuarios', '0003_siembra_permisos_de_gestion_de_usuarios'),
     ]
 
