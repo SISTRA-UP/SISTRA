@@ -1,0 +1,52 @@
+{% extends 'parametrizacion/parametrizacion/_pagina.html' %}
+
+{% block titulo %}Editar etapa · Estados del proceso · Parametrización · SISTRA-UP{% endblock %}
+
+{% block principal %}
+<p class="sis-eyebrow">Parametrización · Estados del proceso</p>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="sis-titulo">Editar etapa del proceso</h1>
+        <p class="sis-sub mb-0">Modifique los datos o el estado de la etapa «{{ actividad.nombre }}».</p>
+    </div>
+    <a href="{% url 'parametrizacion:estados' %}" class="btn btn-outline-secondary">← Volver</a>
+</div>
+
+<section class="sis-card" style="max-width: 650px;">
+    <form method="post" novalidate>
+        {% csrf_token %}
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="{{ form.nombre.id_for_label }}">{{ form.nombre.label }} *</label>
+            {{ form.nombre }}
+            {% for error in form.nombre.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="{{ form.orden.id_for_label }}">{{ form.orden.label }} *</label>
+            {{ form.orden }}
+            <div class="form-text">Secuencia numérica en el flujo de Trabajo Social.</div>
+            {% for error in form.orden.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="{{ form.descripcion.id_for_label }}">{{ form.descripcion.label }}</label>
+            {{ form.descripcion }}
+            {% for error in form.descripcion.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="mb-3 form-check">
+            {{ form.obligatoria }}
+            <label class="form-check-label" for="{{ form.obligatoria.id_for_label }}">
+                {{ form.obligatoria.label }}
+            </label>
+            {% for error in form.obligatoria.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="mb-4">
+            <label class="form-label fw-semibold" for="{{ form.estado.id_for_label }}">{{ form.estado.label }}</label>
+            {{ form.estado }}
+            {% for error in form.estado.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="d-flex justify-content-end gap-2">
+            <a href="{% url 'parametrizacion:estados' %}" class="btn btn-outline-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Guardar cambios</button>
+        </div>
+    </form>
+</section>
+{% endblock %}
