@@ -1,0 +1,162 @@
+{% comment %}
+  template.html — Registro y Gestión de Propuesta de Trabajo Social (SIS-01)
+  Extiende tu base si la tienes: {% extends "base.html" %} y envuelve el contenido en un {% block %}.
+{% endcomment %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Propuesta de Trabajo Social</title>
+  <style>
+    :root { --bg:#f6f7f9; --card:#fff; --txt:#1f2933; --muted:#667085; --line:#d0d5dd;
+            --brand:#1d4ed8; --ok:#15803d; --warn:#b45309; --err:#b91c1c; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#111418; --card:#1a1f26; --txt:#e6e8eb; --muted:#9aa4b2; --line:#323a45; --brand:#60a5fa; }
+    }
+    body { margin:0; background:var(--bg); color:var(--txt); font:16px/1.5 system-ui, sans-serif; }
+    main { max-width:820px; margin:0 auto; padding:24px 16px 64px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:16px; }
+    h1 { font-size:1.4rem; margin:0 0 4px; }
+    .badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:.8rem; border:1px solid var(--line); }
+    .badge.EN_REVISION { color:var(--warn); } .badge.APROBADO { color:var(--ok); }
+    .field { margin-bottom:16px; }
+    label { display:block; font-weight:600; margin-bottom:4px; }
+    .req { color:var(--err); }
+    input[type=text], select, textarea { width:100%; box-sizing:border-box; padding:8px 10px; font:inherit;
+      color:var(--txt); background:var(--bg); border:1px solid var(--line); border-radius:8px; }
+    input:disabled, select:disabled, textarea:disabled { opacity:.65; cursor:not-allowed; }
+    .progress-wrap { position:sticky; top:0; background:var(--card); z-index:2; padding:12px 20px;
+      border:1px solid var(--line); border-radius:12px; margin-bottom:16px; }
+    .bar { height:10px; background:var(--line); border-radius:999px; overflow:hidden; }
+    .bar > span { display:block; height:100%; width:0; background:var(--brand); transition:width .25s; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    button { font:inherit; padding:9px 18px; border-radius:8px; border:1px solid var(--line);
+      background:var(--card); color:var(--txt); cursor:pointer; }
+    button.primary { background:var(--brand); border-color:var(--brand); color:#fff; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .msg { padding:10px 14px; border-radius:8px; margin-bottom:8px; border:1px solid var(--line); }
+    .msg.error { color:var(--err); } .msg.success { color:var(--ok); } .msg.warning { color:var(--warn); }
+    .errorlist { color:var(--err); margin:4px 0 0; padding-left:18px; font-size:.9rem; }
+    .muted { color:var(--muted); font-size:.9rem; }
+    #estado-guardado { margin-left:auto; }
+  </style>
+</head>
+<body>
+<main>
+  <header class="card">
+    <h1>Propuesta de Trabajo Social</h1>
+    <span class="badge {{ propuesta.estado|default:'BORRADOR' }}">{{ estado }}</span>
+  </header>
+
+  {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+
+  {% if propuesta.estado == "REQUIERE_MODIFICACION" and propuesta.observaciones_director %}
+    <div class="msg warning"><strong>Observaciones del Director:</strong> {{ propuesta.observaciones_director|linebreaksbr }}</div>
+  {% endif %}
+  {% if bloqueado %}
+    <div class="msg warning">Esta propuesta está bloqueada para edición mientras permanezca en estado «{{ estado }}».</div>
+  {% endif %}
+
+  {# ---- Carga de plantilla Word (formulario independiente: los <form> no se anidan) ---- #}
+  {% if not bloqueado %}
+  <form class="card" method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="accion" value="importar_word">
+    <label for="{{ word_form.archivo.id_for_label }}">{{ word_form.archivo.label }}</label>
+    <div class="row">
+      {{ word_form.archivo }}
+      <button type="submit">Autocompletar desde Word</button>
+    </div>
+    <p class="muted">Se rellenarán los campos reconocidos. Nada se guarda hasta que pulses «Guardar borrador».</p>
+  </form>
+  {% endif %}
+
+  {# ---- Barra de progreso ---- #}
+  <div class="progress-wrap" role="status" aria-live="polite">
+    <div class="row"><strong>Avance</strong><span id="progreso-texto">{{ progreso }}%</span></div>
+    <div class="bar"><span id="progreso-barra" style="width: {{ progreso }}%"></span></div>
+  </div>
+
+  {# ---- Formulario principal ---- #}
+  <form id="form-propuesta" class="card" method="post" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <ul class="errorlist">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>
+    {% endif %}
+
+    {% for field in form %}
+      <div class="field">
+        <label for="{{ field.id_for_label }}">
+          {{ field.label }}{% if field.field.es_obligatorio %} <span class="req" aria-hidden="true">*</span>{% endif %}
+        </label>
+        {{ field }}
+        {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+      </div>
+    {% endfor %}
+
+    {% if not bloqueado %}
+    <div class="row">
+      <button type="submit" name="accion" value="guardar">Guardar borrador</button>
+      <button type="submit" name="accion" value="enviar" id="btn-enviar" class="primary" disabled>Enviar propuesta</button>
+      <span id="estado-guardado" class="muted" aria-live="polite"></span>
+    </div>
+    <p class="muted"><span class="req">*</span> Obligatorio para enviar. «Enviar propuesta» se habilita al completar todos los campos obligatorios.</p>
+    {% endif %}
+  </form>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  const BLOQUEADO = {{ bloqueado|yesno:"true,false" }};
+  const form = document.getElementById("form-propuesta");
+  const requeridos = Array.from(form.querySelectorAll("[data-required]"));
+  const barra = document.getElementById("progreso-barra");
+  const texto = document.getElementById("progreso-texto");
+  const btnEnviar = document.getElementById("btn-enviar");
+  const estadoGuardado = document.getElementById("estado-guardado");
+
+  /** Avance real = campos obligatorios con contenido / total de obligatorios. */
+  function calcular() {
+    const llenos = requeridos.filter(el => el.value.trim() !== "").length;
+    const pct = requeridos.length ? Math.round(100 * llenos / requeridos.length) : 0;
+    barra.style.width = pct + "%";
+    texto.textContent = pct + "%";
+    if (btnEnviar) btnEnviar.disabled = BLOQUEADO || llenos < requeridos.length;
+  }
+  form.addEventListener("input", calcular);
+  form.addEventListener("change", calcular);
+  calcular();                                   // estado inicial (también tras importar desde Word)
+
+  if (BLOQUEADO) return;
+
+  /** Autoguardado en borrador (3 s después de la última edición). */
+  let temporizador = null, guardando = false;
+  async function autoguardar() {
+    if (guardando || requeridos.every(el => el.value.trim() === "")) return;   // no crea borradores vacíos
+    guardando = true;
+    estadoGuardado.textContent = "Guardando…";
+    try {
+      const datos = new FormData(form);
+      datos.set("accion", "autoguardar");
+      const r = await fetch(window.location.href, {
+        method: "POST", body: datos, headers: { "X-Requested-With": "XMLHttpRequest" },
+        credentials: "same-origin",
+      });
+      const json = await r.json();
+      estadoGuardado.textContent = json.ok ? "Borrador guardado" : "No se pudo autoguardar";
+    } catch (e) {
+      estadoGuardado.textContent = "Sin conexión: no se pudo autoguardar";
+    } finally {
+      guardando = false;
+    }
+  }
+  form.addEventListener("input", () => {
+    clearTimeout(temporizador);
+    temporizador = setTimeout(autoguardar, 3000);
+  });
+})();
+</script>
+</body>
+</html>

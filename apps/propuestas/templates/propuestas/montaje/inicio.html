@@ -1,0 +1,453 @@
+{% extends 'base.html' %}
+
+{% block titulo %}
+    Montaje de Propuesta de Trabajo Social · SISTRA-UP
+{% endblock %}
+
+{% block contenido %}
+<div class="container py-4" style="max-width: 980px;">
+
+    <!-- Encabezado -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center pb-3 mb-4 border-bottom">
+        <div>
+            <h1 class="h3 text-dark fw-bold mb-1">Propuesta de Trabajo Social</h1>
+            {% if carrera %}
+                <p class="text-muted small mb-0">Carrera: <span class="fw-semibold">{{ carrera.nombre }}</span></p>
+            {% endif %}
+        </div>
+        <div class="mt-2 mt-sm-0">
+            {% if propuesta %}
+                {% if propuesta.estado == 'Borrador' %}
+                    <span class="badge bg-secondary fs-6">Borrador</span>
+                {% elif propuesta.estado == 'En revisión' %}
+                    <span class="badge bg-warning text-dark fs-6">En revisión</span>
+                {% elif propuesta.estado == 'Requiere modificación' %}
+                    <span class="badge bg-info text-dark fs-6">Requiere modificación</span>
+                {% elif propuesta.estado == 'Aprobado' %}
+                    <span class="badge bg-success fs-6">Aprobado</span>
+                {% else %}
+                    <span class="badge bg-dark fs-6">{{ propuesta.estado }}</span>
+                {% endif %}
+            {% else %}
+                <span class="badge bg-secondary fs-6">Nueva Propuesta</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Mensajes Django -->
+    {% for message in messages %}
+        <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags == 'warning' %}warning{% elif message.tags == 'info' %}info{% else %}success{% endif %} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+        </div>
+    {% endfor %}
+
+    {% if sin_proceso %}
+        <div class="alert alert-warning py-4 text-center shadow-sm">
+            <h4 class="alert-heading fw-bold">Atención</h4>
+            <p class="mb-0">{{ mensaje_sin_proceso }}</p>
+        </div>
+    {% else %}
+
+        {% if observacion_director %}
+            <div class="alert alert-warning shadow-sm border-warning">
+                <h5 class="alert-heading fw-bold">Observaciones del Director (Requiere Modificación)</h5>
+                <p class="mb-0">{{ observacion_director|linebreaksbr }}</p>
+            </div>
+        {% endif %}
+
+        {% if bloqueado %}
+            <div class="alert alert-info shadow-sm">
+                <i class="bi bi-info-circle me-1"></i>
+                Esta propuesta está actualmente en estado <strong>«{{ propuesta.estado }}»</strong> y se encuentra bloqueada para edición.
+            </div>
+        {% endif %}
+
+        <!-- Barra fija de avance (Progress) -->
+        <div class="card shadow-sm mb-4 sticky-top bg-white border-primary-subtle" style="top: 1rem; z-index: 1020;">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="fw-bold text-primary">Avance de la propuesta</span>
+                    <span id="progreso-texto" class="badge bg-primary fs-6">{{ progreso }}%</span>
+                </div>
+                <div class="progress" style="height: 12px;">
+                    <div id="progreso-barra" class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                         role="progressbar" style="width: {{ progreso }}%;" aria-valuenow="{{ progreso }}"
+                         aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-1">
+                    <small class="text-muted">Se requiere 100% de avance para enviar a revisión.</small>
+                    <small id="estado-guardado" class="text-secondary fw-semibold"></small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Carga opcional de plantilla Word (.docx) -->
+        {% if not bloqueado %}
+            <div class="card shadow-sm mb-4 border-secondary-subtle">
+                <div class="card-header bg-light py-2">
+                    <span class="fw-bold text-secondary">¿Diligenciaste tu propuesta en la plantilla de Word?</span>
+                </div>
+                <div class="card-body py-3">
+                    <form method="post" enctype="multipart/form-data" class="row g-2 align-items-center">
+                        {% csrf_token %}
+                        <input type="hidden" name="accion" value="importar_word">
+                        <div class="col-md-8 col-sm-12">
+                            {{ word_form.archivo }}
+                        </div>
+                        <div class="col-md-4 col-sm-12">
+                            <button type="submit" class="btn btn-outline-primary w-100">
+                                Autocompletar desde Word
+                            </button>
+                        </div>
+                        <small class="text-muted mt-1">
+                            Sube el archivo .docx para rellenar automáticamente los campos reconocidos.
+                        </small>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+
+        <!-- Formulario principal de la propuesta -->
+        <form id="form-propuesta" method="post" novalidate>
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    <ul class="mb-0">
+                        {% for err in form.non_field_errors %}
+                            <li>{{ err }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            <!-- Sección 1: Información General -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white fw-semibold">
+                    1. Información General del Proyecto
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="{{ form.titulo.id_for_label }}" class="form-label fw-bold">
+                            {{ form.titulo.label }} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.titulo }}
+                        {% if form.titulo.errors %}
+                            <div class="text-danger small mt-1">{{ form.titulo.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6 col-sm-12">
+                            <label for="{{ form.entidad.id_for_label }}" class="form-label fw-bold">
+                                {{ form.entidad.label }} <span class="text-danger">*</span>
+                            </label>
+                            {{ form.entidad }}
+                            {% if form.entidad.errors %}
+                                <div class="text-danger small mt-1">{{ form.entidad.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 col-sm-12">
+                            <label for="{{ form.sector_entidad.id_for_label }}" class="form-label fw-bold">
+                                {{ form.sector_entidad.label }} <span class="text-danger">*</span>
+                            </label>
+                            {{ form.sector_entidad }}
+                            {% if form.sector_entidad.errors %}
+                                <div class="text-danger small mt-1">{{ form.sector_entidad.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4 col-sm-12">
+                            <label for="{{ form.sector.id_for_label }}" class="form-label fw-bold">
+                                {{ form.sector.label }} <span class="text-danger">*</span>
+                            </label>
+                            {{ form.sector }}
+                            {% if form.sector.errors %}
+                                <div class="text-danger small mt-1">{{ form.sector.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 col-sm-6">
+                            <label for="{{ form.fecha_inicio.id_for_label }}" class="form-label fw-bold">
+                                {{ form.fecha_inicio.label }} <span class="text-danger">*</span>
+                            </label>
+                            {{ form.fecha_inicio }}
+                            {% if form.fecha_inicio.errors %}
+                                <div class="text-danger small mt-1">{{ form.fecha_inicio.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 col-sm-6">
+                            <label for="{{ form.fecha_fin.id_for_label }}" class="form-label fw-bold">
+                                {{ form.fecha_fin.label }} <span class="text-danger">*</span>
+                            </label>
+                            {{ form.fecha_fin }}
+                            {% if form.fecha_fin.errors %}
+                                <div class="text-danger small mt-1">{{ form.fecha_fin.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección 2: Ubicación y Población -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white fw-semibold">
+                    2. Ubicación y Caracterización de la Población
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4 col-sm-12">
+                            <label for="{{ form.zona.id_for_label }}" class="form-label fw-bold">
+                                {{ form.zona.label }} <span class="text-danger">*</span>
+                            </label>
+                            {{ form.zona }}
+                            {% if form.zona.errors %}
+                                <div class="text-danger small mt-1">{{ form.zona.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 col-sm-12">
+                            <label for="{{ form.area.id_for_label }}" class="form-label fw-bold">
+                                {{ form.area.label }} <span class="text-danger">*</span>
+                            </label>
+                            {{ form.area }}
+                            {% if form.area.errors %}
+                                <div class="text-danger small mt-1">{{ form.area.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 col-sm-12">
+                            <label for="{{ form.unidad.id_for_label }}" class="form-label fw-bold">
+                                {{ form.unidad.label }} <span class="text-danger">*</span>
+                            </label>
+                            {{ form.unidad }}
+                            {% if form.unidad.errors %}
+                                <div class="text-danger small mt-1">{{ form.unidad.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.poblacion_beneficiada.id_for_label }}" class="form-label fw-bold">
+                            {{ form.poblacion_beneficiada.label }} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.poblacion_beneficiada }}
+                        {% if form.poblacion_beneficiada.errors %}
+                            <div class="text-danger small mt-1">{{ form.poblacion_beneficiada.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.identificacion_poblacion.id_for_label }}" class="form-label fw-bold">
+                            {{ form.identificacion_poblacion.label }} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.identificacion_poblacion }}
+                        {% if form.identificacion_poblacion.errors %}
+                            <div class="text-danger small mt-1">{{ form.identificacion_poblacion.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección 3: Formulación y Diagnóstico -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white fw-semibold">
+                    3. Formulación y Diagnóstico del Proyecto
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="{{ form.resena_historica.id_for_label }}" class="form-label fw-bold">
+                            {{ form.resena_historica.label }} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.resena_historica }}
+                        {% if form.resena_historica.errors %}
+                            <div class="text-danger small mt-1">{{ form.resena_historica.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.identificacion_necesidad.id_for_label }}" class="form-label fw-bold">
+                            {{ form.identificacion_necesidad.label }} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.identificacion_necesidad }}
+                        {% if form.identificacion_necesidad.errors %}
+                            <div class="text-danger small mt-1">{{ form.identificacion_necesidad.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.justificacion.id_for_label }}" class="form-label fw-bold">
+                            {{ form.justificacion.label }} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.justificacion }}
+                        {% if form.justificacion.errors %}
+                            <div class="text-danger small mt-1">{{ form.justificacion.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.objetivos.id_for_label }}" class="form-label fw-bold">
+                            {{ form.objetivos.label }} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.objetivos }}
+                        {% if form.objetivos.errors %}
+                            <div class="text-danger small mt-1">{{ form.objetivos.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección 4: Metodología e Impacto -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white fw-semibold">
+                    4. Metodología e Impacto Esperado
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="{{ form.referente_teorico.id_for_label }}" class="form-label fw-bold">
+                            {{ form.referente_teorico.label }} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.referente_teorico }}
+                        {% if form.referente_teorico.errors %}
+                            <div class="text-danger small mt-1">{{ form.referente_teorico.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.propuesta_social.id_for_label }}" class="form-label fw-bold">
+                            {{ form.propuesta_social.label }} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.propuesta_social }}
+                        {% if form.propuesta_social.errors %}
+                            <div class="text-danger small mt-1">{{ form.propuesta_social.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.impacto_social.id_for_label }}" class="form-label fw-bold">
+                            {{ form.impacto_social.label }} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.impacto_social }}
+                        {% if form.impacto_social.errors %}
+                            <div class="text-danger small mt-1">{{ form.impacto_social.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botones de Acción -->
+            {% if not bloqueado %}
+                <div class="card shadow-sm mb-5 border-0 bg-light">
+                    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <button type="submit" name="accion" value="guardar" class="btn btn-outline-secondary px-4">
+                            Guardar borrador
+                        </button>
+                        <button type="submit" name="accion" value="enviar" id="btn-enviar" class="btn btn-success px-4" {% if progreso < 100 %}disabled{% endif %}>
+                            Enviar propuesta a revisión
+                        </button>
+                    </div>
+                    <div class="card-footer bg-transparent border-0 text-muted small pt-0">
+                        <span class="text-danger">*</span> Campos obligatorios para enviar a revisión. El botón de envío se activa automáticamente al completar el 100%.
+                    </div>
+                </div>
+            {% endif %}
+
+        </form>
+
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+(function() {
+    'use strict';
+    const form = document.getElementById('form-propuesta');
+    if (!form) return;
+
+    const requeridos = Array.from(form.querySelectorAll('[data-required]'));
+    const barra = document.getElementById('progreso-barra');
+    const texto = document.getElementById('progreso-texto');
+    const btnEnviar = document.getElementById('btn-enviar');
+    const estadoGuardado = document.getElementById('estado-guardado');
+    const BLOQUEADO = {{ bloqueado|yesno:"true,false" }};
+
+    function calcularAvance() {
+        if (!requeridos.length) return;
+        const llenos = requeridos.filter(el => {
+            if (el.tagName === 'SELECT') {
+                return el.value !== '';
+            }
+            return el.value.trim() !== '';
+        }).length;
+
+        const pct = Math.round(100 * llenos / requeridos.length);
+        if (barra) {
+            barra.style.width = pct + '%';
+            barra.setAttribute('aria-valuenow', pct);
+        }
+        if (texto) {
+            texto.textContent = pct + '%';
+        }
+        if (btnEnviar && !BLOQUEADO) {
+            btnEnviar.disabled = (pct < 100);
+        }
+    }
+
+    form.addEventListener('input', calcularAvance);
+    form.addEventListener('change', calcularAvance);
+    calcularAvance();
+
+    if (BLOQUEADO) return;
+
+    // Autoguardado debounced (3 segundos tras último cambio)
+    let temporizador = null;
+    let guardando = false;
+
+    function programarAutoguardado() {
+        if (temporizador) clearTimeout(temporizador);
+        temporizador = setTimeout(ejecutarAutoguardado, 3000);
+    }
+
+    async function ejecutarAutoguardado() {
+        if (guardando) return;
+        // Evitar autoguardar si todos los campos están totalmente vacíos
+        const algunDato = requeridos.some(el => el.value.trim() !== '');
+        if (!algunDato) return;
+
+        guardando = true;
+        if (estadoGuardado) estadoGuardado.textContent = 'Guardando borrador…';
+
+        try {
+            const formData = new FormData(form);
+            formData.set('accion', 'autoguardar');
+
+            const resp = await fetch('{% url "propuestas:autoguardar" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            if (resp.ok) {
+                const data = await resp.json();
+                if (estadoGuardado) {
+                    estadoGuardado.textContent = 'Borrador autoguardado a las ' + new Date().toLocaleTimeString();
+                }
+            } else {
+                if (estadoGuardado) estadoGuardado.textContent = 'No se pudo autoguardar.';
+            }
+        } catch (err) {
+            if (estadoGuardado) estadoGuardado.textContent = 'Sin conexión para autoguardar.';
+        } finally {
+            guardando = false;
+        }
+    }
+
+    form.addEventListener('input', programarAutoguardado);
+})();
+</script>
+{% endblock %}
+

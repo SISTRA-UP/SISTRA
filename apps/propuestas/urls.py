@@ -17,6 +17,8 @@ app_name = 'propuestas'
 
 urlpatterns = [
     # SISTRA-01 · Montaje de propuesta – Trabajo Social
+    path('mi-propuesta/', montaje.inicio, name='montaje'),
+    path('mi-propuesta/autoguardar/', montaje.autoguardar, name='autoguardar'),
 
     # SISTRA-02 · Aprobación de propuesta
     path('aprobacion/', aprobacion.bandeja, name='aprobacion'),
