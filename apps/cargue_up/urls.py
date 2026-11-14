@@ -39,6 +39,8 @@ urlpatterns = [
     # SISTRA-05 · Notificación de cargue UP – Director
 
     # SISTRA-08 · Notificación de cargue UP (informe)
+    path('informe/', aviso_informe.inicio, name='aviso_informe'),
+    path('informe/confirmar/', aviso_informe.confirmar, name='aviso_informe_confirmar'),
 
     # SISTRA-09 · Notificación de cargue UP – Director (informe)
 ]

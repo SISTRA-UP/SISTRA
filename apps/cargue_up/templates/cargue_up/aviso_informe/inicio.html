@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Cargue en UP · Informe · SISTRA-UP{% endblock %}
+
+{% block contenido %}
+<div class="container-fluid py-3">
+    <h1 class="h3 mb-1">Cargue en UP</h1>
+    <p class="text-muted">SISTRA-08 · Informe de Trabajo Social</p>
+
+    {% for mensaje in messages %}
+    <div class="alert alert-{% if mensaje.level_tag == 'error' %}danger{% else %}{{ mensaje.level_tag }}{% endif %} alert-dismissible fade show" role="alert">
+        {{ mensaje }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+    </div>
+    {% endfor %}
+
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span class="fw-semibold">Mi informe</span>
+            {% if estado == 'bloqueado' %}
+            <span class="badge text-bg-secondary">Bloqueado</span>
+            {% elif estado == 'habilitado' %}
+            <span class="badge text-bg-primary">Aprobado</span>
+            {% else %}
+            <span class="badge text-bg-success">{{ informe.estado }}</span>
+            {% endif %}
+        </div>
+
+        <div class="card-body">
+            {% if estado == 'bloqueado' %}
+            <p class="mb-0">Esta sección se habilita cuando tu Director apruebe el informe.</p>
+
+            {% else %}
+            <p class="mb-1"><strong>{{ informe.codigo }}</strong> · {{ informe.propuesta.titulo }}</p>
+
+            <div class="progress mb-3" role="progressbar" aria-label="Progreso del cargue" aria-valuemin="0"
+                aria-valuemax="100" aria-valuenow="{% if estado == 'habilitado' %}25{% else %}50{% endif %}">
+                <div class="progress-bar {% if estado == 'habilitado' %}w-25{% else %}w-50{% endif %}"></div>
+            </div>
+            <ol class="list-inline small text-muted">
+                <li class="list-inline-item">Aprobado</li>
+                <li class="list-inline-item">→ Subido en UP</li>
+                <li class="list-inline-item">→ Aprobado en UP</li>
+            </ol>
+
+            {% if estado == 'habilitado' %}
+            <p>Cárgalo en la Plataforma UP y vuelve a confirmar aquí.</p>
+            <div class="d-flex flex-wrap gap-2">
+                {% if url_up %}
+                <a class="btn btn-outline-primary btn-lg" href="{{ url_up }}" target="_blank" rel="noopener noreferrer">
+                    Ir a la Plataforma UP
+                </a>
+                {% else %}
+                <button class="btn btn-outline-primary btn-lg" disabled>Ir a la Plataforma UP</button>
+                <span class="text-danger align-self-center">El enlace a la Plataforma UP no está disponible por
+                    ahora.</span>
+                {% endif %}
+                <button class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#modalConfirmar">
+                    Subido en UP
+                </button>
+            </div>
+            {% else %}
+            <div class="alert alert-success mb-0">
+                Avisaste a tu Director
+                {% if ultimo_cargue %}el {{ ultimo_cargue.fecha_declaracion|date:"d/m/Y H:i" }}{% endif %}.
+            </div>
+            {% endif %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if estado == 'habilitado' %}
+<div class="modal fade" id="modalConfirmar" tabindex="-1" aria-labelledby="tituloModal" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="post" action="{% url 'cargue_up:aviso_informe_confirmar' %}"
+            id="formConfirmar">
+            {% csrf_token %}
+            <input type="hidden" name="id_informe" value="{{ informe.pk }}">
+            <div class="modal-header">
+                <h2 class="modal-title h5" id="tituloModal">Confirmar cargue</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">¿Confirmas que ya cargaste tu informe en la Plataforma UP?</div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary" id="btnConfirmar">Confirmar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block js %}
+<script>
+    // Evita el doble clic: deshabilita el botón al enviar.
+    const form = document.getElementById('formConfirmar');
+    if (form) {
+        form.addEventListener('submit', () => {
+            const boton = document.getElementById('btnConfirmar');
+            boton.disabled = true;
+            boton.textContent = 'Registrando…';
+        });
+    }
+</script>
+{% endblock %}
