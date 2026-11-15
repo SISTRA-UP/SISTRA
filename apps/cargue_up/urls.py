@@ -37,6 +37,16 @@ urlpatterns = [
     ),
 
     # SISTRA-05 · Notificación de cargue UP – Director
+	 path(
+        'notificaciones/director/',
+        verificacion_propuesta.notificaciones_director,
+        name='notificaciones_director',
+    ),
+    path(
+        'notificaciones/director/<int:id_notificacion>/leida/',
+        verificacion_propuesta.marcar_notificacion_leida,
+        name='marcar_notificacion_leida',
+    ),
 
     # SISTRA-08 · Notificación de cargue UP (informe)
 
