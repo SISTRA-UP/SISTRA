@@ -1,0 +1,76 @@
+/* SISTRA-09 · estilo de la verificación del Director.
+   Reutiliza la identidad visual del Logueo (SISTRA-13) sin depender de su CSS. */
+:root {
+    --vi-ink: #003366;
+    --vi-red: #ad3333;
+    --vi-red-dark: #8f2929;
+    --vi-pink: #f1caca;
+    --vi-line: #dadada;
+    --vi-muted: #697586;
+    --vi-bg: #f6f7f9;
+}
+
+.vi-page { min-height: 100vh; background: var(--vi-bg); color: var(--vi-ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+
+/* Encabezado azul con la marca, como el panel izquierdo del Logueo */
+.vi-hero { position: relative; overflow: hidden; padding: 28px 0 56px; background: var(--vi-ink); color: #fff; }
+.vi-hero::before, .vi-hero::after { position: absolute; border: 1px solid rgb(225 225 225 / 9%); border-radius: 50%; content: ""; pointer-events: none; }
+.vi-hero::before { top: -140px; right: -120px; width: 460px; height: 460px; }
+.vi-hero::after { top: -60px; right: -30px; width: 300px; height: 300px; }
+.vi-hero > .container { position: relative; z-index: 1; }
+
+.vi-brand { display: inline-flex; align-items: center; gap: 12px; color: #fff; text-decoration: none; }
+.vi-brand:hover { color: #fff; }
+.vi-brand-mark { display: grid; width: 46px; height: 46px; flex: 0 0 46px; place-items: center; overflow: hidden; padding: 2px; border: 1px solid var(--vi-line); border-radius: 12px; background: #fff; }
+.vi-brand-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.vi-brand-word { display: flex; flex-direction: column; font-family: "Source Serif 4", Georgia, "Times New Roman", serif; font-size: 22px; font-weight: 600; line-height: 1; letter-spacing: -.04em; }
+.vi-brand-word span { color: var(--vi-pink); }
+.vi-brand-word small { margin-top: 5px; color: rgb(240 240 240 / 68%); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 9px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+
+.vi-eyebrow { margin: 0 0 11px; font-size: 10px; font-weight: 700; letter-spacing: .15em; line-height: 1.4; text-transform: uppercase; }
+.vi-hero .vi-eyebrow { color: #ababab; }
+.vi-title { margin: 0 0 14px; color: #fff; font-family: "Source Serif 4", Georgia, "Times New Roman", serif; font-size: clamp(34px, 4.6vw, 54px); font-weight: 400; line-height: 1.06; letter-spacing: -.04em; }
+.vi-title em { color: var(--vi-pink); font-weight: 400; }
+.vi-lead { max-width: 620px; margin: 0; color: rgb(244 244 244 / 75%); font-size: 14px; line-height: 1.75; }
+.vi-hero .btn-vi-ghost { border-color: rgb(255 255 255 / 40%); color: #fff; }
+.vi-hero .btn-vi-ghost:hover, .vi-hero .btn-vi-ghost:focus { border-color: #fff; background: rgb(255 255 255 / 12%); color: #fff; }
+
+/* Contenido: tarjetas que suben sobre el encabezado */
+.vi-body { position: relative; z-index: 2; margin-top: -28px; padding-bottom: 56px; }
+.vi-card { border: 1px solid #e8e8e8; border-radius: 14px; background: #fff; box-shadow: 0 12px 40px rgb(0 51 102 / 6%); }
+.vi-card h2 { color: var(--vi-ink); font-family: "Source Serif 4", Georgia, "Times New Roman", serif; font-size: 22px; font-weight: 500; letter-spacing: -.02em; }
+.vi-muted { color: #4b5563; font-size: 13px; line-height: 1.7; }
+
+.vi-pills .nav-link { border-radius: 999px; color: var(--vi-ink); font-size: 13px; font-weight: 600; }
+.vi-pills .nav-link:hover { background: rgb(0 51 102 / 8%); }
+.vi-pills .nav-link.active { background: var(--vi-ink); color: #fff; }
+
+.vi-card .form-label { color: var(--vi-ink); font-size: 13px; font-weight: 600; }
+.vi-card .form-control, .vi-modal .form-control { border-color: #dedede; color: var(--vi-ink); }
+.vi-card .form-control:focus, .vi-modal .form-control:focus { border-color: var(--vi-red); box-shadow: 0 0 0 .2rem rgb(173 51 51 / 12%); }
+
+.vi-table { margin: 0; color: var(--vi-ink); }
+.vi-table thead th { padding: 14px 16px; border-bottom: 1px solid var(--vi-line); background: #f6f6f6; color: var(--vi-ink); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; }
+.vi-table tbody td { padding: 14px 16px; font-size: 13px; }
+.vi-table tbody tr:hover { background: rgb(0 51 102 / 3%); }
+.vi-table .vi-student { font-weight: 600; }
+
+/* Botones con la paleta del Logueo */
+.btn-vi-navy { border-color: var(--vi-ink); background: var(--vi-ink); color: #fff; }
+.btn-vi-navy:hover, .btn-vi-navy:focus { border-color: #002447; background: #002447; color: #fff; }
+.btn-vi-red { border-color: var(--vi-red); background: var(--vi-red); color: #fff; }
+.btn-vi-red:hover, .btn-vi-red:focus { border-color: var(--vi-red-dark); background: var(--vi-red-dark); color: #fff; }
+.btn-vi-outline { border-color: var(--vi-ink); background: transparent; color: var(--vi-ink); }
+.btn-vi-outline:hover, .btn-vi-outline:focus { background: var(--vi-ink); color: #fff; }
+.btn-vi-ghost { border: 1px solid var(--vi-line); background: transparent; color: var(--vi-ink); }
+.vi-card .btn:focus-visible, .vi-hero .btn:focus-visible { box-shadow: 0 0 0 .2rem rgb(173 51 51 / 25%); }
+
+.vi-modal .modal-content { border: 0; border-radius: 14px; }
+.vi-modal .modal-title { color: var(--vi-ink); font-family: "Source Serif 4", Georgia, "Times New Roman", serif; font-weight: 500; letter-spacing: -.02em; }
+.vi-alert { font-size: 13px; }
+.vi-detail dt { color: var(--vi-muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.vi-detail dd { color: var(--vi-ink); font-size: 14px; }
+.vi-empty { padding: 40px 24px; color: var(--vi-ink); text-align: center; }
+
+@media (max-width: 575.98px) { .vi-hero { padding-bottom: 44px; } .vi-table thead th, .vi-table tbody td { padding: 12px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
