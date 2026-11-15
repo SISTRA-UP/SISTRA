@@ -7,7 +7,7 @@ Preparado para integrarse con SISTRA-07 (Aprobación de informe).
 """
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from apps.usuarios.permisos import requiere_permiso
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -68,7 +68,7 @@ def _registrar_auditoria(usuario, informe, accion, resultado, detalle):
     )
 
 
-@login_required
+@requiere_permiso('informe.montar')
 def inicio(request):
     """Vista principal de montaje de informe."""
     usuario = request.user
