@@ -218,7 +218,8 @@ class CrearRolConPermisos(BaseRoles):
         administrador = next(
             rol for rol in respuesta.context['roles'] if rol.nombre == 'Administrador'
         )
-        self.assertEqual(administrador.total_permisos, len(PERMISOS_DE_SISTRA_10))
+        # >= porque otros tickets (SISTRA-11, etc.) siembran permisos adicionales
+        self.assertGreaterEqual(administrador.total_permisos, len(PERMISOS_DE_SISTRA_10))
 
     def test_quien_no_ha_entrado_no_ve_los_roles(self):
         self.client.logout()
