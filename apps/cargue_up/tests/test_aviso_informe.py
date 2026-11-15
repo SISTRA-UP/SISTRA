@@ -5,8 +5,13 @@ Se ejecutan con: uv run python manage.py test
 """
 
 from django.test import TestCase  # noqa: F401
-from datetime import date
+from datetime import date, timedelta
 from unittest import mock
+
+from io import StringIO
+
+from django.core import mail
+from django.core.management import call_command
 
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -15,6 +20,7 @@ from django.utils import timezone
 from apps.cargue_up.models import CargueUp
 from apps.informes.models import Informe
 from apps.parametrizacion.models import Carrera, Facultad, PeriodoAcademico
+from apps.parametrizacion.servicios import guardar
 from apps.personas.models import (
     Director, DirectorCarrera, Estudiante, EstudianteCarrera,
 )
@@ -38,6 +44,13 @@ ESTADO_APROBADO = 'Aprobado'
 ESTADO_SUBIDO = 'Subido en UP'
 ACCION_OK = 'AVISAR_SUBIDO_UP_INFORME'
 ACCION_BLOQUEADO = 'AVISAR_SUBIDO_UP_INFORME_BLOQUEADO'
+URL_IR_UP = 'cargue_up:aviso_informe_ir_up'
+URL_DESCARGAR = 'cargue_up:aviso_informe_descargar'
+ACCION_IR_UP = 'Ir a la Plataforma UP (informe)'
+ACCION_DESCARGAR = 'Descargar informe'
+URL_UP = 'https://up.ejemplo.edu.co/'
+RUTA_URL_UP = 'apps.cargue_up.views.aviso_informe._url_up'
+TIPO_RECORDATORIO = 'RECORDATORIO_CARGUE_UP_INFORME'
 
 
 def _post_confirmar(client, informe_id):
@@ -87,7 +100,6 @@ def _crear_informe(carrera, periodo, estudiante, estado=ESTADO_APROBADO, n=1):
         fecha_creacion=timezone.now(), fecha_actualizacion=timezone.now(),
     )
 
-
 class AvisoInformeBase(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -134,6 +146,22 @@ class PantallaTests(AvisoInformeBase):
         r = self.client.get(reverse(URL_INICIO))
         self.assertEqual(r.status_code, 200)
         self.assertNotContains(r, reverse(URL_CONFIRMAR) + '"')  # sin formulario
+
+    def test_cerrar_sesion_es_un_formulario_post(self):
+        self.entrar(self.user_est)
+        r = self.client.get(reverse(URL_INICIO))
+        self.assertContains(r, f'action="{reverse("usuarios:logout")}"')
+
+    def test_la_pantalla_lee_la_direccion_de_la_clave_url_up(self):
+        guardar('url_up', URL_UP, self.user_dir)
+        self.entrar(self.user_est)
+        r = self.client.get(reverse(URL_INICIO))
+        self.assertEqual(r.context['url_up'], URL_UP)
+
+    def test_sin_url_configurada_la_pantalla_recibe_none(self):
+        self.entrar(self.user_est)
+        r = self.client.get(reverse(URL_INICIO))
+        self.assertIsNone(r.context['url_up'])
 
 
 class ConfirmarTests(AvisoInformeBase):
@@ -254,3 +282,111 @@ class AtomicidadTests(AvisoInformeBase):
         self.assertFalse(CargueUp.objects.filter(informe=self.informe).exists())
         self.assertFalse(HistorialEstado.objects.filter(
             informe=self.informe, estado_nuevo=ESTADO_SUBIDO).exists())
+
+class IrAUpTests(AvisoInformeBase):
+    def test_aprobado_redirige_a_la_url_y_audita_exito(self):
+        self.entrar(self.user_est)
+        with mock.patch(RUTA_URL_UP, return_value=URL_UP):
+            r = self.client.get(reverse(URL_IR_UP))
+        self.assertRedirects(r, URL_UP, fetch_redirect_response=False)
+        self.assertTrue(Auditoria.objects.filter(
+            usuario=self.user_est, accion=ACCION_IR_UP, resultado='Éxito',
+            id_registro_afectado=self.informe.pk).exists())
+
+    def test_no_aprobado_no_redirige_y_audita_bloqueado(self):
+        Informe.objects.filter(pk=self.informe.pk).update(estado='En revisión')
+        self.entrar(self.user_est)
+        with mock.patch(RUTA_URL_UP, return_value=URL_UP):
+            r = self.client.get(reverse(URL_IR_UP))
+        self.assertRedirects(r, reverse(URL_INICIO), fetch_redirect_response=False)
+        self.assertEqual(_mensajes(r)[0][0], messages.WARNING)
+        self.assertTrue(Auditoria.objects.filter(
+            accion=ACCION_IR_UP, resultado='Bloqueado').exists())
+
+    def test_sin_url_audita_bloqueado_y_avisa(self):
+        self.entrar(self.user_est)
+        with mock.patch(RUTA_URL_UP, return_value=None):
+            r = self.client.get(reverse(URL_IR_UP))
+        self.assertRedirects(r, reverse(URL_INICIO), fetch_redirect_response=False)
+        self.assertEqual(_mensajes(r)[0][0], messages.ERROR)
+        self.assertTrue(Auditoria.objects.filter(
+            accion=ACCION_IR_UP, resultado='Bloqueado', detalle='sin_url_up').exists())
+
+    def test_director_recibe_403(self):
+        self.entrar(self.user_dir)
+        r = self.client.get(reverse(URL_IR_UP))
+        self.assertEqual(r.status_code, 403)
+
+
+class DescargarTests(AvisoInformeBase):
+    def test_no_aprobado_es_bloqueado(self):
+        Informe.objects.filter(pk=self.informe.pk).update(estado='En revisión')
+        self.entrar(self.user_est)
+        r = self.client.get(reverse(URL_DESCARGAR))
+        self.assertRedirects(r, reverse(URL_INICIO), fetch_redirect_response=False)
+        self.assertEqual(_mensajes(r)[0][0], messages.WARNING)
+        self.assertTrue(Auditoria.objects.filter(
+            accion=ACCION_DESCARGAR, resultado='Bloqueado').exists())
+
+    def test_aprobado_audita_fallo_con_msg_08_04(self):
+        self.entrar(self.user_est)
+        r = self.client.get(reverse(URL_DESCARGAR))
+        self.assertRedirects(r, reverse(URL_INICIO), fetch_redirect_response=False)
+        nivel, texto = _mensajes(r)[0]
+        self.assertEqual(nivel, messages.ERROR)
+        self.assertIn('No pudimos completar la acción', texto)
+        self.assertTrue(Auditoria.objects.filter(
+            accion=ACCION_DESCARGAR, resultado='Fallo').exists())
+
+    def test_director_recibe_403(self):
+        self.entrar(self.user_dir)
+        self.assertEqual(self.client.get(reverse(URL_DESCARGAR)).status_code, 403)
+
+class RecordatorioTests(AvisoInformeBase):
+    def setUp(self):
+        # El informe del estudiante 1 se aprobó hace 8 días; el del otro (INF-2), sin historial, es reciente.
+        HistorialEstado.objects.create(
+            informe=self.informe, usuario=self.user_dir, estado_nuevo='Aprobado',
+            tipo_accion='Aprobado', fecha_hora=timezone.now() - timedelta(days=8))
+
+    def _correr(self):
+        call_command('recordatorio_cargue_up_informe', '--dias', '7', stdout=StringIO())
+
+    def _recordatorios(self, informe):
+        return Notificacion.objects.filter(informe=informe, tipo=TIPO_RECORDATORIO)
+
+    def test_crea_el_recordatorio_sin_correo_y_lo_audita(self):
+        self._correr()
+        n = self._recordatorios(self.informe)
+        self.assertEqual(n.count(), 1)
+        notif = n.first()
+        self.assertEqual(notif.usuario, self.user_est)
+        self.assertIn('aún no has indicado', notif.mensaje)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertTrue(Auditoria.objects.filter(
+            accion='Envío de recordatorio cargue en UP (informe)',
+            tabla_afectada='notificacion', id_registro_afectado=notif.pk,
+            resultado='Éxito').exists())
+
+    def test_no_repite_antes_de_la_frecuencia(self):
+        self._correr()
+        self._correr()
+        self.assertEqual(self._recordatorios(self.informe).count(), 1)
+
+    def test_repite_pasada_la_frecuencia(self):
+        self._correr()
+        self._recordatorios(self.informe).update(
+            fecha_creacion=timezone.now() - timedelta(days=8))
+        self._correr()
+        self.assertEqual(self._recordatorios(self.informe).count(), 2)
+
+    def test_se_detiene_con_subido_en_up(self):
+        Informe.objects.filter(pk=self.informe.pk).update(estado=ESTADO_SUBIDO)
+        self._correr()
+        self.assertEqual(self._recordatorios(self.informe).count(), 0)
+
+    def test_no_avisa_informes_archivados_ni_recientes(self):
+        Informe.objects.filter(pk=self.informe.pk).update(archivado=True)
+        self._correr()
+        self.assertEqual(self._recordatorios(self.informe).count(), 0)
+        self.assertEqual(self._recordatorios(self.informe_otro).count(), 0)
