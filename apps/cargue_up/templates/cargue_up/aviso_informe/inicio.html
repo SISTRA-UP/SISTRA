@@ -207,7 +207,11 @@
         <span class="d-flex align-items-center gap-2 ps-3 border-start">
             <span class="avatar">{{ request.user.nombre|slice:":1" }}</span>
             <span class="d-none d-sm-inline">{{ request.user.nombre }}</span>
-            <a href="#" class="text-decoration-none" title="Cerrar sesión (SISTRA-13)" aria-label="Cerrar sesión"><i class="bi bi-box-arrow-right"></i></a>
+            <form method="post" action="{% url 'usuarios:logout' %}" class="d-inline m-0">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-link p-0 text-decoration-none" style="color:inherit;"
+                    title="Cerrar sesión (SISTRA-13)" aria-label="Cerrar sesión"><i class="bi bi-box-arrow-right"></i></button>
+            </form>
         </span>
     </div>
 </header>
@@ -288,8 +292,11 @@
                 <li><i class="bi bi-check-lg"></i> Documentos en PDF: informe final, evidencias y certificación.</li>
             </ul>
             <div class="d-flex flex-wrap gap-3 mt-4 ms-2">
+                <a class="btn btn-outline-secondary d-inline-flex align-items-center"
+                    style="min-height:48px;" href="{% url 'cargue_up:aviso_informe_descargar' %}">Descargar informe</a>
                 <a class="btn btn-navy d-inline-flex align-items-center {% if not url_up %}disabled{% endif %}"
-                    href="{{ url_up }}" target="_blank" rel="noopener noreferrer">Ir al sistema UP</a>
+                    href="{% url 'cargue_up:aviso_informe_ir_up' %}" target="_blank" rel="noopener noreferrer"
+                    {% if not url_up %}aria-disabled="true"{% endif %}>Ir al sistema UP</a>
                 <button type="button" class="btn btn-rojo" data-bs-toggle="modal" data-bs-target="#modalConfirmar">
                     Confirmar cargue
                 </button>

@@ -15,6 +15,9 @@ ACCION_AUDITORIA = 'AVISAR_SUBIDO_UP_INFORME'
 ACCION_AUDITORIA_BLOQUEADA = 'AVISAR_SUBIDO_UP_INFORME_BLOQUEADO'
 RESULTADO_EXITO = 'Éxito'
 RESULTADO_BLOQUEADO = 'Bloqueado'
+ACCION_IR_UP = 'Ir a la Plataforma UP (informe)'
+ACCION_DESCARGAR = 'Descargar informe'
+RESULTADO_FALLO = 'Fallo'
 
 # Estados del informe que habilitan o muestran el cargue (RG-02 / RG-06).
 APROBADO = EstadoTramite.APROBADO
@@ -22,6 +25,7 @@ SUBIDO_EN_UP = EstadoTramite.SUBIDO_EN_UP
 APROBADO_EN_UP = EstadoTramite.APROBADO_EN_UP
 
 RUTA_ESTUDIANTE = 'propuesta__proceso__estudiante_carrera__estudiante__usuario'
+
 
 class AvisoInformeError(Exception):
     """Error de negocio; `codigo` apunta al mensaje MSG-08-xx."""
@@ -51,6 +55,17 @@ def _director_usuario(informe):
     )
     return asignacion.director.usuario if asignacion else None
 
+
+def auditar(usuario, accion, informe, resultado, detalle=''):
+    """Registra una acción del estudiante sobre su informe (informe puede ser None)."""
+    Auditoria.objects.create(
+        usuario=usuario,
+        accion=accion,
+        tabla_afectada='informe',
+        id_registro_afectado=informe.pk if informe else None,
+        detalle=detalle,
+        resultado=resultado,
+    )
 
 def registrar_subido_en_up(usuario, id_informe):
     """Registra que el estudiante cargó el informe en la Plataforma UP.
