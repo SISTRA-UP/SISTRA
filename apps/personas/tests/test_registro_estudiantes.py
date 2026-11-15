@@ -683,6 +683,37 @@ class MaximoDeFilasDelCsv(BaseRegistro):
         respuesta = self.subir(self.tres_filas())
         self.assertEqual(respuesta.context['resumen']['registrados'], 3)
 
+    def test_lee_el_maximo_guardado_desde_documentos_y_formatos(self):
+        rol_administrador = self.rol_administrador
+        permiso, _ = Permiso.objects.get_or_create(
+            nombre='sistema.parametrizar',
+            defaults={'descripcion': 'Acceso a parametrización', 'estado': 'Activo'},
+        )
+        RolPermiso.objects.get_or_create(rol=rol_administrador, permiso=permiso)
+        administrador = Usuario.objects.create_user(
+            correo_institucional='admin.maximo@ejemplo.edu.co',
+            password='ClaveDePrueba123',
+            nombre='Admin Máximo',
+            cedula='1000000099',
+            nombre_usuario='admin.maximo',
+            rol=rol_administrador,
+            requiere_cambio_contrasena=False,
+        )
+        self.client.force_login(administrador)
+
+        respuesta_configuracion = self.client.post(
+            reverse('parametrizacion:documentos'),
+            {'max_mb_docx': '10', 'max_mb_csv': '2', 'maximo_filas_csv': '2'},
+        )
+        self.assertEqual(respuesta_configuracion.status_code, 302)
+
+        self.client.force_login(self.director)
+        respuesta_csv = self.subir(self.tres_filas())
+
+        self.assertIsNone(respuesta_csv.context['resumen'])
+        self.assertContains(respuesta_csv, 'el máximo por cargue es 2')
+        self.assertFalse(Usuario.objects.filter(cedula='2000000001').exists())
+
     def test_un_valor_invalido_no_rompe_el_cargue(self):
         self.configurar('muchas')
         respuesta = self.subir(self.tres_filas())

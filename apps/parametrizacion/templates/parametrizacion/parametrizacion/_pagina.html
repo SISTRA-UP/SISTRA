@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:wght@500;600&display=swap">
+<link rel="stylesheet" href="{% static 'css/sistra.css' %}">
+{% endblock %}
+
+{% block contenido %}
+<header class="sis-top">
+    <a class="sis-brand" href="/">SISTRA-UP</a>
+    <div class="sis-user">
+        <span>Espacio del {{ request.user.rol.nombre|lower }}</span>
+        <span class="sis-avatar" aria-hidden="true">{{ request.user.nombre|slice:":1" }}</span>
+        <span>{{ request.user.nombre }}</span>
+        {# Cerrar sesión — lo agrega SISTRA-13 #}
+    </div>
+</header>
+
+<div class="sis-layout">
+    <aside>{% include 'parametrizacion/parametrizacion/_menu.html' %}</aside>
+    <main>
+        {% for mensaje in messages %}
+        <div class="sis-alert sis-alert-{{ mensaje.level_tag }}" role="status">{{ mensaje }}</div>
+        {% endfor %}
+        {% block principal %}{% endblock %}
+    </main>
+</div>
+{% endblock %}
