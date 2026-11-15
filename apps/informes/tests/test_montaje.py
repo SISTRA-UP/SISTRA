@@ -4,6 +4,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
 from datetime import date
+from apps.usuarios.models import Permiso, RolPermiso
 
 from apps.usuarios.models import Usuario, Rol
 from apps.personas.models import Estudiante, EstudianteCarrera
@@ -40,7 +41,12 @@ class MontajeInformeTests(TestCase):
             rol=self.rol,
             requiere_cambio_contrasena=False,
         )
-
+        # Asignar el permiso informe.montar al rol Estudiante para las pruebas
+        permiso_montar, _ = Permiso.objects.get_or_create(
+            nombre='informe.montar',
+            defaults={'descripcion': 'Permite al estudiante montar su informe'}
+        )
+        RolPermiso.objects.get_or_create(rol=self.rol, permiso=permiso_montar)
         self.estudiante = Estudiante.objects.create(usuario=self.usuario)
 
         self.facultad, _ = Facultad.objects.get_or_create(nombre='Facultad Test')
