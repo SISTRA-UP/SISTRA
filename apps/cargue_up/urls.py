@@ -41,4 +41,24 @@ urlpatterns = [
     # SISTRA-08 · Notificación de cargue UP (informe)
 
     # SISTRA-09 · Notificación de cargue UP – Director (informe)
+    path(
+        'verificar/informe/',
+        verificacion_informe.lista,
+        name='verificacion_informe_lista',
+    ),
+    path(
+        'verificar/informe/<int:id_informe>/',
+        verificacion_informe.detalle,
+        name='verificacion_informe_detalle',
+    ),
+    path(
+        'verificar/informe/<int:id_informe>/decidir/',
+        verificacion_informe.decidir,
+        name='verificacion_informe_decidir',
+    ),
+    path(
+        'verificar/informe/<int:id_informe>/corregir/',
+        verificacion_informe.corregir,
+        name='verificacion_informe_corregir',
+    ),
 ]
