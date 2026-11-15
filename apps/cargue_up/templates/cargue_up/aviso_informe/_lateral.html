@@ -1,0 +1,18 @@
+<div class="lateral-titulo text-uppercase mb-2">Mi espacio</div>
+<nav class="d-flex flex-column gap-1 mb-3" aria-label="Menú principal">
+  <a class="lateral-link" href="#">
+    <i class="bi bi-clipboard-check"></i> Mi propuesta
+  </a>
+  <a class="lateral-link" href="#">
+    <i class="bi bi-file-earmark-text"></i> Mi informe
+  </a>
+  {% if perms.cargue_up.avisar %}
+    <a class="lateral-link activo" aria-current="page" href="{% url 'cargue_up:aviso_informe' %}">
+      <i class="bi bi-send"></i> Cargue UP y notificaciones
+    </a>
+  {% endif %}
+</nav>
+<div class="consejo">
+  <b><i class="bi bi-info-circle me-1"></i> Consejo</b><br>
+  No olvides confirmar la subida a UP
+</div>
