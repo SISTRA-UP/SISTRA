@@ -13,7 +13,8 @@ from django.utils import timezone
 
 from apps.cargue_up.models import CargueUp, EstadoVerificacion
 from apps.informes.models import Informe
-from apps.parametrizacion.models import Parametro, TipoRechazo
+from apps.parametrizacion import servicios as servicios_parametrizacion
+from apps.parametrizacion.models import TipoRechazo
 from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.seguimiento.models import Auditoria, HistorialEstado, Notificacion
 from apps.usuarios.models import Estado
@@ -68,25 +69,14 @@ def sanitizar_texto(valor: str) -> str:
 
 
 def obtener_limites_semaforo() -> tuple[int, int]:
-    """Obtiene los umbrales de días del semáforo desde Parametro en BD con fallback a 7 y 14."""
-    """SUJETO A CAMBIOS. Esperando Parametrizacion"""
-    verde = DIAS_SEMAFORO_VERDE
-    amarillo = DIAS_SEMAFORO_AMARILLO
-    try:
-        p_verde = Parametro.objects.filter(
-            clave__in=['dias_semaforo_verde', 'semaforo_verde', 'DIAS_SEMAFORO_VERDE']
-        ).first()
-        if p_verde and p_verde.valor.strip().isdigit():
-            verde = int(p_verde.valor.strip())
+    """Umbrales del semáforo (RG-07) configurados por el ADMO en Parametrización (SISTRA-11).
 
-        p_amarillo = Parametro.objects.filter(
-            clave__in=['dias_semaforo_amarillo', 'semaforo_amarillo', 'DIAS_SEMAFORO_AMARILLO']
-        ).first()
-        if p_amarillo and p_amarillo.valor.strip().isdigit():
-            amarillo = int(p_amarillo.valor.strip())
-    except Exception:
-        pass
-    return verde, amarillo
+    Se leen con la API de SISTRA-11; si un valor no es un entero válido se usan 7 y 14.
+    """
+    return (
+        servicios_parametrizacion.obtener_entero('semaforo.verde_hasta_dias', DIAS_SEMAFORO_VERDE),
+        servicios_parametrizacion.obtener_entero('semaforo.amarillo_hasta_dias', DIAS_SEMAFORO_AMARILLO),
+    )
 
 
 def _salidas_de_revision(propuesta):
