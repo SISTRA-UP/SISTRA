@@ -4,7 +4,7 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
-from django.shortcuts import redirect, render
+from django.shortcuts import redirect
 from django.views.decorators.http import require_POST
 
 from apps.parametrizacion.servicios import obtener
@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 PERMISO = 'cargue_up.avisar'            # Debe reutilizarse en SISTRA-04 y SISTRA-08, porque es el mismo permiso de negocio.
 CLAVE_URL_UP = 'url_up'                 # Misma clave que usa SISTRA-03.
+PANTALLA = 'cargue_up:cargue_propuesta'
 
 MENSAJES = {
     'exito': (messages.SUCCESS, 'Listo. Avisamos a tu Director que subiste el informe a la Plataforma UP.'),   # MSG-08-02
@@ -55,17 +56,7 @@ def _informe_aprobado_o_bloquear(request, accion):
 @login_required
 @permission_required(PERMISO, raise_exception=True)
 def inicio(request):
-    informe = servicio.informe_del_estudiante(request.user)
-    estado = _estado_pantalla(informe)
-    ultimo_cargue = (
-        informe.cargues_up.order_by('-fecha_declaracion').first() if informe else None
-    )
-    return render(request, 'cargue_up/aviso_informe/inicio.html', {
-        'informe': informe,
-        'estado': estado,
-        'ultimo_cargue': ultimo_cargue,
-        'url_up': _url_up(),
-    })
+    return redirect(PANTALLA)
 
 
 @login_required
@@ -73,14 +64,14 @@ def inicio(request):
 def ir_a_up(request):
     informe = _informe_aprobado_o_bloquear(request, servicio.ACCION_IR_UP)
     if informe is None:
-        return redirect('cargue_up:aviso_informe')
+        return redirect(PANTALLA)
     url_up = _url_up()
     if not url_up:
         servicio.auditar(
             request.user, servicio.ACCION_IR_UP, informe,
             servicio.RESULTADO_BLOQUEADO, 'sin_url_up')
         messages.add_message(request, *MENSAJES['sin_enlace'])
-        return redirect('cargue_up:aviso_informe')
+        return redirect(PANTALLA)
     servicio.auditar(request.user, servicio.ACCION_IR_UP, informe, servicio.RESULTADO_EXITO)
     return redirect(url_up)
 
@@ -90,13 +81,13 @@ def ir_a_up(request):
 def descargar(request):
     informe = _informe_aprobado_o_bloquear(request, servicio.ACCION_DESCARGAR)
     if informe is None:
-        return redirect('cargue_up:aviso_informe')
+        return redirect(PANTALLA)
     # El PDF del informe aún no se genera: se audita como Fallo (igual que SISTRA-03).
     servicio.auditar(
         request.user, servicio.ACCION_DESCARGAR, informe,
         servicio.RESULTADO_FALLO, 'documento_no_disponible')
     messages.add_message(request, *MENSAJES['falla'])                  # MSG-08-04
-    return redirect('cargue_up:aviso_informe')
+    return redirect(PANTALLA)
 
 
 @login_required
@@ -113,4 +104,4 @@ def confirmar(request):
         clave = 'falla'
     nivel, texto = MENSAJES[clave]
     messages.add_message(request, nivel, texto)
-    return redirect('cargue_up:aviso_informe')
+    return redirect(PANTALLA)

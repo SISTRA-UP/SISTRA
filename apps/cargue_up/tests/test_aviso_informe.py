@@ -28,6 +28,7 @@ from apps.procesos.models import ProcesoTrabajoSocial
 from apps.propuestas.models import Propuesta
 from apps.seguimiento.models import Auditoria, HistorialEstado, Notificacion
 from apps.usuarios.models import Permiso, Rol, RolPermiso
+from apps.cargue_up.models import CargueUp, EstadoVerificacion
 
 from django.contrib import messages
 from django.contrib.messages import get_messages
@@ -51,6 +52,7 @@ ACCION_DESCARGAR = 'Descargar informe'
 URL_UP = 'https://up.ejemplo.edu.co/'
 RUTA_URL_UP = 'apps.cargue_up.views.aviso_informe._url_up'
 TIPO_RECORDATORIO = 'RECORDATORIO_CARGUE_UP_INFORME'
+URL_PANTALLA = 'cargue_up:cargue_propuesta'
 
 
 def _post_confirmar(client, informe_id):
@@ -134,34 +136,72 @@ class AvisoInformeBase(TestCase):
 
 
 class PantallaTests(AvisoInformeBase):
-    def test_ca01_informe_aprobado_habilita_el_cargue(self):
-        self.entrar(self.user_est)
-        r = self.client.get(reverse(URL_INICIO))
-        self.assertEqual(r.status_code, 200)
-        self.assertContains(r, self.informe.propuesta.titulo)
+    AVISO_BLOQUEO = 'Esta sección se habilita cuando tu Director apruebe el informe.'
 
-    def test_ca02_informe_no_aprobado_no_habilita(self):
+    def _get(self):
+        self.entrar(self.user_est)
+        return self.client.get(reverse(URL_PANTALLA))
+
+    def test_aprobado_muestra_las_acciones(self):
+        r = self._get()
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'id="panel-informe"')
+        self.assertContains(r, reverse(URL_DESCARGAR))
+        self.assertContains(r, f'action="{reverse(URL_CONFIRMAR)}"')
+        self.assertContains(r, 'data-bs-target="#modal-confirmar-informe"')  # texto del botón
+        self.assertNotContains(r, self.AVISO_BLOQUEO)
+
+    def test_en_revision_bloquea(self):
         Informe.objects.filter(pk=self.informe.pk).update(estado='En revisión')
-        self.entrar(self.user_est)
-        r = self.client.get(reverse(URL_INICIO))
-        self.assertEqual(r.status_code, 200)
-        self.assertNotContains(r, reverse(URL_CONFIRMAR) + '"')  # sin formulario
+        r = self._get()
+        self.assertContains(r, self.AVISO_BLOQUEO)
+        self.assertNotContains(r, f'action="{reverse(URL_CONFIRMAR)}"')
+        self.assertNotContains(r, reverse(URL_DESCARGAR))
 
-    def test_cerrar_sesion_es_un_formulario_post(self):
-        self.entrar(self.user_est)
-        r = self.client.get(reverse(URL_INICIO))
-        self.assertContains(r, f'action="{reverse("usuarios:logout")}"')
+    def test_sin_informe(self):
+        Informe.objects.filter(pk=self.informe.pk).delete()
+        r = self._get()
+        self.assertContains(r, 'Sin informe')
+        self.assertContains(r, self.AVISO_BLOQUEO)
 
-    def test_la_pantalla_lee_la_direccion_de_la_clave_url_up(self):
-        guardar('url_up', URL_UP, self.user_dir)
-        self.entrar(self.user_est)
-        r = self.client.get(reverse(URL_INICIO))
-        self.assertEqual(r.context['url_up'], URL_UP)
+    def test_con_url_up_muestra_el_enlace(self):
+        with mock.patch(RUTA_URL_UP, return_value=URL_UP):
+            r = self._get()
+        self.assertContains(r, reverse(URL_IR_UP))
+        self.assertContains(r, 'target="_blank"')
 
-    def test_sin_url_configurada_la_pantalla_recibe_none(self):
+    def test_sin_url_up_no_hay_enlace(self):
+        with mock.patch(RUTA_URL_UP, return_value=None):
+            r = self._get()
+        self.assertNotContains(r, reverse(URL_IR_UP))
+        self.assertContains(
+            r, 'El enlace a la Plataforma UP no está disponible por ahora.')
+
+    def test_subido_en_up(self):
+        CargueUp.objects.create(
+            informe=self.informe, fecha_declaracion=timezone.now(),
+            estado_verificacion=EstadoVerificacion.PENDIENTE)
+        Informe.objects.filter(pk=self.informe.pk).update(estado=ESTADO_SUBIDO)
+        r = self._get()
+        self.assertContains(r, 'Ya avisaste a tu director que subiste el informe')
+        self.assertNotContains(r, f'action="{reverse(URL_CONFIRMAR)}"')
+
+    def test_aprobado_en_up(self):
+        Informe.objects.filter(pk=self.informe.pk).update(estado='Aprobado en UP')
+        r = self._get()
+        self.assertContains(r, 'Tu director verificó el informe en la Plataforma UP.')
+        self.assertNotContains(r, 'Lo verificará')
+
+    def test_el_form_lleva_solo_el_id_propio(self):
+        r = self._get()
+        self.assertContains(r, f'name="id_informe" value="{self.informe.pk}"')
+        self.assertNotContains(
+            r, f'name="id_informe" value="{self.informe_otro.pk}"')
+
+    def test_la_direccion_vieja_redirige_a_la_pantalla(self):
         self.entrar(self.user_est)
         r = self.client.get(reverse(URL_INICIO))
-        self.assertIsNone(r.context['url_up'])
+        self.assertRedirects(r, reverse(URL_PANTALLA), fetch_redirect_response=False)
 
 
 class ConfirmarTests(AvisoInformeBase):
@@ -174,7 +214,7 @@ class ConfirmarTests(AvisoInformeBase):
     def test_ca03_confirmar_registra_todo(self):
         self.entrar(self.user_est)
         r = _post_confirmar(self.client, self.informe.pk)
-        self.assertRedirects(r, reverse(URL_INICIO), fetch_redirect_response=False)
+        self.assertRedirects(r, reverse(URL_PANTALLA), fetch_redirect_response=False)
         self.assertEqual(_mensajes(r)[0][0], messages.SUCCESS)
 
         self.informe.refresh_from_db()
@@ -298,7 +338,7 @@ class IrAUpTests(AvisoInformeBase):
         self.entrar(self.user_est)
         with mock.patch(RUTA_URL_UP, return_value=URL_UP):
             r = self.client.get(reverse(URL_IR_UP))
-        self.assertRedirects(r, reverse(URL_INICIO), fetch_redirect_response=False)
+        self.assertRedirects(r, reverse(URL_PANTALLA), fetch_redirect_response=False)
         self.assertEqual(_mensajes(r)[0][0], messages.WARNING)
         self.assertTrue(Auditoria.objects.filter(
             accion=ACCION_IR_UP, resultado='Bloqueado').exists())
@@ -307,7 +347,7 @@ class IrAUpTests(AvisoInformeBase):
         self.entrar(self.user_est)
         with mock.patch(RUTA_URL_UP, return_value=None):
             r = self.client.get(reverse(URL_IR_UP))
-        self.assertRedirects(r, reverse(URL_INICIO), fetch_redirect_response=False)
+        self.assertRedirects(r, reverse(URL_PANTALLA), fetch_redirect_response=False)
         self.assertEqual(_mensajes(r)[0][0], messages.ERROR)
         self.assertTrue(Auditoria.objects.filter(
             accion=ACCION_IR_UP, resultado='Bloqueado', detalle='sin_url_up').exists())
@@ -323,7 +363,7 @@ class DescargarTests(AvisoInformeBase):
         Informe.objects.filter(pk=self.informe.pk).update(estado='En revisión')
         self.entrar(self.user_est)
         r = self.client.get(reverse(URL_DESCARGAR))
-        self.assertRedirects(r, reverse(URL_INICIO), fetch_redirect_response=False)
+        self.assertRedirects(r, reverse(URL_PANTALLA), fetch_redirect_response=False)
         self.assertEqual(_mensajes(r)[0][0], messages.WARNING)
         self.assertTrue(Auditoria.objects.filter(
             accion=ACCION_DESCARGAR, resultado='Bloqueado').exists())
@@ -331,7 +371,7 @@ class DescargarTests(AvisoInformeBase):
     def test_aprobado_audita_fallo_con_msg_08_04(self):
         self.entrar(self.user_est)
         r = self.client.get(reverse(URL_DESCARGAR))
-        self.assertRedirects(r, reverse(URL_INICIO), fetch_redirect_response=False)
+        self.assertRedirects(r, reverse(URL_PANTALLA), fetch_redirect_response=False)
         nivel, texto = _mensajes(r)[0]
         self.assertEqual(nivel, messages.ERROR)
         self.assertIn('No pudimos completar la acción', texto)
