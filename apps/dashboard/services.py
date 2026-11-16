@@ -44,12 +44,12 @@ BADGES_ESTADO_TRAMITE = {
 }
 
 
-def url_segura(nombre_ruta, *args):
+def url_segura(nombre_ruta, *args, defecto='#'):
     """Resuelve una URL nombrada sin romper la vista si la ruta aún no existe."""
     try:
         return reverse(nombre_ruta, args=args)
     except NoReverseMatch:
-        return None
+        return defecto
 
 
 def registrar_auditoria_dashboard(usuario, panel):
@@ -89,7 +89,12 @@ def obtener_umbrales_semaforo():
 def evaluar_semaforo(fecha_envio, estado, umbrales=None):
     """Calcula el nivel del semáforo para trámites pendientes de revisión."""
     if estado != EstadoTramite.EN_REVISION or not fecha_envio:
-        return {'nivel': None, 'etiqueta': 'No aplica', 'color': 'light', 'dias': None}
+        return {
+            'nivel': None,
+            'etiqueta': 'No aplica',
+            'color': 'secondary',
+            'dias': None,
+        }
 
     dias_verde, dias_amarillo = umbrales or obtener_umbrales_semaforo()
     dias = max((timezone.now() - fecha_envio).days, 0)
@@ -105,7 +110,7 @@ def evaluar_semaforo(fecha_envio, estado, umbrales=None):
         return {
             'nivel': 'amarillo',
             'etiqueta': f'{dias} d · Por vencer',
-            'color': 'warning',
+            'color': 'warning text-dark',
             'dias': dias,
         }
     return {
@@ -129,7 +134,7 @@ def _periodo_vigente():
 
 
 def _calcular_avance_estudiante(proceso, propuesta_activa, informe_activo):
-    """Calcula el porcentaje de avance (0% en FA-01 si aún no existe propuesta)."""
+    """Calcula el porcentaje de avance y el listado de etapas del proceso."""
     if not proceso or not propuesta_activa:
         return 0, []
 
@@ -146,7 +151,6 @@ def _calcular_avance_estudiante(proceso, propuesta_activa, informe_activo):
         porcentaje = round((completadas / total) * 100)
         return porcentaje, etapas
 
-    # Cálculo de respaldo basado en los hitos de propuesta e informe si aún no hay etapas sembradas
     catalogo = list(
         Actividad.objects.filter(estado=Estado.ACTIVO).order_by('orden')
     )
@@ -176,7 +180,7 @@ def _calcular_avance_estudiante(proceso, propuesta_activa, informe_activo):
 
 
 def construir_contexto_estudiante(usuario, id_carrera=None):
-    """Construye el contexto de consulta para el panel «Mi Trabajo Social»."""
+    """Construye el contexto unificado para el panel «Mi Trabajo Social»."""
     estudiante = Estudiante.objects.filter(usuario=usuario).first()
     inscripciones = []
     inscripcion_actual = None
@@ -265,11 +269,39 @@ def construir_contexto_estudiante(usuario, id_carrera=None):
     avance_porcentaje, etapas = _calcular_avance_estudiante(
         proceso, propuesta_activa, informe_activo
     )
+    notificaciones = _notificaciones_no_leidas(usuario)
+
+    accesos_rapidos = [
+        {
+            'etiqueta': 'Montar propuesta',
+            'descripcion': 'Diligenciar o consultar propuesta de Trabajo Social',
+            'url': url_segura('propuestas:montaje'),
+            'clase': 'primary',
+        },
+        {
+            'etiqueta': 'Montar informe',
+            'descripcion': 'Registrar resultados, conclusiones y recomendaciones',
+            'url': url_segura('informes:montaje'),
+            'clase': 'outline-primary',
+        },
+        {
+            'etiqueta': 'Cargue UP propuesta',
+            'descripcion': 'Declarar subida de propuesta en Plataforma UP',
+            'url': url_segura('cargue_up:cargue_propuesta'),
+            'clase': 'outline-secondary',
+        },
+        {
+            'etiqueta': 'Cargue UP informe',
+            'descripcion': 'Declarar subida de informe en Plataforma UP',
+            'url': url_segura('cargue_up:cargue_informe'),
+            'clase': 'outline-dark',
+        },
+    ]
 
     return {
         'titulo_panel': 'Mi Trabajo Social',
         'subtitulo_panel': 'Consulta el estado de tu propuesta, informe y avance del proceso',
-        'rol_panel': 'Estudiante',
+        'tipo_panel': 'estudiante',
         'periodo_vigente': _periodo_vigente(),
         'inscripciones': inscripciones,
         'inscripcion_actual': inscripcion_actual,
@@ -290,18 +322,14 @@ def construir_contexto_estudiante(usuario, id_carrera=None):
         'ultima_observacion': ultima_observacion,
         'avance_porcentaje': avance_porcentaje,
         'etapas': etapas,
-        'avisos': _notificaciones_no_leidas(usuario),
-        'enlaces': {
-            'montar_propuesta': url_segura('propuestas:montaje'),
-            'montar_informe': url_segura('informes:montaje'),
-            'cargue_up_propuesta': url_segura('cargue_up:cargue_propuesta'),
-            'cargue_up_informe': url_segura('cargue_up:cargue_informe'),
-        },
+        'notificaciones': notificaciones,
+        'total_notificaciones': len(notificaciones),
+        'accesos_rapidos': accesos_rapidos,
     }
 
 
 def construir_contexto_director(usuario, filtros):
-    """Construye el contexto de seguimiento de carrera para el rol Director."""
+    """Construye el contexto unificado de seguimiento de carrera para el rol Director."""
     director = Director.objects.filter(usuario=usuario).first()
     asignaciones = []
     if director:
@@ -337,38 +365,43 @@ def construir_contexto_director(usuario, filtros):
         estado=EstadoTramite.EN_REVISION
     ).count()
 
-    # FA-02: todas las tarjetas inician en 0 si aún no hay registros en la carrera
     tarjetas = [
         {
-            'etiqueta': 'Propuestas en revisión',
+            'titulo': 'Propuestas en revisión',
             'valor': conteos_propuestas.get(EstadoTramite.EN_REVISION, 0),
-            'color': 'primary',
+            'detalle': 'Pendientes de concepto',
+            'borde': 'primary',
         },
         {
-            'etiqueta': 'Requieren modificación',
+            'titulo': 'Requieren modificación',
             'valor': conteos_propuestas.get(EstadoTramite.REQUIERE_MODIFICACION, 0),
-            'color': 'warning',
+            'detalle': 'Devueltas a estudiantes',
+            'borde': 'warning',
         },
         {
-            'etiqueta': 'Propuestas aprobadas',
+            'titulo': 'Propuestas aprobadas',
             'valor': conteos_propuestas.get(EstadoTramite.APROBADO, 0)
             + conteos_propuestas.get(EstadoTramite.APROBADO_EN_UP, 0),
-            'color': 'success',
+            'detalle': 'Aprobadas en sistema o UP',
+            'borde': 'success',
         },
         {
-            'etiqueta': 'Propuestas rechazadas',
+            'titulo': 'Propuestas rechazadas',
             'valor': conteos_propuestas.get(EstadoTramite.RECHAZADO, 0),
-            'color': 'danger',
+            'detalle': 'No aprobadas en revisión',
+            'borde': 'danger',
         },
         {
-            'etiqueta': 'Subido en UP por verificar',
+            'titulo': 'Subido en UP por verificar',
             'valor': cargues_pendientes,
-            'color': 'info',
+            'detalle': 'Declaraciones pendientes',
+            'borde': 'info',
         },
         {
-            'etiqueta': 'Informes en revisión',
+            'titulo': 'Informes en revisión',
             'valor': informes_en_revision,
-            'color': 'secondary',
+            'detalle': 'Pendientes de revisión final',
+            'borde': 'secondary',
         },
     ]
 
@@ -422,7 +455,6 @@ def construir_contexto_director(usuario, filtros):
         ):
             continue
 
-        # Prioriza el semáforo del trámite que esté actualmente en revisión
         if informe and informe.estado == EstadoTramite.EN_REVISION:
             semaforo = evaluar_semaforo(informe.fecha_envio, informe.estado, umbrales)
         elif propuesta and propuesta.estado == EstadoTramite.EN_REVISION:
@@ -445,39 +477,62 @@ def construir_contexto_director(usuario, filtros):
                     propuesta.estado, 'secondary'
                 )
                 if propuesta
-                else 'light',
+                else 'secondary',
                 'informe': informe,
                 'informe_badge': BADGES_ESTADO_TRAMITE.get(
                     informe.estado, 'secondary'
                 )
                 if informe
-                else 'light',
+                else 'secondary',
                 'estado_actual': estado_actual,
                 'semaforo': semaforo,
             }
         )
 
+    notificaciones = _notificaciones_no_leidas(usuario)
+    accesos_rapidos = [
+        {
+            'etiqueta': 'Aprobación de propuestas',
+            'descripcion': 'Revisar y emitir concepto sobre propuestas',
+            'url': url_segura('propuestas:aprobacion'),
+            'clase': 'primary',
+        },
+        {
+            'etiqueta': 'Aprobación de informes',
+            'descripcion': 'Revisar informes finales enviados',
+            'url': url_segura('informes:aprobacion'),
+            'clase': 'outline-primary',
+        },
+        {
+            'etiqueta': 'Verificación UP',
+            'descripcion': 'Validar cargues declarados en Plataforma UP',
+            'url': url_segura('cargue_up:verificacion_propuesta'),
+            'clase': 'outline-secondary',
+        },
+        {
+            'etiqueta': 'Registrar estudiantes',
+            'descripcion': 'Inscripción individual o masiva por CSV',
+            'url': url_segura('personas:estudiantes'),
+            'clase': 'outline-dark',
+        },
+    ]
+
     return {
         'titulo_panel': 'Mis estudiantes',
         'subtitulo_panel': 'Seguimiento por carrera, estados de revisión y tiempos de respuesta',
-        'rol_panel': 'Director',
+        'tipo_panel': 'director',
         'periodo_vigente': _periodo_vigente(),
-        'asignaciones': asignaciones,
+        'asignaciones_director': asignaciones,
         'tarjetas': tarjetas,
         'filas_estudiantes': filas_estudiantes,
-        'avisos': _notificaciones_no_leidas(usuario),
-        'enlaces': {
-            'aprobacion_propuestas': url_segura('propuestas:aprobacion'),
-            'aprobacion_informes': url_segura('informes:aprobacion'),
-            'verificacion_propuesta': url_segura('cargue_up:verificacion_propuesta'),
-            'verificacion_informe': url_segura('cargue_up:verificacion_informe'),
-            'registrar_estudiantes': url_segura('personas:estudiantes'),
-        },
+        'notificaciones': notificaciones,
+        'total_notificaciones': len(notificaciones),
+        'accesos_rapidos': accesos_rapidos,
     }
 
 
 def construir_contexto_administrador(usuario, filtros):
-    """Construye el contexto institucional global para el rol Administrador (ADMO)."""
+    """Construye el contexto unificado institucional para el rol Administrador."""
     facultad = filtros.get('facultad')
     carrera = filtros.get('carrera')
     periodo = filtros.get('periodo')
@@ -522,36 +577,42 @@ def construir_contexto_administrador(usuario, filtros):
 
     tarjetas = [
         {
-            'etiqueta': 'Estudiantes activos',
+            'titulo': 'Estudiantes activos',
             'valor': inscripciones_qs.count(),
-            'color': 'dark',
+            'detalle': 'Inscripciones activas en curso',
+            'borde': 'dark',
         },
         {
-            'etiqueta': 'Propuestas en revisión',
+            'titulo': 'Propuestas en revisión',
             'valor': conteos_propuestas.get(EstadoTramite.EN_REVISION, 0),
-            'color': 'primary',
+            'detalle': 'Pendientes de concepto',
+            'borde': 'primary',
         },
         {
-            'etiqueta': 'Propuestas aprobadas (total)',
+            'titulo': 'Propuestas aprobadas (total)',
             'valor': conteos_propuestas.get(EstadoTramite.APROBADO, 0)
             + conteos_propuestas.get(EstadoTramite.APROBADO_EN_UP, 0),
-            'color': 'success',
+            'detalle': 'Aprobadas en sistema o UP',
+            'borde': 'success',
         },
         {
-            'etiqueta': 'Informes en revisión',
+            'titulo': 'Informes en revisión',
             'valor': conteos_informes.get(EstadoTramite.EN_REVISION, 0),
-            'color': 'info',
+            'detalle': 'Pendientes de evaluación',
+            'borde': 'info',
         },
         {
-            'etiqueta': 'Informes aprobados en UP',
+            'titulo': 'Informes aprobados en UP',
             'valor': conteos_informes.get(EstadoTramite.APROBADO_EN_UP, 0),
-            'color': 'success',
+            'detalle': 'Procesos culminados en UP',
+            'borde': 'success',
         },
         {
-            'etiqueta': 'Trámites rechazados',
+            'titulo': 'Trámites rechazados',
             'valor': conteos_propuestas.get(EstadoTramite.RECHAZADO, 0)
             + conteos_informes.get(EstadoTramite.RECHAZADO, 0),
-            'color': 'danger',
+            'detalle': 'Propuestas e informes rechazados',
+            'borde': 'danger',
         },
     ]
 
@@ -597,20 +658,44 @@ def construir_contexto_administrador(usuario, filtros):
             | Q(nombre_usuario__icontains=busqueda)
         )
 
+    notificaciones = _notificaciones_no_leidas(usuario)
+    accesos_rapidos = [
+        {
+            'etiqueta': 'Usuarios',
+            'descripcion': 'Gestionar cuentas y estados de acceso',
+            'url': url_segura('usuarios:usuarios'),
+            'clase': 'primary',
+        },
+        {
+            'etiqueta': 'Roles y permisos',
+            'descripcion': 'Configurar permisos por rol',
+            'url': url_segura('usuarios:roles'),
+            'clase': 'outline-primary',
+        },
+        {
+            'etiqueta': 'Parametrización',
+            'descripcion': 'Periodos, facultades, carreras y parámetros',
+            'url': url_segura('parametrizacion:parametrizacion'),
+            'clase': 'outline-secondary',
+        },
+        {
+            'etiqueta': 'Reportes',
+            'descripcion': 'Consolidado e indicadores institucionales',
+            'url': url_segura('reportes:reportes'),
+            'clase': 'outline-dark',
+        },
+    ]
+
     return {
         'titulo_panel': 'Administración',
         'subtitulo_panel': 'Panorama institucional de facultades, carreras, procesos y usuarios',
-        'rol_panel': 'Administrador',
+        'tipo_panel': 'administrador',
         'periodo_vigente': _periodo_vigente(),
         'tarjetas': tarjetas,
         'resumen_carreras': resumen_carreras,
         'usuarios_listado': list(usuarios_qs[:25]),
         'total_usuarios_filtrados': usuarios_qs.count(),
-        'avisos': _notificaciones_no_leidas(usuario),
-        'enlaces': {
-            'usuarios': url_segura('usuarios:usuarios'),
-            'roles': url_segura('usuarios:roles'),
-            'parametrizacion': url_segura('parametrizacion:parametrizacion'),
-            'reportes': url_segura('reportes:reportes'),
-        },
+        'notificaciones': notificaciones,
+        'total_notificaciones': len(notificaciones),
+        'accesos_rapidos': accesos_rapidos,
     }

@@ -1,7 +1,3 @@
-"""SISTRA-14 · Dashboard: formularios.
-
-Solo el responsable de este requisito edita este archivo.
-"""
 """Formularios de filtrado y búsqueda del dashboard (SISTRA-14)."""
 
 from django import forms
@@ -88,3 +84,4 @@ class FiltroAdministradorForm(forms.Form):
         empty_label='Todos los roles',
         widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
     )
+    
