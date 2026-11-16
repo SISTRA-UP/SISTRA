@@ -127,4 +127,3 @@ class DashboardVistasTests(TestCase):
         self.client.force_login(self.estudiante_user)
         respuesta = self.client.get(reverse('dashboard:administrador'))
         self.assertEqual(respuesta.status_code, 403)
-        

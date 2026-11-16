@@ -503,10 +503,13 @@ def construir_contexto_director(usuario, filtros):
             'url': url_segura('informes:aprobacion'),
             'clase': 'outline-primary',
         },
-        {
+       {
             'etiqueta': 'Verificación UP',
             'descripcion': 'Validar cargues declarados en Plataforma UP',
-            'url': url_segura('cargue_up:verificacion_propuesta'),
+            'url': (
+                url_segura('cargue_up:verificacion_propuesta')
+                or url_segura('cargue_up:verificacion_informe_lista')
+            ),
             'clase': 'outline-secondary',
         },
         {
