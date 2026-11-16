@@ -1,0 +1,305 @@
+{% extends 'base.html' %}
+
+{% block titulo %}{{ titulo_panel }} · SISTRA-UP{% endblock %}
+
+{% block contenido %}
+<div class="container-fluid py-4">
+  <div class="row g-4">
+    <!-- Menú lateral dinámico según permisos (SIS-40) -->
+    <div class="col-12 col-lg-3">
+      <div class="card shadow-sm">
+        <div class="card-header bg-light fw-semibold">
+          Navegación del sistema
+        </div>
+        <div class="card-body">
+          {% include 'usuarios/roles/_menu.html' %}
+        </div>
+      </div>
+
+      <div class="card shadow-sm mt-3">
+        <div class="card-body">
+          <div class="small text-muted">Periodo académico vigente</div>
+          {% if periodo_vigente %}
+            <div class="fw-bold fs-5">{{ periodo_vigente.nombre }}</div>
+            <div class="small text-muted mt-1">
+              Cierre propuestas: {{ periodo_vigente.fecha_cierre_propuesta|date:"d/m/Y" }}<br>
+              Cierre informes: {{ periodo_vigente.fecha_cierre_informe|date:"d/m/Y" }}
+            </div>
+          {% else %}
+            <span class="badge bg-warning text-dark mt-1">Sin periodo vigente configurado</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Contenido principal por rol -->
+    <div class="col-12 col-lg-9">
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-4">
+        <div>
+          <span class="badge bg-primary mb-1">{{ request.user.rol.nombre }}</span>
+          <h1 class="h3 mb-1">{{ titulo_panel }}</h1>
+          <p class="text-muted mb-0">{{ subtitulo_panel }}</p>
+        </div>
+
+        <button type="button" class="btn btn-outline-secondary position-relative" data-bs-toggle="modal" data-bs-target="#modalNotificaciones">
+          Avisos
+          {% if total_notificaciones > 0 %}
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+              {{ total_notificaciones }}
+            </span>
+          {% endif %}
+        </button>
+      </div>
+
+      <!-- Accesos rápidos -->
+      {% if accesos_rapidos %}
+        <div class="row g-2 mb-4">
+          {% for acceso in accesos_rapidos %}
+            <div class="col-12 col-md-6 col-xl-3">
+              <a href="{{ acceso.url }}" class="btn btn-{{ acceso.clase }} w-100 h-100 text-start p-3">
+                <div class="fw-semibold">{{ acceso.etiqueta }}</div>
+                <div class="small opacity-75">{{ acceso.descripcion }}</div>
+              </a>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <!-- Tarjetas de resumen (Director y Administrador) -->
+      {% if tarjetas %}
+        <div class="row g-3 mb-4">
+          {% for t in tarjetas %}
+            <div class="col-12 col-sm-6 col-xl-3">
+              <div class="card h-100 border-start border-4 border-{{ t.borde }} shadow-sm">
+                <div class="card-body">
+                  <div class="small text-muted">{{ t.titulo }}</div>
+                  <div class="display-6 fw-bold my-1">{{ t.valor }}</div>
+                  <div class="small text-muted">{{ t.detalle }}</div>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <!-- VISTA ESTUDIANTE -->
+      {% if tipo_panel == 'estudiante' %}
+        {% if not procesos_resumen %}
+          <div class="alert alert-warning" role="alert">
+            Aún no tienes una inscripción activa en una carrera registrada en el sistema. Consulta con el Director de tu programa.
+          </div>
+        {% endif %}
+
+        {% for item in procesos_resumen %}
+          <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+              <div>
+                <h2 class="h5 mb-0">{{ item.inscripcion.carrera.nombre }}</h2>
+                <small class="text-muted">{{ item.inscripcion.carrera.facultad.nombre }}</small>
+              </div>
+              {% if item.proceso %}
+                <span class="badge bg-info text-dark">Proceso: {{ item.proceso.estado }}</span>
+              {% endif %}
+            </div>
+            <div class="card-body">
+              <div class="mb-3">
+                <div class="d-flex justify-content-between small mb-1">
+                  <span>Avance general de etapas</span>
+                  <span class="fw-semibold">{{ item.completadas }} de {{ item.total_etapas }} ({{ item.porcentaje }}%)</span>
+                </div>
+                <<div class="progress" role="progressbar" aria-valuenow="{{ item.porcentaje }}" aria-valuemin="0" aria-valuemax="100">
+  <div class="progress-bar {% if item.porcentaje >= 100 %}w-100{% elif item.porcentaje >= 75 %}w-75{% elif item.porcentaje >= 50 %}w-50{% elif item.porcentaje >= 25 %}w-25{% else %}w-0{% endif %}">
+    {{ item.porcentaje }}%
+  </div>
+</div>
+
+              <div class="row g-3">
+                <div class="col-12 col-md-6">
+                  <div class="border rounded p-3 h-100">
+                    <div class="small text-muted mb-1">Propuesta de Trabajo Social</div>
+                    {% if item.propuesta %}
+                      <div class="fw-semibold">{{ item.propuesta.codigo }} · {{ item.propuesta.titulo|default:"Sin título" }}</div>
+                      <span class="badge bg-primary mt-2">{{ item.propuesta.estado }}</span>
+                      {% if item.ultima_obs_propuesta %}
+                        <div class="alert alert-light border mt-2 mb-0 py-2 small">
+                          <strong>Última observación:</strong> {{ item.ultima_obs_propuesta.observacion }}
+                        </div>
+                      {% endif %}
+                    {% else %}
+                      <p class="text-muted small mb-0">No has iniciado una propuesta en esta carrera.</p>
+                    {% endif %}
+                  </div>
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <div class="border rounded p-3 h-100">
+                    <div class="small text-muted mb-1">Informe Final</div>
+                    {% if item.informe %}
+                      <div class="fw-semibold">{{ item.informe.codigo }} (Versión {{ item.informe.version_entrega }})</div>
+                      <span class="badge bg-primary mt-2">{{ item.informe.estado }}</span>
+                      {% if item.ultima_obs_informe %}
+                        <div class="alert alert-light border mt-2 mb-0 py-2 small">
+                          <strong>Última observación:</strong> {{ item.ultima_obs_informe.observacion }}
+                        </div>
+                      {% endif %}
+                    {% else %}
+                      <p class="text-muted small mb-0">Aún no registras un informe final.</p>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      <!-- VISTA DIRECTOR -->
+      {% if tipo_panel == 'director' %}
+        {% if not asignaciones_director %}
+          <div class="alert alert-warning" role="alert">
+            No tienes carreras activas asignadas como Director en este momento.
+          </div>
+        {% else %}
+          <div class="mb-3">
+            <span class="small text-muted me-2">Carreras a cargo:</span>
+            {% for asig in asignaciones_director %}
+              <span class="badge bg-secondary me-1">{{ asig.carrera.nombre }}</span>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="card shadow-sm mb-4">
+          <div class="card-header bg-white fw-semibold">
+            Propuestas pendientes de revisión
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Código</th>
+                  <th>Estudiante</th>
+                  <th>Carrera</th>
+                  <th>Envío</th>
+                  <th>Semáforo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in propuestas_revision %}
+                  <tr>
+                    <td class="fw-semibold">{{ p.codigo }}</td>
+                    <td>{{ p.proceso.estudiante_carrera.estudiante.usuario.nombre }}</td>
+                    <td>{{ p.proceso.estudiante_carrera.carrera.nombre }}</td>
+                    <td>{{ p.fecha_envio|date:"d/m/Y H:i"|default:"—" }}</td>
+                    <td><span class="badge bg-{{ p.semaforo.clase }}">{{ p.semaforo.texto }}</span></td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="5" class="text-center text-muted py-3">No hay propuestas pendientes de revisión.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card shadow-sm">
+          <div class="card-header bg-white fw-semibold">
+            Informes pendientes de revisión
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Código</th>
+                  <th>Estudiante</th>
+                  <th>Versión</th>
+                  <th>Envío</th>
+                  <th>Semáforo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for inf in informes_revision %}
+                  <tr>
+                    <td class="fw-semibold">{{ inf.codigo }}</td>
+                    <td>{{ inf.propuesta.proceso.estudiante_carrera.estudiante.usuario.nombre }}</td>
+                    <td>v{{ inf.version_entrega }}</td>
+                    <td>{{ inf.fecha_envio|date:"d/m/Y H:i"|default:"—" }}</td>
+                    <td><span class="badge bg-{{ inf.semaforo.clase }}">{{ inf.semaforo.texto }}</span></td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="5" class="text-center text-muted py-3">No hay informes pendientes de revisión.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- VISTA ADMINISTRADOR -->
+      {% if tipo_panel == 'administrador' %}
+        <div class="card shadow-sm">
+          <div class="card-header bg-white fw-semibold">
+            Actividad reciente de auditoría
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Fecha y hora</th>
+                  <th>Usuario</th>
+                  <th>Acción</th>
+                  <th>Detalle</th>
+                  <th>Resultado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for ev in auditorias_recientes %}
+                  <tr>
+                    <td class="small">{{ ev.fecha_hora|date:"d/m/Y H:i" }}</td>
+                    <td>{{ ev.usuario.nombre|default:"Sistema / Anónimo" }}</td>
+                    <td><code>{{ ev.accion }}</code></td>
+                    <td class="small">{{ ev.detalle|truncatechars:70 }}</td>
+                    <td><span class="badge bg-success">{{ ev.resultado }}</span></td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="5" class="text-center text-muted py-3">Sin registros de auditoría aún.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Modal de avisos sin leer -->
+<div class="modal fade" id="modalNotificaciones" tabindex="-1" aria-labelledby="modalNotificacionesLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title fs-5" id="modalNotificacionesLabel">Notificaciones recientes</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        {% if notificaciones %}
+          <ul class="list-group list-group-flush">
+            {% for n in notificaciones %}
+              <li class="list-group-item">
+                <div class="small text-muted">{{ n.tipo }} · {{ n.fecha_creacion|date:"d/m/Y H:i" }}</div>
+                <div>{{ n.mensaje }}</div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-muted mb-0">No tienes notificaciones pendientes por leer.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
