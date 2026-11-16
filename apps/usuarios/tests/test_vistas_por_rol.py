@@ -56,7 +56,7 @@ class BaseVistasPorRol(TestCase):
 
     def crear_usuario(self, rol, nombre='Persona de prueba'):
         self.contador += 1
-        correo = f'persona{self.contador}@ejemplo.edu.co'
+        correo = f'persona{self.contador}@unipamplona.edu.co'
         return Usuario.objects.create_user(
             correo_institucional=correo,
             password='ClaveDePrueba123',
