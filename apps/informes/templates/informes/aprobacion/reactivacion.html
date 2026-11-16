@@ -1,0 +1,186 @@
+<div
+    class="modal fade"
+    id="modal-reactivacion"
+    tabindex="-1"
+    aria-labelledby="titulo-reactivacion"
+    aria-hidden="true"
+>
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="form-reactivacion" method="post">
+                {% csrf_token %}
+
+                <input
+                    type="hidden"
+                    name="fecha_actualizacion"
+                    id="version-reactivacion"
+                >
+
+                <div class="modal-header">
+                    <h2 class="modal-title fs-5" id="titulo-reactivacion">
+                        Reactivar informe
+                    </h2>
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Cerrar"
+                    ></button>
+                </div>
+
+                <div class="modal-body">
+                    <p id="referencia-reactivacion" class="fw-semibold"></p>
+
+                    <div class="alert alert-info">
+                        El informe volverá a En revisión y conservará
+                        el tiempo de revisión acumulado.
+                        Su rechazo anterior permanecerá en el historial.
+                    </div>
+
+                    <div class="mb-3">
+                        <label
+                            for="motivo-reactivacion"
+                            class="form-label"
+                        >
+                            Motivo de la reactivación
+                        </label>
+                        <textarea maxlength="{{ form_decision.observacion.field.max_length }}"
+                            id="motivo-reactivacion"
+                            name="motivo"
+                            class="form-control"
+                            rows="4"
+                            required
+                            placeholder="Explica por qué debe reactivarse."
+                        ></textarea>
+                    </div>
+
+                    <p class="small text-secondary">
+                        El sistema comprobará que el informe no esté archivado
+                        y que no exista otro informe activo para la misma
+                        propuesta. Se notificará al estudiante.
+                    </p>
+
+                    <div
+                        id="error-reactivacion"
+                        class="alert alert-danger text-break"
+                        role="alert"
+                        hidden
+                    ></div>
+                </div>
+
+                <div class="modal-footer">
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="submit"
+                        id="confirmar-reactivacion"
+                        class="btn btn-warning"
+                    >
+                        Confirmar reactivación
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const modal = document.getElementById("modal-reactivacion");
+    const formulario = document.getElementById("form-reactivacion");
+    const confirmar = document.getElementById("confirmar-reactivacion");
+    const error = document.getElementById("error-reactivacion");
+
+    let enviando = false;
+
+    modal.addEventListener("show.bs.modal", evento => {
+        const boton = evento.relatedTarget;
+
+        if (!boton) {
+            evento.preventDefault();
+            return;
+        }
+
+        formulario.reset();
+        formulario.action = boton.dataset.url;
+
+        document.getElementById("referencia-reactivacion").textContent =
+            "Informe " + boton.dataset.codigo;
+
+        document.getElementById("version-reactivacion").value =
+            boton.dataset.version;
+
+        error.hidden = true;
+        error.textContent = "";
+        confirmar.disabled = false;
+        confirmar.textContent = "Confirmar reactivación";
+    });
+
+    modal.addEventListener("hide.bs.modal", evento => {
+        if (enviando) evento.preventDefault();
+    });
+
+    formulario.addEventListener("submit", async evento => {
+        evento.preventDefault();
+
+        if (enviando || !formulario.reportValidity()) return;
+
+        enviando = true;
+        confirmar.disabled = true;
+        confirmar.textContent = "Reactivando...";
+        error.hidden = true;
+
+        try {
+            const respuesta = await fetch(formulario.action, {
+                method: "POST",
+                body: new FormData(formulario),
+                credentials: "same-origin"
+            });
+
+            const contenido =
+                respuesta.headers.get("content-type") || "";
+
+            if (
+                respuesta.redirected ||
+                !contenido.includes("application/json")
+            ) {
+                throw new Error(
+                    "No se pudo confirmar la operación. " +
+                    "Actualiza la pantalla y comprueba tu sesión."
+                );
+            }
+
+            const datos = await respuesta.json();
+
+            if (!respuesta.ok || !datos.ok) {
+                let mensaje = datos.mensaje || "No se pudo reactivar.";
+
+                if (datos.errores) {
+                    for (const errores of Object.values(datos.errores)) {
+                        for (const detalle of errores) {
+                            mensaje += " " + detalle.message;
+                        }
+                    }
+                }
+
+                throw new Error(mensaje);
+            }
+
+            window.location.reload();
+        } catch (fallo) {
+            error.textContent = fallo.message ||
+                "No se pudo confirmar el resultado. Actualiza la pantalla.";
+            error.hidden = false;
+        } finally {
+            enviando = false;
+            confirmar.disabled = false;
+            confirmar.textContent = "Confirmar reactivación";
+        }
+    });
+});
+</script>

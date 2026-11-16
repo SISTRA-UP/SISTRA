@@ -1,0 +1,79 @@
+/* Solo quedan estilos propios para marca, composición y estados no cubiertos por Bootstrap. */
+:root {
+    --sistra-ink: #003366;
+    --sistra-red: #ad3333;
+    --sistra-line: #dadada;
+    --sistra-muted: #697586;
+}
+
+.login-page { min-height: 100vh; color: var(--sistra-ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.access-story { position: relative; min-height: 100vh; overflow: hidden; padding: 42px clamp(36px, 6vw, 96px) 32px; background: var(--sistra-ink); color: #fff; }
+.access-story::before, .access-story::after { position: absolute; z-index: 0; border: 1px solid rgb(225 225 225 / 9%); border-radius: 50%; content: ""; pointer-events: none; }
+.access-story::before { top: 10%; right: -190px; width: 590px; height: 590px; }
+.access-story::after { top: 18%; right: -105px; width: 420px; height: 420px; }
+.access-story > * { position: relative; z-index: 1; }
+
+.brand { width: fit-content; }
+.brand-mark { display: grid; width: 56px; height: 56px; flex: 0 0 56px; place-items: center; overflow: hidden; padding: 2px; border: 1px solid var(--sistra-line); border-radius: 12px; background: #fff; }
+.brand-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.brand-word { display: flex; flex-direction: column; color: #fff; font-family: "Source Serif 4", Georgia, "Times New Roman", serif; font-size: 25px; font-weight: 600; line-height: 1; letter-spacing: -.04em; }
+.brand-name, .brand-period { display: inline; }
+.brand-period { color: var(--sistra-red); }
+.access-story .brand-period { color: #f1caca; }
+.brand-word small { margin-top: 5px; color: rgb(240 240 240 / 68%); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 9px; font-weight: 500; line-height: 1; letter-spacing: .08em; text-transform: uppercase; }
+.brand-compact .brand-mark { width: 46px; height: 46px; flex-basis: 46px; }
+.brand-compact .brand-word { color: var(--sistra-ink); font-size: 22px; }
+.brand-compact .brand-word small, .brand-compact .brand-period { color: var(--sistra-ink); }
+
+.story-content { width: min(100%, 570px); padding: 78px 0 88px; }
+.eyebrow { margin: 0 0 11px; color: var(--sistra-ink); font-size: 10px; font-weight: 700; letter-spacing: .15em; line-height: 1.4; text-transform: uppercase; }
+.access-story .eyebrow { color: #ababab; }
+.story-content h1, .access-panel h2, .private-card h1 { color: var(--sistra-ink); font-family: "Source Serif 4", Georgia, "Times New Roman", serif; font-weight: 500; letter-spacing: -.035em; }
+.story-content h1 { margin: 22px 0 18px; color: #fff; font-size: clamp(43px, 5vw, 65px); font-weight: 400; line-height: 1.04; letter-spacing: -.045em; }
+.story-content h1 em { color: #f1caca; font-weight: 400; }
+.story-copy { max-width: 450px; color: rgb(244 244 244 / 75%); font-size: 15px; line-height: 1.8; }
+.story-steps { gap: 14px; margin-top: 46px; color: rgb(242 242 242 / 76%); font-size: 11px; font-weight: 500; }
+.story-steps span { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.story-steps b { color: #f1caca; font-size: 10px; letter-spacing: .05em; }
+.story-steps i { width: 28px; height: 1px; background: rgb(223 223 223 / 30%); }
+.story-note { margin-top: 62px; padding-top: 20px; border-top: 1px solid rgb(233 233 233 / 14%); }
+.note-seal { display: grid; width: 35px; height: 35px; flex: 0 0 35px; place-items: center; border: 1px solid rgb(233 233 233 / 28%); border-radius: 50%; color: #d3d3d3; font-family: Georgia, serif; font-size: 16px; }
+.story-note strong, .story-note small { display: block; }
+.story-note strong { font-size: 11px; font-weight: 600; }
+.story-note small { margin-top: 4px; color: rgb(242 242 242 / 61%); font-size: 10px; }
+.access-foot { gap: 12px; color: rgb(242 242 242 / 55%); font-size: 10px; }
+
+.access-panel { min-height: 100vh; padding: 54px clamp(32px, 7vw, 104px); background: #fff; }
+.access-panel-inner { width: min(100%, 480px); margin: 0 auto; }
+.mobile-brand { margin-bottom: 40px; }
+.access-panel .eyebrow { margin-bottom: 12px; }
+.access-panel h2 { margin: 0 0 12px; font-size: clamp(34px, 4vw, 43px); line-height: 1.15; }
+.muted { color: #4b5563; font-size: 13px; line-height: 1.75; }
+.access-panel-inner > .muted { max-width: 410px; margin-bottom: 25px; }
+.login-form .form-label { color: var(--sistra-ink); }
+.login-form .form-control { border-color: #dedede; color: var(--sistra-ink); }
+.login-form .form-control:focus { border-color: var(--sistra-red); box-shadow: 0 0 0 .2rem rgb(173 51 51 / 12%); }
+.login-form .form-text { color: var(--sistra-muted); font-size: 10px; }
+.login-alert { margin-bottom: 20px; font-size: 12px; }
+.login-button { margin-top: 22px; border-color: var(--sistra-red); background: var(--sistra-red); }
+.login-button:hover, .login-button:focus { border-color: #8f2929; background: #8f2929; }
+.access-privacy { background: #f6f6f6; }
+.lock-mark { display: grid; width: 25px; height: 25px; flex: 0 0 25px; place-items: center; border: 1px solid var(--sistra-line); border-radius: 8px; color: var(--sistra-ink); font-size: 16px; }
+.access-privacy p { margin: 0; color: var(--sistra-ink); font-size: 10px; line-height: 1.6; }
+.access-privacy strong { color: var(--sistra-ink); font-size: 11px; }
+.access-privacy code { color: var(--sistra-red); font-family: inherit; font-size: 10px; }
+.access-seal-row { margin-top: 45px; color: var(--sistra-ink); font-size: 10px; }
+.access-seal-row b { margin: 0 4px; color: #c1c1c1; }
+.seal-mini { display: block; width: 34px; height: 40px; flex: 0 0 34px; padding: 1px; border: 1px solid var(--sistra-line); border-radius: 50%; background: #fff; object-fit: contain; }
+.auth-card { width: min(100%, 520px); background: #fff; }
+.auth-card h1 { color: var(--sistra-ink); font-family: "Source Serif 4", Georgia, "Times New Roman", serif; }
+.auth-card .form-control:focus { border-color: var(--sistra-red); box-shadow: 0 0 0 .2rem rgb(173 51 51 / 12%); }
+.private-home { max-width: 1100px; }
+.private-card { border: 1px solid #e8e8e8; border-radius: 14px; background: #fff; box-shadow: 0 12px 40px rgb(0 51 102 / 6%); }
+.private-card h1 { margin: 0 0 12px; font-size: clamp(32px, 5vw, 46px); }
+.private-card .muted { max-width: 720px; }
+
+@media (max-width: 991.98px) { .access-panel { min-height: 100vh; padding: 38px 24px; } }
+@media (max-width: 640px) { .access-panel { padding: 30px 22px; } .brand-compact .brand-mark { width: 44px; height: 44px; flex-basis: 44px; } }
+@media (max-width: 420px) { .access-panel { padding: 28px 18px; } .access-panel h2 { font-size: 34px; } .story-steps { gap: 8px; } .story-steps i { width: 14px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }

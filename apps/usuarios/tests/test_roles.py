@@ -61,6 +61,7 @@ class BaseRoles(TestCase):
             cedula=cedula,
             nombre_usuario=correo.split('@')[0],
             rol=rol or self.rol_administrador,
+            requiere_cambio_contrasena=False,
         )
 
     def crear_rol_con(self, nombre, *permisos):
@@ -217,11 +218,17 @@ class CrearRolConPermisos(BaseRoles):
         administrador = next(
             rol for rol in respuesta.context['roles'] if rol.nombre == 'Administrador'
         )
-        self.assertEqual(administrador.total_permisos, len(PERMISOS_DE_SISTRA_10))
+        # >= porque otros tickets (SISTRA-11, etc.) siembran permisos adicionales
+        self.assertGreaterEqual(administrador.total_permisos, len(PERMISOS_DE_SISTRA_10))
 
     def test_quien_no_ha_entrado_no_ve_los_roles(self):
+        # Desde SIS-40 el anónimo va al login, no al 403: el 403 queda para
+        # quien sí tiene sesión y le falta el permiso.
         self.client.logout()
-        self.assertEqual(self.client.get(reverse('usuarios:roles')).status_code, 403)
+        respuesta = self.client.get(reverse('usuarios:roles'))
+
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertTrue(respuesta.url.startswith(reverse('usuarios:login')))
 
     def test_con_rol_editar_pero_sin_rol_inactivar_no_se_cambia_el_estado(self):
         # `estado` no es campo del formulario a propósito: si lo fuera, este POST

@@ -20,12 +20,45 @@ app_name = 'cargue_up'
 
 urlpatterns = [
     # SISTRA-03 · Cargue al sistema de UP
+    path('', cargue_propuesta.inicio, name='cargue_propuesta'),
+    path('descargar/<int:id_propuesta>/', cargue_propuesta.descargar_propuesta, name='descargar_propuesta'),
+    path('ir-up/<int:id_propuesta>/', cargue_propuesta.ir_a_up, name='ir_a_up'),
 
     # SISTRA-04 · Notificación de cargue UP
+    path(
+        'avisar/propuesta/<int:id_propuesta>/',
+        aviso_propuesta.confirmacion,
+        name='aviso_propuesta_confirmacion',
+    ),
+    path(
+        'avisar/propuesta/<int:id_propuesta>/registrar/',
+        aviso_propuesta.registrar,
+        name='aviso_propuesta_registrar',
+    ),
 
     # SISTRA-05 · Notificación de cargue UP – Director
 
     # SISTRA-08 · Notificación de cargue UP (informe)
 
     # SISTRA-09 · Notificación de cargue UP – Director (informe)
+    path(
+        'verificar/informe/',
+        verificacion_informe.lista,
+        name='verificacion_informe_lista',
+    ),
+    path(
+        'verificar/informe/<int:id_informe>/',
+        verificacion_informe.detalle,
+        name='verificacion_informe_detalle',
+    ),
+    path(
+        'verificar/informe/<int:id_informe>/decidir/',
+        verificacion_informe.decidir,
+        name='verificacion_informe_decidir',
+    ),
+    path(
+        'verificar/informe/<int:id_informe>/corregir/',
+        verificacion_informe.corregir,
+        name='verificacion_informe_corregir',
+    ),
 ]

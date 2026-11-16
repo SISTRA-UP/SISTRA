@@ -5,7 +5,6 @@ Solo el responsable de este requisito edita este archivo.
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
-from django.contrib.auth.decorators import permission_required
 from django.db import transaction
 from django.db.models import Count, ProtectedError, Q
 from django.shortcuts import get_object_or_404, redirect, render
@@ -20,6 +19,7 @@ from apps.usuarios.forms.roles import (
     UsuarioForm,
 )
 from apps.usuarios.models import Estado, Rol
+from apps.usuarios.permisos import requiere_permiso
 
 Usuario = get_user_model()
 
@@ -115,7 +115,7 @@ def _formulario_de_rol(request, rol=None):
     )
 
 
-@permission_required('rol.ver', raise_exception=True)
+@requiere_permiso('rol.ver')
 def lista_roles(request):
     roles = list(Rol.objects.annotate(total_permisos=Count('asignaciones')).order_by('nombre'))
     for rol in roles:
@@ -123,7 +123,7 @@ def lista_roles(request):
     return render(request, 'usuarios/roles/lista_roles.html', {'roles': roles})
 
 
-@permission_required('rol.crear', raise_exception=True)
+@requiere_permiso('rol.crear')
 def crear_rol(request):
     formulario = _formulario_de_rol(request)
     if request.method == 'POST' and formulario.is_valid():
@@ -145,7 +145,7 @@ def crear_rol(request):
     )
 
 
-@permission_required('rol.editar', raise_exception=True)
+@requiere_permiso('rol.editar')
 def editar_rol(request, id_rol):
     rol = get_object_or_404(Rol, pk=id_rol)
     formulario = _formulario_de_rol(request, rol)
@@ -166,7 +166,7 @@ def editar_rol(request, id_rol):
     )
 
 
-@permission_required('rol.inactivar', raise_exception=True)
+@requiere_permiso('rol.inactivar')
 @require_POST
 def cambiar_estado_rol(request, id_rol):
     """Inactiva o reactiva un rol. Nunca se borra: se perdería el historial.
@@ -229,7 +229,7 @@ def _carreras_de(usuario):
     return []
 
 
-@permission_required('usuario.ver', raise_exception=True)
+@requiere_permiso('usuario.ver')
 def lista_usuarios(request):
     formulario = BusquedaUsuarioForm(request.GET or None)
     usuarios = (
@@ -281,7 +281,7 @@ def _formulario_de_usuario(request, usuario=None):
     )
 
 
-@permission_required('usuario.crear', raise_exception=True)
+@requiere_permiso('usuario.crear')
 def crear_usuario(request):
     """Crea un usuario con una contraseña temporal que nadie ve.
 
@@ -315,7 +315,7 @@ def crear_usuario(request):
     )
 
 
-@permission_required('usuario.editar', raise_exception=True)
+@requiere_permiso('usuario.editar')
 def editar_usuario(request, id_usuario):
     usuario = get_object_or_404(Usuario, pk=id_usuario)
     formulario = _formulario_de_usuario(request, usuario)
@@ -341,7 +341,7 @@ def editar_usuario(request, id_usuario):
     )
 
 
-@permission_required('usuario.inactivar', raise_exception=True)
+@requiere_permiso('usuario.inactivar')
 @require_POST
 def cambiar_estado_usuario(request, id_usuario):
     """Inactiva o reactiva un usuario.
@@ -369,7 +369,7 @@ def cambiar_estado_usuario(request, id_usuario):
     return redirect('usuarios:usuarios')
 
 
-@permission_required('usuario.eliminar', raise_exception=True)
+@requiere_permiso('usuario.eliminar')
 @require_POST
 def eliminar_usuario(request, id_usuario):
     """Elimina a un usuario **solo si no tiene nada registrado**.

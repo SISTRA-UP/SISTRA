@@ -17,6 +17,29 @@ app_name = 'propuestas'
 
 urlpatterns = [
     # SISTRA-01 · Montaje de propuesta – Trabajo Social
+    path('mi-propuesta/', montaje.inicio, name='montaje'),
 
     # SISTRA-02 · Aprobación de propuesta
+    path('aprobacion/', aprobacion.bandeja, name='aprobacion'),
+    path(
+        'aprobacion/<int:id_propuesta>/detalle/',
+        aprobacion.detalle_propuesta,
+        name='detalle_propuesta',
+    ),
+    path(
+        'aprobacion/<int:id_propuesta>/decidir/',
+        aprobacion.cambiar_estado,
+        name='cambiar_estado',
+    ),
+    path(
+        'aprobacion/<int:id_propuesta>/reactivar/',
+        aprobacion.reactivar_propuesta,
+        name='reactivar_propuesta',
+    ),
+    path('aprobacion/masivo/', aprobacion.accion_masiva, name='accion_masiva'),
+    path(
+        'aprobacion/<int:id_propuesta>/documento/',
+        aprobacion.descargar_documento,
+        name='descargar_documento',
+    ),
 ]
