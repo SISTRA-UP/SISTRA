@@ -45,6 +45,7 @@ OPCIONES_DEL_MENU = (
         'Aprobación de propuestas',
         GRUPO_TRAMITES,
     ),
+    Opcion('informe.montar', 'informes:montaje', 'Montar informe', GRUPO_TRAMITES),
     Opcion(
         'informe.aprobar',
         'informes:aprobacion',
