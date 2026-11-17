@@ -3,15 +3,14 @@
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
 from django.urls import NoReverseMatch, reverse
-from django.utils import timezone
 
 from apps.cargue_up.models import CargueUp, EstadoVerificacion
 from apps.informes.models import Informe
+from apps.informes.views.aprobacion_semaforo import calcular_semaforo_informe
 from apps.parametrizacion.models import (
     Actividad,
     Carrera,
     EstadoPeriodo,
-    Parametro,
     PeriodoAcademico,
 )
 from apps.personas.models import (
@@ -22,16 +21,16 @@ from apps.personas.models import (
     EstudianteCarrera,
 )
 from apps.procesos.models import EstadoAvance, ProcesoActividad, ProcesoTrabajoSocial
+from apps.propuestas.forms.aprobacion import (
+    RESULTADO_EXITO,
+    calcular_semaforo,
+    obtener_limites_semaforo,
+)
 from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.seguimiento.models import Auditoria, HistorialEstado, Notificacion
 from apps.usuarios.models import Estado
 
 Usuario = get_user_model()
-
-CLAVE_SEMAFORO_VERDE = 'SEMAFORO_DIAS_VERDE'
-CLAVE_SEMAFORO_AMARILLO = 'SEMAFORO_DIAS_AMARILLO'
-DIAS_VERDE_POR_DEFECTO = 3
-DIAS_AMARILLO_POR_DEFECTO = 7
 
 BADGES_ESTADO_TRAMITE = {
     EstadoTramite.BORRADOR: 'secondary',
@@ -43,6 +42,12 @@ BADGES_ESTADO_TRAMITE = {
     EstadoTramite.APROBADO_EN_UP: 'success',
 }
 
+ETIQUETAS_SEMAFORO = {
+    'verde': ('Al día', 'success'),
+    'amarillo': ('Por vencer', 'warning text-dark'),
+    'rojo': ('Atrasado', 'danger'),
+}
+
 
 def url_segura(nombre_ruta, *args, defecto='#'):
     """Resuelve una URL nombrada sin romper la vista si la ruta aún no existe."""
@@ -50,6 +55,11 @@ def url_segura(nombre_ruta, *args, defecto='#'):
         return reverse(nombre_ruta, args=args)
     except NoReverseMatch:
         return defecto
+
+
+def solo_disponibles(accesos):
+    """Quita los accesos cuyo módulo todavía no tiene ruta, para no mostrar enlaces vacíos."""
+    return [acceso for acceso in accesos if acceso['url'] != '#']
 
 
 def registrar_auditoria_dashboard(usuario, panel):
@@ -60,65 +70,23 @@ def registrar_auditoria_dashboard(usuario, panel):
         tabla_afectada='dashboard',
         id_registro_afectado=usuario.pk,
         detalle=f'Acceso al panel principal ({panel})',
-        resultado='EXITO',
+        resultado=RESULTADO_EXITO,
     )
 
 
-def obtener_umbrales_semaforo():
-    """Lee los días límite del semáforo desde `parametro` con valores de respaldo."""
-    parametros = dict(
-        Parametro.objects.filter(
-            clave__in=[CLAVE_SEMAFORO_VERDE, CLAVE_SEMAFORO_AMARILLO]
-        ).values_list('clave', 'valor')
-    )
-    try:
-        dias_verde = int(parametros.get(CLAVE_SEMAFORO_VERDE, DIAS_VERDE_POR_DEFECTO))
-    except (TypeError, ValueError):
-        dias_verde = DIAS_VERDE_POR_DEFECTO
-
-    try:
-        dias_amarillo = int(
-            parametros.get(CLAVE_SEMAFORO_AMARILLO, DIAS_AMARILLO_POR_DEFECTO)
-        )
-    except (TypeError, ValueError):
-        dias_amarillo = DIAS_AMARILLO_POR_DEFECTO
-
-    return dias_verde, max(dias_amarillo, dias_verde + 1)
-
-
-def evaluar_semaforo(fecha_envio, estado, umbrales=None):
-    """Calcula el nivel del semáforo para trámites pendientes de revisión."""
-    if estado != EstadoTramite.EN_REVISION or not fecha_envio:
-        return {
-            'nivel': None,
-            'etiqueta': 'No aplica',
-            'color': 'secondary',
-            'dias': None,
-        }
-
-    dias_verde, dias_amarillo = umbrales or obtener_umbrales_semaforo()
-    dias = max((timezone.now() - fecha_envio).days, 0)
-
-    if dias <= dias_verde:
-        return {
-            'nivel': 'verde',
-            'etiqueta': f'{dias} d · Al día',
-            'color': 'success',
-            'dias': dias,
-        }
-    if dias <= dias_amarillo:
-        return {
-            'nivel': 'amarillo',
-            'etiqueta': f'{dias} d · Por vencer',
-            'color': 'warning text-dark',
-            'dias': dias,
-        }
-    return {
-        'nivel': 'rojo',
-        'etiqueta': f'{dias} d · Atrasado',
-        'color': 'danger',
-        'dias': dias,
-    }
+def evaluar_semaforo(propuesta=None, informe=None, limites=None):
+    """Mismo semáforo que las bandejas: SISTRA-02 para la propuesta y SISTRA-07 para el informe."""
+    if informe is not None and informe.estado == EstadoTramite.EN_REVISION:
+        resultado = calcular_semaforo_informe(informe, limites=limites)
+    elif propuesta is not None and propuesta.estado == EstadoTramite.EN_REVISION:
+        resultado = calcular_semaforo(propuesta, limites=limites)
+    else:
+        resultado = None
+    if not resultado or resultado.get('color') not in ETIQUETAS_SEMAFORO:
+        return {'nivel': None, 'etiqueta': 'No aplica', 'color': 'secondary', 'dias': None}
+    texto, clase = ETIQUETAS_SEMAFORO[resultado['color']]
+    dias = resultado['dias']
+    return {'nivel': resultado['color'], 'etiqueta': f'{dias} d · {texto}', 'color': clase, 'dias': dias}
 
 
 def _notificaciones_no_leidas(usuario, limite=10):
@@ -273,28 +241,22 @@ def construir_contexto_estudiante(usuario, id_carrera=None):
 
     accesos_rapidos = [
         {
-            'etiqueta': 'Montar propuesta',
+            'etiqueta': 'Mi propuesta',
             'descripcion': 'Diligenciar o consultar propuesta de Trabajo Social',
             'url': url_segura('propuestas:montaje'),
             'clase': 'primary',
         },
         {
-            'etiqueta': 'Montar informe',
+            'etiqueta': 'Mi informe',
             'descripcion': 'Registrar resultados, conclusiones y recomendaciones',
             'url': url_segura('informes:montaje'),
             'clase': 'outline-primary',
         },
         {
-            'etiqueta': 'Cargue UP propuesta',
-            'descripcion': 'Declarar subida de propuesta en Plataforma UP',
+            'etiqueta': 'Cargue en UP',
+            'descripcion': 'Declarar subida de propuesta o informe en Plataforma UP',
             'url': url_segura('cargue_up:cargue_propuesta'),
             'clase': 'outline-secondary',
-        },
-        {
-            'etiqueta': 'Cargue UP informe',
-            'descripcion': 'Declarar subida de informe en Plataforma UP',
-            'url': url_segura('cargue_up:cargue_informe'),
-            'clase': 'outline-dark',
         },
     ]
 
@@ -324,7 +286,7 @@ def construir_contexto_estudiante(usuario, id_carrera=None):
         'etapas': etapas,
         'notificaciones': notificaciones,
         'total_notificaciones': len(notificaciones),
-        'accesos_rapidos': accesos_rapidos,
+        'accesos_rapidos': solo_disponibles(accesos_rapidos),
     }
 
 
@@ -340,7 +302,7 @@ def construir_contexto_director(usuario, filtros):
         )
 
     carreras_ids = [asig.carrera_id for asig in asignaciones]
-    umbrales = obtener_umbrales_semaforo()
+    umbrales = obtener_limites_semaforo()
 
     propuestas_base = Propuesta.objects.filter(
         proceso__estudiante_carrera__carrera_id__in=carreras_ids,
@@ -455,14 +417,7 @@ def construir_contexto_director(usuario, filtros):
         ):
             continue
 
-        if informe and informe.estado == EstadoTramite.EN_REVISION:
-            semaforo = evaluar_semaforo(informe.fecha_envio, informe.estado, umbrales)
-        elif propuesta and propuesta.estado == EstadoTramite.EN_REVISION:
-            semaforo = evaluar_semaforo(
-                propuesta.fecha_envio, propuesta.estado, umbrales
-            )
-        else:
-            semaforo = evaluar_semaforo(None, None, umbrales)
+        semaforo = evaluar_semaforo(propuesta, informe, umbrales)
 
         if semaforo_filtro and semaforo['nivel'] != semaforo_filtro:
             continue
@@ -503,19 +458,28 @@ def construir_contexto_director(usuario, filtros):
             'url': url_segura('informes:aprobacion'),
             'clase': 'outline-primary',
         },
-       {
-            'etiqueta': 'Verificación UP',
-            'descripcion': 'Validar cargues declarados en Plataforma UP',
-            'url': (
-                url_segura('cargue_up:verificacion_propuesta')
-                or url_segura('cargue_up:verificacion_informe_lista')
-            ),
+        {
+            'etiqueta': 'Verificar cargues de propuestas',
+            'descripcion': 'Validar cargues de propuestas en Plataforma UP',
+            'url': url_segura('cargue_up:verificacion_propuesta'),
+            'clase': 'outline-secondary',
+        },
+        {
+            'etiqueta': 'Verificar cargues de informes',
+            'descripcion': 'Validar cargues de informes en Plataforma UP',
+            'url': url_segura('cargue_up:verificacion_informe_lista'),
             'clase': 'outline-secondary',
         },
         {
             'etiqueta': 'Registrar estudiantes',
             'descripcion': 'Inscripción individual o masiva por CSV',
             'url': url_segura('personas:estudiantes'),
+            'clase': 'outline-dark',
+        },
+        {
+            'etiqueta': 'Reportes',
+            'descripcion': 'Consolidado e indicadores de seguimiento',
+            'url': url_segura('reportes:reportes'),
             'clase': 'outline-dark',
         },
     ]
@@ -530,7 +494,7 @@ def construir_contexto_director(usuario, filtros):
         'filas_estudiantes': filas_estudiantes,
         'notificaciones': notificaciones,
         'total_notificaciones': len(notificaciones),
-        'accesos_rapidos': accesos_rapidos,
+        'accesos_rapidos': solo_disponibles(accesos_rapidos),
     }
 
 
@@ -700,5 +664,5 @@ def construir_contexto_administrador(usuario, filtros):
         'total_usuarios_filtrados': usuarios_qs.count(),
         'notificaciones': notificaciones,
         'total_notificaciones': len(notificaciones),
-        'accesos_rapidos': accesos_rapidos,
+        'accesos_rapidos': solo_disponibles(accesos_rapidos),
     }

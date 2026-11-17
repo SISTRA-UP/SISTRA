@@ -41,14 +41,21 @@
           <p class="text-muted mb-0">{{ subtitulo_panel }}</p>
         </div>
 
-        <button type="button" class="btn btn-outline-secondary position-relative" data-bs-toggle="modal" data-bs-target="#modalNotificaciones">
-          Avisos
-          {% if total_notificaciones > 0 %}
-            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-              {{ total_notificaciones }}
-            </span>
-          {% endif %}
-        </button>
+        <div class="d-flex align-items-center gap-2">
+          <button type="button" class="btn btn-outline-secondary position-relative" data-bs-toggle="modal" data-bs-target="#modalNotificaciones">
+            Avisos
+            {% if total_notificaciones > 0 %}
+              <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                {{ total_notificaciones }}
+              </span>
+            {% endif %}
+          </button>
+
+          <form method="post" action="{% url 'usuarios:logout' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger">Cerrar sesión</button>
+          </form>
+        </div>
       </div>
 
       <!-- Accesos rápidos por rol -->
@@ -363,7 +370,7 @@
             {% endfor %}
           </ul>
         {% else %}
-          <p class="text-muted mb-0">No tienes notificaciones pendientes por leer.</p>
+          <p class="text-muted mb-0">No tienes acciones pendientes.</p>
         {% endif %}
       </div>
     </div>
