@@ -414,6 +414,7 @@ class TestAislamientoReportes(TestCase):
             observacion='Aprobado para prueba de integración',
             fecha_hora=timezone.now(),
         )
+        return informe
 
     @classmethod
     def _crear_propuesta_rechazada(cls):
@@ -540,6 +541,46 @@ class TestAislamientoReportes(TestCase):
     # -------------------------------------------------
     # 7. PRUEBAS DE AISLAMIENTO
     # -------------------------------------------------
+
+    def test_no_salen_registros_sin_terminar(self):
+        """Los informes que no han terminado no aparecen en el reporte."""
+        estados_no_finalizados = [
+            EstadoTramite.BORRADOR,
+            EstadoTramite.EN_REVISION,
+            EstadoTramite.REQUIERE_MODIFICACION,
+            EstadoTramite.APROBADO,
+        ]
+
+        for indice, estado in enumerate(estados_no_finalizados, start=1):
+            informe = self._crear_informe_aprobado(
+                carrera=self.carrera_a,
+                codigo=f'PROP-PEND-{indice}',
+                codigo_informe=f'INF-PEND-{indice}',
+                nombre_estudiante=f'Estudiante Pendiente {indice}',
+                cedula=f'40000000{indice}',
+                correo=f'pendiente{indice}@test.com',
+                nombre_usuario=f'pendiente_{indice}',
+                entidad='Entidad de prueba',
+                sector=SectorEntidad.PUBLICO,
+            )
+
+            informe.estado = estado
+            informe.save(update_fields=['estado'])
+
+        datos = obtener_datos_reporte_trabajo_social(
+            self.usuario_admin
+        )
+
+        codigos_reportados = {
+            registro['titulo']
+            for registro in datos['aprobados'] + datos['rechazados']
+        }
+
+        for indice in range(1, 5):
+            self.assertNotIn(
+                f'Propuesta de prueba PROP-PEND-{indice}',
+                codigos_reportados,
+            )
 
     def test_director_a_solo_recibe_datos_de_su_carrera(self):
         datos = obtener_datos_reporte_trabajo_social(
@@ -768,7 +809,7 @@ class TestAislamientoReportes(TestCase):
         self.assertEqual(respuesta.status_code, 200)
         self.assertContains(
             respuesta,
-            'No se encontraron registros',
+            'No hay procesos aprobados ni rechazados',
         )
 
         self.assertTrue(
@@ -818,7 +859,7 @@ class TestAislamientoReportes(TestCase):
         self.assertEqual(respuesta.status_code, 200)
         self.assertContains(
             respuesta,
-            'Ocurrió un error al generar el reporte',
+            'No fue posible generar el reporte',
         )
 
         self.assertTrue(

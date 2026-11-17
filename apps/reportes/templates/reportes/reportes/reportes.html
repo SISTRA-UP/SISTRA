@@ -116,8 +116,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         boton.disabled = true;
-        textoBoton.textContent = 'Generando reporte...';
+        textoBoton.textContent = 'Generando reporte… Por favor espera.';
         alerta.classList.remove('d-none');
+
+        // Si el PDF se descarga, la página no se recarga: se reactiva el botón.
+        setTimeout(function () {
+            boton.disabled = false;
+            textoBoton.textContent = 'Descargar reporte';
+            alerta.classList.add('d-none');
+        }, 5000);
 
     });
 

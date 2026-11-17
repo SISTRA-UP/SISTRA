@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from apps.reportes.forms.reportes import (
     FormularioReporte,
-    MSG_REP_01,
+    MSG_FECHAS_OBLIGATORIAS,
     MSG_REP_03,
 )
 
@@ -24,12 +24,12 @@ class FormularioReporteTests(SimpleTestCase):
 
         self.assertEqual(
             formulario.errors['filterDateStart'][0],
-            MSG_REP_01,
+            MSG_FECHAS_OBLIGATORIAS,
         )
 
         self.assertEqual(
             formulario.errors['filterDateEnd'][0],
-            MSG_REP_01,
+            MSG_FECHAS_OBLIGATORIAS,
         )
 
     def test_rango_de_fechas_valido(self):
