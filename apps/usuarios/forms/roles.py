@@ -12,6 +12,8 @@ from django.utils.crypto import get_random_string
 
 from apps.parametrizacion.models import Carrera
 from apps.personas.models import Director, DirectorCarrera
+# Un solo lugar para el dominio: lo define el login (SISTRA-13), que es quien lo exige.
+from apps.usuarios.forms.logueo import DOMINIO_INSTITUCIONAL
 from apps.usuarios.models import ROL_ADMINISTRADOR, Estado, Permiso, Rol, RolPermiso
 
 Usuario = get_user_model()
@@ -243,6 +245,25 @@ class UsuarioForm(forms.ModelForm):
             .select_related('carrera')
             .first()
         )
+
+    def clean_correo_institucional(self):
+        """Solo el dominio institucional, y normalizado.
+
+        Con este correo se entra al sistema (RG-14) y el login de SISTRA-13 solo
+        acepta el dominio institucional: si aquí se dejara pasar otro, la cuenta
+        quedaría creada y su dueño nunca podría ingresar. Se normaliza con el
+        mismo criterio del modelo para que la unicidad se evalúe sobre el valor
+        que de verdad se va a guardar.
+        """
+        correo = Usuario.objects.normalize_email(
+            self.cleaned_data['correo_institucional']
+        )
+        if correo.rsplit('@', 1)[-1] != DOMINIO_INSTITUCIONAL:
+            raise forms.ValidationError(
+                f'El correo tiene que ser institucional, con el dominio '
+                f'@{DOMINIO_INSTITUCIONAL}.'
+            )
+        return correo
 
     def clean(self):
         datos = super().clean()
