@@ -27,6 +27,8 @@ from apps.parametrizacion.models import Parametro
 from apps.personas.models import EstadoInscripcion, Estudiante, EstudianteCarrera
 from apps.procesos.models import EstadoAvance, ProcesoTrabajoSocial
 from apps.seguimiento.models import Auditoria
+# Un solo lugar para el dominio: lo define el login (SISTRA-13), que es quien lo exige.
+from apps.usuarios.forms.logueo import DOMINIO_INSTITUCIONAL
 from apps.usuarios.models import Estado, Rol
 
 Usuario = get_user_model()
@@ -179,6 +181,11 @@ def _validar(nombre, cedula, correo):
         validate_email(correo)
     except forms.ValidationError:
         raise FilaInvalida('El correo no tiene un formato válido.')
+    if correo.rsplit('@', 1)[-1] != DOMINIO_INSTITUCIONAL:
+        raise FilaInvalida(
+            f'El correo tiene que ser institucional, con el dominio '
+            f'@{DOMINIO_INSTITUCIONAL}.'
+        )
     return nombre, cedula, correo
 
 

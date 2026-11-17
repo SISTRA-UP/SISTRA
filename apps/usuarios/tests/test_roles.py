@@ -50,7 +50,7 @@ class BaseRoles(TestCase):
         self.rol_administrador = Rol.objects.get(nombre='Administrador')
         self.rol_estudiante = Rol.objects.get(nombre='Estudiante')
         self.administrador = self.crear_usuario(
-            'admin@ejemplo.edu.co', nombre='Ana Admin', cedula='1000000001'
+            'admin@unipamplona.edu.co', nombre='Ana Admin', cedula='1000000001'
         )
 
     def crear_usuario(self, correo, nombre='Persona de prueba', cedula='1000000000', rol=None):
@@ -103,7 +103,7 @@ class SiembraDeRolesYPermisos(BaseRoles):
 
     def test_el_estudiante_no_tiene_permisos_de_administracion(self):
         estudiante = self.crear_usuario(
-            'pedro.perez@ejemplo.edu.co', cedula='1000000002', rol=self.rol_estudiante
+            'pedro.perez@unipamplona.edu.co', cedula='1000000002', rol=self.rol_estudiante
         )
         self.assertFalse(estudiante.has_perm('rol.crear'))
         self.assertFalse(estudiante.has_perm('usuario.ver'))
@@ -185,7 +185,7 @@ class CrearRolConPermisos(BaseRoles):
         rol = Rol.objects.create(nombre='Secretaria')
         RolPermiso.objects.create(rol=rol, permiso=Permiso.objects.get(nombre='rol.ver'))
         secretaria = self.crear_usuario(
-            'sara.soto@ejemplo.edu.co', cedula='1000000003', rol=rol
+            'sara.soto@unipamplona.edu.co', cedula='1000000003', rol=rol
         )
         self.assertTrue(secretaria.has_perm('rol.ver'))
 
@@ -200,7 +200,7 @@ class CrearRolConPermisos(BaseRoles):
     def test_sin_permiso_no_se_puede_crear_un_rol(self):
         self.client.force_login(
             self.crear_usuario(
-                'luis.lopez@ejemplo.edu.co', cedula='1000000004', rol=self.rol_estudiante
+                'luis.lopez@unipamplona.edu.co', cedula='1000000004', rol=self.rol_estudiante
             )
         )
         respuesta = self.client.post(
@@ -235,7 +235,7 @@ class CrearRolConPermisos(BaseRoles):
         # inactivaría el rol sin tener `rol.inactivar`.
         editor = self.crear_rol_con('Editor', 'rol.ver', 'rol.editar')
         self.client.force_login(
-            self.crear_usuario('eva.editora@ejemplo.edu.co', cedula='1000000011', rol=editor)
+            self.crear_usuario('eva.editora@unipamplona.edu.co', cedula='1000000011', rol=editor)
         )
         objetivo = Rol.objects.create(nombre='Secretaria')
 
@@ -256,7 +256,9 @@ class CrearRolConPermisos(BaseRoles):
     def test_sin_el_permiso_de_asignar_no_se_pueden_inyectar_permisos(self):
         creador = self.crear_rol_con('Creador', 'rol.ver', 'rol.crear')
         self.client.force_login(
-            self.crear_usuario('caro.creadora@ejemplo.edu.co', cedula='1000000012', rol=creador)
+            self.crear_usuario(
+                'caro.creadora@unipamplona.edu.co', cedula='1000000012', rol=creador
+            )
         )
         respuesta = self.client.post(
             reverse('usuarios:rol_nuevo'),
@@ -321,7 +323,7 @@ class BuscarYFiltrarUsuarios(BaseRoles):
         super().setUp()
         self.client.force_login(self.administrador)
         self.estudiante = self.crear_usuario(
-            'maria.gomez@ejemplo.edu.co',
+            'maria.gomez@unipamplona.edu.co',
             nombre='María Gómez',
             cedula='1098765432',
             rol=self.rol_estudiante,
@@ -344,7 +346,7 @@ class BuscarYFiltrarUsuarios(BaseRoles):
         # Limitación conocida: `icontains` sobre PostgreSQL no normaliza tildes.
         # Queda anotada en DUDAS; se resolvería con la extensión `unaccent`.
         nunez = self.crear_usuario(
-            'pedro.p@ejemplo.edu.co',
+            'pedro.p@unipamplona.edu.co',
             nombre='Pedro Núñez',
             cedula='1000000055',
             rol=self.rol_estudiante,
@@ -359,7 +361,7 @@ class BuscarYFiltrarUsuarios(BaseRoles):
         self.assertEqual(self.buscar(q='maria.gomez'), [self.estudiante])
 
     def test_busca_por_correo_institucional(self):
-        self.assertEqual(self.buscar(q='maria.gomez@ejemplo.edu.co'), [self.estudiante])
+        self.assertEqual(self.buscar(q='maria.gomez@unipamplona.edu.co'), [self.estudiante])
 
     def test_busca_por_nombre_de_la_carrera(self):
         self.assertEqual(self.buscar(q='Ingeniería de Sistemas'), [self.estudiante])
@@ -401,7 +403,7 @@ class InactivarUsuarios(BaseRoles):
         super().setUp()
         self.client.force_login(self.administrador)
         self.estudiante = self.crear_usuario(
-            'juan.ruiz@ejemplo.edu.co',
+            'juan.ruiz@unipamplona.edu.co',
             nombre='Juan Ruiz',
             cedula='1012345678',
             rol=self.rol_estudiante,
@@ -484,7 +486,7 @@ class CrearUsuarios(BaseRoles):
         datos = {
             'nombre': 'Laura Peña',
             'cedula': '1020304050',
-            'correo_institucional': 'laura.pena@ejemplo.edu.co',
+            'correo_institucional': 'laura.pena@unipamplona.edu.co',
             'rol': self.rol_estudiante.pk,
             'carrera': '',
         }
@@ -499,7 +501,7 @@ class CrearUsuarios(BaseRoles):
         self.assertRedirects(respuesta, reverse('usuarios:usuarios'))
         usuario = Usuario.objects.get(cedula='1020304050')
         self.assertEqual(usuario.nombre, 'Laura Peña')
-        self.assertEqual(usuario.correo_institucional, 'laura.pena@ejemplo.edu.co')
+        self.assertEqual(usuario.correo_institucional, 'laura.pena@unipamplona.edu.co')
         self.assertEqual(usuario.rol, self.rol_estudiante)
         self.assertEqual(usuario.estado, Estado.ACTIVO)
 
@@ -556,7 +558,7 @@ class CrearUsuarios(BaseRoles):
         respuesta = self.crear(
             nombre='Otro Director',
             cedula='2020202020',
-            correo_institucional='otro.director@ejemplo.edu.co',
+            correo_institucional='otro.director@unipamplona.edu.co',
             rol=self.rol_director.pk,
             carrera=self.carrera.pk,
         )
@@ -589,7 +591,7 @@ class CrearUsuarios(BaseRoles):
 
     def test_sin_el_permiso_no_se_puede_crear(self):
         miron = self.crear_usuario(
-            'solo.mira@ejemplo.edu.co',
+            'solo.mira@unipamplona.edu.co',
             nombre='Solo Mira',
             cedula='3030303030',
             rol=self.crear_rol_con('Consulta', 'usuario.ver'),
@@ -615,7 +617,7 @@ class EditarUsuarios(BaseRoles):
         self.sistemas = self.crear_carrera('Ingeniería de Sistemas', 'IS-01')
         self.civil = self.crear_carrera('Ingeniería Civil', 'IC-01')
         self.usuario = self.crear_usuario(
-            'pedro.diaz@ejemplo.edu.co',
+            'pedro.diaz@unipamplona.edu.co',
             nombre='Pedro Díaz',
             cedula='1055555555',
             rol=self.rol_estudiante,
@@ -699,7 +701,7 @@ class EditarUsuarios(BaseRoles):
 
     def test_con_usuario_editar_pero_sin_usuario_inactivar_no_se_cambia_el_estado(self):
         editor = self.crear_usuario(
-            'editor@ejemplo.edu.co',
+            'editor@unipamplona.edu.co',
             nombre='Solo Edita',
             cedula='4040404040',
             rol=self.crear_rol_con('Edición', 'usuario.ver', 'usuario.editar'),
@@ -738,13 +740,13 @@ class EliminarUsuarios(BaseRoles):
         super().setUp()
         self.client.force_login(self.administrador)
         self.suelto = self.crear_usuario(
-            'creado.por.error@ejemplo.edu.co',
+            'creado.por.error@unipamplona.edu.co',
             nombre='Creado Por Error',
             cedula='1066666666',
             rol=self.rol_estudiante,
         )
         self.estudiante = self.crear_usuario(
-            'sofia.lara@ejemplo.edu.co',
+            'sofia.lara@unipamplona.edu.co',
             nombre='Sofía Lara',
             cedula='1077777777',
             rol=self.rol_estudiante,
@@ -820,7 +822,7 @@ class AuditoriaDeLosCambios(BaseRoles):
         super().setUp()
         self.client.force_login(self.administrador)
         self.usuario = self.crear_usuario(
-            'ruth.vega@ejemplo.edu.co',
+            'ruth.vega@unipamplona.edu.co',
             nombre='Ruth Vega',
             cedula='1088888888',
             rol=self.rol_estudiante,
@@ -835,7 +837,7 @@ class AuditoriaDeLosCambios(BaseRoles):
             {
                 'nombre': 'Hugo Mena',
                 'cedula': '1099999999',
-                'correo_institucional': 'hugo.mena@ejemplo.edu.co',
+                'correo_institucional': 'hugo.mena@unipamplona.edu.co',
                 'rol': self.rol_estudiante.pk,
                 'carrera': '',
             },
@@ -881,7 +883,7 @@ class AuditoriaDeLosCambios(BaseRoles):
         registro = self.ultima()
         self.assertEqual(registro.accion, 'Eliminar usuario')
         self.assertEqual(registro.resultado, 'Éxito')
-        self.assertIn('ruth.vega@ejemplo.edu.co', registro.detalle)
+        self.assertIn('ruth.vega@unipamplona.edu.co', registro.detalle)
 
     def test_un_borrado_que_falla_tambien_queda_registrado(self):
         self.inscribir_en_carrera(self.usuario, 'Ingeniería de Sistemas', 'IS-01')
@@ -958,7 +960,7 @@ class ColumnaCarreraEnLaLista(BaseRoles):
 
     def test_muestra_las_carreras_del_estudiante(self):
         estudiante = self.crear_usuario(
-            'luis.mora@ejemplo.edu.co',
+            'luis.mora@unipamplona.edu.co',
             nombre='Luis Mora',
             cedula='1033333333',
             rol=self.rol_estudiante,
@@ -977,7 +979,7 @@ class ColumnaCarreraEnLaLista(BaseRoles):
 
     def test_muestra_la_carrera_vigente_del_director(self):
         usuario = self.crear_usuario(
-            'dora.prado@ejemplo.edu.co',
+            'dora.prado@unipamplona.edu.co',
             nombre='Dora Prado',
             cedula='1044444444',
             rol=Rol.objects.get(nombre='Director'),
@@ -1097,7 +1099,7 @@ class ArreglosDeLaRevision(BaseRoles):
         self.sistemas = self.crear_carrera('Ingeniería de Sistemas', 'IS-01')
         self.civil = self.crear_carrera('Ingeniería Civil', 'IC-01')
         self.usuario = self.crear_usuario(
-            'pedro.diaz@ejemplo.edu.co',
+            'pedro.diaz@unipamplona.edu.co',
             nombre='Pedro Díaz',
             cedula='1055555555',
             rol=self.rol_estudiante,
@@ -1127,7 +1129,7 @@ class ArreglosDeLaRevision(BaseRoles):
             {
                 'nombre': 'Dora Prado',
                 'cedula': '1044444444',
-                'correo_institucional': 'dora.prado@ejemplo.edu.co',
+                'correo_institucional': 'dora.prado@unipamplona.edu.co',
                 'rol': self.rol_director.pk,
                 'carrera': self.sistemas.pk,
             },
@@ -1186,9 +1188,9 @@ class ArreglosDeLaRevision(BaseRoles):
     # --- C-3 · el nombre de usuario quedaba contradiciendo al correo ---
 
     def test_al_cambiar_el_correo_se_vuelve_a_derivar_el_nombre_de_usuario(self):
-        self.editar(self.usuario, correo_institucional='pedro.gomez@ejemplo.edu.co')
+        self.editar(self.usuario, correo_institucional='pedro.gomez@unipamplona.edu.co')
         self.usuario.refresh_from_db()
-        self.assertEqual(self.usuario.correo_institucional, 'pedro.gomez@ejemplo.edu.co')
+        self.assertEqual(self.usuario.correo_institucional, 'pedro.gomez@unipamplona.edu.co')
         self.assertEqual(self.usuario.nombre_usuario, 'pedro.gomez')
 
     def test_editar_sin_tocar_el_correo_no_le_pone_numero_al_nombre_de_usuario(self):
@@ -1200,7 +1202,7 @@ class ArreglosDeLaRevision(BaseRoles):
         self.crear_usuario(
             'pedro.gomez@otrodominio.edu.co', nombre='Pedro Homónimo', cedula='8888888888'
         )
-        self.editar(self.usuario, correo_institucional='pedro.gomez@ejemplo.edu.co')
+        self.editar(self.usuario, correo_institucional='pedro.gomez@unipamplona.edu.co')
         self.usuario.refresh_from_db()
         self.assertEqual(self.usuario.nombre_usuario, 'pedro.gomez-2')
 
@@ -1237,7 +1239,7 @@ class ArreglosDeLaRevision(BaseRoles):
     def poblar(self, cuantos, desde):
         for i in range(cuantos):
             usuario = self.crear_usuario(
-                f'persona{desde + i}@ejemplo.edu.co',
+                f'persona{desde + i}@unipamplona.edu.co',
                 nombre=f'Persona {desde + i}',
                 cedula=f'20{desde + i:08d}',
                 rol=self.rol_estudiante,
@@ -1245,3 +1247,96 @@ class ArreglosDeLaRevision(BaseRoles):
             self.inscribir_en_carrera(
                 usuario, f'Carrera {desde + i}', f'C-{desde + i:03d}'
             )
+
+
+class DominioInstitucionalDelCorreo(BaseRoles):
+    """SIS-42 · crear y editar usuarios exigen el dominio institucional.
+
+    Con ese correo se entra al sistema (RG-14) y el login de SISTRA-13 solo
+    acepta `@unipamplona.edu.co`, así que un dominio ajeno deja la cuenta
+    creada y sin poder ingresar.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.administrador)
+        self.usuario = self.crear_usuario(
+            'pedro.diaz@unipamplona.edu.co',
+            nombre='Pedro Díaz',
+            cedula='1055555555',
+            rol=self.rol_estudiante,
+        )
+
+    def datos(self, **cambios):
+        datos = {
+            'nombre': 'Laura Peña',
+            'cedula': '1020304050',
+            'correo_institucional': 'laura.pena@unipamplona.edu.co',
+            'rol': self.rol_estudiante.pk,
+            'carrera': '',
+        }
+        datos.update(cambios)
+        return datos
+
+    def crear(self, **cambios):
+        return self.client.post(reverse('usuarios:usuario_nuevo'), self.datos(**cambios))
+
+    def editar(self, **cambios):
+        datos = self.datos(
+            nombre=self.usuario.nombre,
+            cedula=self.usuario.cedula,
+            correo_institucional=self.usuario.correo_institucional,
+            rol=self.usuario.rol_id,
+        )
+        datos.update(cambios)
+        return self.client.post(
+            reverse('usuarios:usuario_editar', args=[self.usuario.pk]), datos
+        )
+
+    def test_crear_con_otro_dominio_no_guarda(self):
+        respuesta = self.crear(correo_institucional='laura.pena@ejemplo.edu.co')
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, 'unipamplona.edu.co')
+        self.assertFalse(Usuario.objects.filter(cedula='1020304050').exists())
+
+    def test_crear_con_un_dominio_que_solo_se_parece_no_guarda(self):
+        respuesta = self.crear(correo_institucional='laura@mail.unipamplona.edu.co.co')
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertFalse(Usuario.objects.filter(cedula='1020304050').exists())
+
+    def test_editar_con_otro_dominio_no_guarda(self):
+        respuesta = self.editar(correo_institucional='pedro.diaz@ejemplo.edu.co')
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, 'unipamplona.edu.co')
+        self.usuario.refresh_from_db()
+        self.assertEqual(self.usuario.correo_institucional, 'pedro.diaz@unipamplona.edu.co')
+
+    def test_crear_acepta_el_institucional_con_mayusculas_y_espacios(self):
+        respuesta = self.crear(correo_institucional='  LAURA.PENA@UNIPAMPLONA.EDU.CO  ')
+        self.assertRedirects(respuesta, reverse('usuarios:usuarios'))
+        usuario = Usuario.objects.get(cedula='1020304050')
+        self.assertEqual(usuario.correo_institucional, 'laura.pena@unipamplona.edu.co')
+        # El nombre de usuario sale del correo ya normalizado.
+        self.assertEqual(usuario.nombre_usuario, 'laura.pena')
+
+    def test_editar_acepta_el_institucional_con_mayusculas_y_espacios(self):
+        respuesta = self.editar(
+            correo_institucional='  PEDRO.DIAZ.MORA@UNIPAMPLONA.EDU.CO  '
+        )
+        self.assertRedirects(respuesta, reverse('usuarios:usuarios'))
+        self.usuario.refresh_from_db()
+        self.assertEqual(
+            self.usuario.correo_institucional, 'pedro.diaz.mora@unipamplona.edu.co'
+        )
+
+    def test_el_mismo_correo_en_mayusculas_no_crea_un_duplicado(self):
+        respuesta = self.crear(
+            cedula='1077777777', correo_institucional='PEDRO.DIAZ@UNIPAMPLONA.EDU.CO'
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(
+            Usuario.objects.filter(
+                correo_institucional__iexact='pedro.diaz@unipamplona.edu.co'
+            ).count(),
+            1,
+        )
