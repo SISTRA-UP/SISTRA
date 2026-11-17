@@ -1,5 +1,7 @@
 """SISTRA-14 · Dashboard: vistas de solo consulta por rol."""
 
+import logging
+
 from django.contrib.auth import logout as auth_logout
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect, render
@@ -18,6 +20,9 @@ from apps.dashboard.services import (
 from apps.personas.models import Director, Estudiante
 from apps.usuarios.models import Estado, ROL_ADMINISTRADOR
 from apps.usuarios.permisos import requiere_permiso
+
+logger = logging.getLogger(__name__)
+MSG_14_02 = 'Ocurrió un problema al cargar tu información. Intenta de nuevo.'
 
 ROL_ESTUDIANTE = 'Estudiante'
 ROL_DIRECTOR = 'Director'
@@ -50,6 +55,17 @@ def _validar_estado_sesion(request):
     return None
 
 
+def _pantalla(request, construir, *args, **extra):
+    """Arma el dashboard; si algo falla muestra MSG-14-02 con «Reintentar» (EX-01)."""
+    try:
+        contexto = construir(*args)
+    except Exception:
+        logger.exception('SISTRA-14: falló la carga del dashboard')
+        return render(request, 'dashboard/dashboard/error.html', {'mensaje': MSG_14_02}, status=500)
+    contexto.update(extra)
+    return render(request, 'dashboard/dashboard/inicio.html', contexto)
+
+
 @never_cache
 @requiere_permiso('dashboard.ver')
 def inicio(request):
@@ -71,10 +87,12 @@ def dashboard_estudiante(request):
         raise PermissionDenied
 
     registrar_auditoria_dashboard(request.user, ROL_ESTUDIANTE)
-    contexto = construir_contexto_estudiante(
-        request.user, id_carrera=request.GET.get('carrera')
+    return _pantalla(
+        request,
+        construir_contexto_estudiante,
+        request.user,
+        request.GET.get('carrera'),
     )
-    return render(request, 'dashboard/dashboard/inicio.html', contexto)
 
 
 @never_cache
@@ -91,9 +109,13 @@ def dashboard_director(request):
     filtros = form_filtro.cleaned_data if form_filtro.is_valid() else {}
 
     registrar_auditoria_dashboard(request.user, ROL_DIRECTOR)
-    contexto = construir_contexto_director(request.user, filtros)
-    contexto['form_filtro'] = form_filtro
-    return render(request, 'dashboard/dashboard/inicio.html', contexto)
+    return _pantalla(
+        request,
+        construir_contexto_director,
+        request.user,
+        filtros,
+        form_filtro=form_filtro,
+    )
 
 
 @never_cache
@@ -110,6 +132,10 @@ def dashboard_administrador(request):
     filtros = form_filtro.cleaned_data if form_filtro.is_valid() else {}
 
     registrar_auditoria_dashboard(request.user, ROL_ADMINISTRADOR)
-    contexto = construir_contexto_administrador(request.user, filtros)
-    contexto['form_filtro'] = form_filtro
-    return render(request, 'dashboard/dashboard/inicio.html', contexto)
+    return _pantalla(
+        request,
+        construir_contexto_administrador,
+        request.user,
+        filtros,
+        form_filtro=form_filtro,
+    )
