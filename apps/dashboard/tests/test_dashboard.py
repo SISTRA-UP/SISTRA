@@ -323,3 +323,26 @@ class DashboardIntegracionTests(TestCase):
         self.assertContains(respuesta, f'action="{reverse("usuarios:logout")}"')
         self.assertContains(respuesta, 'Cerrar sesión')
         self.assertContains(respuesta, 'No tienes acciones pendientes.')
+
+    def test_el_estudiante_puede_cambiar_de_carrera(self):
+        segunda_carrera = Carrera.objects.create(
+            facultad=self.facultad,
+            nombre='Bacteriología',
+            codigo='BAC-TEST',
+        )
+        EstudianteCarrera.objects.create(
+            estudiante=self.estudiante,
+            carrera=segunda_carrera,
+            estado=EstadoInscripcion.ACTIVO,
+        )
+
+        self.client.force_login(self.estudiante_user)
+        respuesta = self.client.get(
+            reverse('dashboard:estudiante'),
+            {'carrera': segunda_carrera.pk},
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(
+            respuesta.context['inscripcion_actual'].carrera,
+            segunda_carrera,
+        )

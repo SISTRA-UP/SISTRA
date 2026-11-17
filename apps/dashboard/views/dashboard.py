@@ -91,7 +91,7 @@ def dashboard_estudiante(request):
         request,
         construir_contexto_estudiante,
         request.user,
-        id_carrera=request.GET.get('carrera'),
+        request.GET.get('carrera'),
     )
 
 
