@@ -3,7 +3,7 @@
 Solo el responsable de este requisito edita este archivo.
 """
 
-from django.contrib.auth.decorators import login_required
+from apps.usuarios.permisos import requiere_permiso
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Exists, OuterRef, Q
@@ -60,7 +60,7 @@ def _informes_del_director(usuario):
     )
 
 
-@login_required
+@requiere_permiso("informe.aprobar")
 @require_GET
 def bandeja(request):
     """Presenta informes con filtros y tiempo acumulado de revisión."""
