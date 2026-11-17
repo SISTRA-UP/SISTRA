@@ -16,6 +16,7 @@ from apps.personas.models import Estudiante
 from apps.usuarios.models import Estado, Permiso, Rol, RolPermiso
 from apps.usuarios.permisos import (
     GRUPO_ADMINISTRACION,
+    GRUPO_TRAMITES,
     OPCIONES_DEL_MENU,
     Opcion,
     opciones_visibles,
@@ -138,8 +139,39 @@ class MenuPorPermisos(BaseVistasPorRol):
 
     def test_el_estudiante_ve_lo_suyo(self):
         usuario = self.crear_usuario(self.rol_estudiante)
-        self.assertEqual(self.etiquetas_de(usuario), ['Cargue en la Plataforma UP'])
+        self.assertEqual(
+            self.etiquetas_de(usuario),
+            ['Montar informe', 'Cargue en la Plataforma UP'],
+        )
         self.assertNotIn('Roles y permisos', self.etiquetas_de(usuario))
+
+    def test_montar_informe_sale_solo_con_su_permiso(self):
+        """Los dos casos del criterio, en una sola prueba."""
+        con_permiso = self.crear_usuario(
+            self.crear_rol_con('Monta informes', 'informe.montar')
+        )
+        sin_permiso = self.crear_usuario(self.crear_rol_con('Sin informes', 'rol.ver'))
+
+        self.assertIn('Montar informe', self.etiquetas_de(con_permiso))
+        self.assertNotIn('Montar informe', self.etiquetas_de(sin_permiso))
+
+    def test_montar_informe_apunta_al_montaje_de_informes(self):
+        """Que la ruta resuelva no basta: tiene que ser la de SISTRA-06.
+
+        Y tiene que salir bajo «Trámites»: el grupo no lo comprobaba ninguna
+        otra prueba, porque `etiquetas_de` aplana los grupos y pierde el
+        título. Con el grupo equivocado, la opción aparecería bajo
+        «Administración» en el menú del estudiante y la suite pasaría igual.
+        """
+        usuario = self.crear_usuario(
+            self.crear_rol_con('Monta informes', 'informe.montar')
+        )
+        grupos = opciones_visibles(usuario)
+        opciones = [opcion for grupo in grupos for opcion in grupo['opciones']]
+
+        self.assertEqual([grupo['titulo'] for grupo in grupos], [GRUPO_TRAMITES])
+        self.assertEqual(len(opciones), 1)
+        self.assertEqual(opciones[0]['url'], reverse('informes:montaje'))
 
     def test_el_anonimo_no_ve_opciones(self):
         self.assertEqual(opciones_visibles(AnonymousUser()), [])
@@ -171,11 +203,12 @@ class MenuPorPermisos(BaseVistasPorRol):
             self.assertEqual(opciones_visibles(usuario), [])
 
     def test_cada_permiso_del_catalogo_esta_sembrado(self):
-        """Diagnóstico claro: cuatro de los siete permisos los siembran otros.
+        """Diagnóstico claro: cinco de los ocho permisos los siembran otros.
 
         `sistema.parametrizar` (SISTRA-11), `propuesta.aprobar` (SISTRA-02),
-        `informe.aprobar` (SISTRA-07) y `cargue_up.avisar` (SISTRA-04) vienen de
-        migraciones de datos ajenas. Si una se cae, esta prueba dice cuál.
+        `informe.montar` (SISTRA-06), `informe.aprobar` (SISTRA-07) y
+        `cargue_up.avisar` (SISTRA-04) vienen de migraciones de datos ajenas.
+        Si una se cae, esta prueba dice cuál.
         """
         sembrados = set(Permiso.objects.values_list('nombre', flat=True))
         for opcion in OPCIONES_DEL_MENU:
@@ -288,25 +321,32 @@ class AccesoALasUrlProtegidas(BaseVistasPorRol):
 
                 self.assertNotIn(respuesta.status_code, (302, 403))
 
-    def test_el_estudiante_puede_abrir_la_opcion_que_ve(self):
-        """La única opción del Estudiante tiene que abrir, no dar 403.
+    def test_el_estudiante_puede_abrir_las_opciones_que_ve(self):
+        """Ninguna opción del Estudiante puede darle 403 al abrirla.
 
-        `cargue_up:cargue_propuesta` es de SISTRA-03 y no comprueba
-        `cargue_up.avisar`: exige perfil de estudiante
-        (`apps/cargue_up/views/cargue_propuesta.py`). Un Estudiante de verdad
+        Las dos son de requisitos ajenos y ninguna se contenta con el permiso:
+        `cargue_up:cargue_propuesta` (SISTRA-03) e `informes:montaje`
+        (SISTRA-06) exigen además perfil de estudiante. Un Estudiante de verdad
         lo tiene, y esta prueba lo fija para que un cambio allá se note aquí.
+        El montaje responde 200 con su propio mensaje cuando el estudiante
+        todavía no tiene propuesta aprobada en UP, que es el caso de esta
+        prueba: sigue siendo una pantalla que abre, no un 403.
         """
         usuario = self.crear_usuario(self.rol_estudiante)
         Estudiante.objects.create(usuario=usuario)
         self.client.force_login(usuario)
 
-        destino = reverse('cargue_up:cargue_propuesta')
+        destinos = [
+            opcion['url'] for grupo in opciones_visibles(usuario)
+            for opcion in grupo['opciones']
+        ]
         self.assertEqual(
-            [opcion['url'] for grupo in opciones_visibles(usuario)
-             for opcion in grupo['opciones']],
-            [destino],
+            destinos,
+            [reverse('informes:montaje'), reverse('cargue_up:cargue_propuesta')],
         )
-        self.assertEqual(self.client.get(destino).status_code, 200)
+        for destino in destinos:
+            with self.subTest(url=destino):
+                self.assertEqual(self.client.get(destino).status_code, 200)
 
     def test_el_cargue_csv_exige_los_dos_permisos(self):
         solo_uno = self.crear_rol_con('Registrador', 'estudiante.registrar')
