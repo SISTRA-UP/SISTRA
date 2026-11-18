@@ -1,0 +1,31 @@
+:root {
+    --dashboard-azul: #003366;
+    --dashboard-rojo: #AD3333;
+    --dashboard-rojo-hover: #8F2929;
+    --dashboard-texto: #1F2430;
+    --dashboard-secundario: #4B5563;
+    --dashboard-borde: #DADADA;
+    --dashboard-fondo: #F6F6F6;
+}
+
+body {
+    background: var(--dashboard-fondo);
+    color: var(--dashboard-texto);
+}
+
+.dashboard-card {
+    border: 1px solid var(--dashboard-borde);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 2px 6px rgba(0, 51, 102, .05);
+}
+
+.dashboard-avance {
+    display: block;
+    width: 100%;
+    height: 12px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #E8EAF0;
+    accent-color: var(--dashboard-rojo);
+}

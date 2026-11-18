@@ -1,0 +1,236 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block titulo %}Dashboard docente · SISTRA{% endblock %}
+
+{% block css %}
+<link rel="stylesheet" href="{% static 'dashboard/css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'dashboard/css/docente.css' %}">
+{% endblock %}
+
+{% block contenido %}
+<header class="docente-barra">
+    <div class="docente-marca">
+        <div class="docente-marca-simbolo" aria-hidden="true">UP</div>
+        <div>
+            <strong>SISTRA | Docente</strong>
+            <span>Universidad de Pamplona · Gestión académica</span>
+        </div>
+    </div>
+    <div class="docente-barra-acciones">
+        <div class="dropdown docente-notificaciones">
+            <button class="docente-notificaciones-boton dropdown-toggle" type="button"
+                    data-bs-toggle="dropdown" aria-expanded="false"
+                    aria-label="Notificaciones{% if notificaciones_sin_leer %}: {{ notificaciones_sin_leer }} sin leer{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bell-fill" viewBox="0 0 16 16">
+  <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2m.995-14.901a1 1 0 1 0-1.99 0A5 5 0 0 0 3 6c0 1.098-.5 6-2 7h14c-1.5-1-2-5.902-2-7 0-2.42-1.72-4.44-4.005-4.901"/>
+</svg>
+                {% if notificaciones_sin_leer %}
+                    <span class="docente-notificaciones-contador" aria-hidden="true">
+                        {% if notificaciones_sin_leer > 99 %}99+{% else %}{{ notificaciones_sin_leer }}{% endif %}
+                    </span>
+                {% endif %}
+            </button>
+            <div class="dropdown-menu dropdown-menu-end docente-notificaciones-menu">
+                <div class="docente-notificaciones-titulo">
+                    <strong>Notificaciones</strong>
+                    <span>{{ notificaciones_sin_leer|default:0 }} sin leer</span>
+                </div>
+                <div class="docente-notificaciones-lista">
+                    {% for notificacion in notificaciones %}
+                        <form method="post"
+                              action="{% url 'dashboard:abrir_notificacion' id_notificacion=notificacion.id_notificacion %}">
+                            {% csrf_token %}
+                            <button type="submit"
+                                    class="docente-notificacion{% if not notificacion.fecha_lectura %} sin-leer{% endif %}">
+                                <span class="docente-notificacion-tipo">{{ notificacion.tipo }}</span>
+                                <span class="docente-notificacion-mensaje">{{ notificacion.mensaje }}</span>
+                                <time datetime="{{ notificacion.fecha_creacion|date:'c' }}">
+                                    {{ notificacion.fecha_creacion|date:'d/m/Y H:i' }}
+                                </time>
+                            </button>
+                        </form>
+                    {% empty %}
+                        <p class="docente-notificaciones-vacio">No tienes notificaciones.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="docente-identidad">
+            <div>
+                <strong>{{ request.user.nombre }}</strong>
+                {% if asignacion %}
+                    <small>{{ asignacion.carrera.nombre }}</small>
+                {% endif %}
+            </div>
+            <div class="docente-avatar" aria-hidden="true">
+                {{ request.user.nombre|slice:":1"|upper }}
+            </div>
+            <form method="post" action="{% url 'usuarios:logout' %}" class="docente-cerrar-sesion">
+                {% csrf_token %}
+                <button type="submit" aria-label="Cerrar sesión" title="Cerrar sesión">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="19" height="19"
+                         fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0z"/>
+                        <path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708z"/>
+                    </svg>
+                </button>
+            </form>
+        </div>
+    </div>
+</header>
+
+<main class="docente-dashboard">
+    <aside class="docente-lateral" aria-label="Navegación del docente">
+        <p class="docente-etiqueta">Mi espacio</p>
+        <nav class="docente-nav">
+            <a class="{% if vista_dashboard != 'registro' and vista_dashboard != 'verificacion_propuesta' and vista_dashboard != 'verificacion_informe' %}activo{% endif %}"
+               href="{% url 'dashboard:docente' %}"
+               {% if vista_dashboard != 'registro' and vista_dashboard != 'verificacion_propuesta' and vista_dashboard != 'verificacion_informe' %}aria-current="page"{% endif %}>
+                <span aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-backpack-fill" viewBox="0 0 16 16">
+                <path d="M5 13v-3h4v.5a.5.5 0 0 0 1 0V10h1v3z"/>
+            <path d="M6 2v.341C3.67 3.165 2 5.388 2 8v5.5A2.5 2.5 0 0 0 4.5 16h7a2.5 2.5 0 0 0 2.5-2.5V8a6 6 0 0 0-4-5.659V2a2 2 0 1 0-4 0m2-1a1 1 0 0 1 1 1v.083a6 6 0 0 0-2 0V2a1 1 0 0 1 1-1m0 3a4 4 0 0 1 3.96 3.43.5.5 0 1 1-.99.14 3 3 0 0 0-5.94 0 .5.5 0 1 1-.99-.14A4 4 0 0 1 8 4M4.5 9h7a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5"/>
+        </svg></span> Mis estudiantes
+            </a>
+            {% if perms.estudiante.registrar %}
+                <a class="{% if vista_dashboard == 'registro' %}activo{% endif %}"
+                   href="{% url 'personas:estudiantes' %}"
+                   {% if vista_dashboard == 'registro' %}aria-current="page"{% endif %}>
+                    <span aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-person-plus-fill" viewBox="0 0 16 16">
+                    <path d="M1 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/>
+                <path fill-rule="evenodd" d="M13.5 5a.5.5 0 0 1 .5.5V7h1.5a.5.5 0 0 1 0 1H14v1.5a.5.5 0 0 1-1 0V8h-1.5a.5.5 0 0 1 0-1H13V5.5a.5.5 0 0 1 .5-.5"/>
+                </svg></span> Registrar estudiantes
+                </a>
+            {% endif %}
+            {% if perms.propuesta.aprobar %}
+                <a href="{% url 'propuestas:aprobacion' %}">
+                    <span aria-hidden="true">P</span> Aprobación de propuestas
+                </a>
+            {% endif %}
+            {% if perms.informe.aprobar %}
+                <a class="{% if vista_dashboard == 'verificacion_informe' %}activo{% endif %}"
+                   href="{% url 'cargue_up:verificacion_informe_lista' %}"
+                   {% if vista_dashboard == 'verificacion_informe' %}aria-current="page"{% endif %}>
+                    <span aria-hidden="true">UP</span> Verificar cargue de informes
+                </a>
+            {% endif %}
+        </nav>
+        {% if asignacion and perms.propuesta.aprobar %}
+            <div class="docente-consejo">
+                <strong>Consejo de priorización</strong>
+                Tienes <b>{{ total_propuestas_en_revision }}</b>
+                propuesta{{ total_propuestas_en_revision|pluralize }} pendiente{{ total_propuestas_en_revision|pluralize }}
+                de revisión para {{ asignacion.carrera.nombre }}.
+            </div>
+        {% endif %}
+    </aside>
+
+    <section class="docente-principal" id="resumen">
+        {% block docente_principal %}
+        <div class="docente-resumen">
+            <div class="docente-resumen-cabecera">
+                <div>
+                    <h1>Hola, {{ request.user.nombre }}</h1>
+                    <p>Gestiona tus estudiantes y revisa los procesos de {{ asignacion.carrera.nombre }}.</p>
+                </div>
+                <span class="docente-carrera">{{ asignacion.carrera.nombre }}</span>
+            </div>
+            <div class="docente-metricas" aria-label="Resumen de actividad">
+                <div class="docente-metrica">
+                    <strong>{{ total_estudiantes }}</strong>
+                    <span>Estudiantes activos</span>
+                </div>
+                <div class="docente-metrica">
+                    <strong>{{ total_propuestas_en_revision }}</strong>
+                    <span>Propuestas en revisión</span>
+                </div>
+                <div class="docente-metrica">
+                    <strong>{{ total_informes_en_revision }}</strong>
+                    <span>Informes en revisión</span>
+                    {% if perms.informe.aprobar %}
+                        <a class="docente-metrica-enlace" href="{% url 'informes:aprobacion' %}">
+                            Aprobación de informe
+                        </a>
+                    {% endif %}
+                </div>
+                {% if perms.informe.aprobar %}
+                <div class="docente-metrica">
+                    <strong>{{ total_informes_por_verificar_up }}</strong>
+                    <span>Informes por verificar en UP</span>
+                    <a class="docente-metrica-enlace" href="{% url 'cargue_up:verificacion_informe_lista' %}">
+                        Revisar cargues
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+{% if total_estudiantes == 0 %}
+<div class="docente-vacio" role="status">
+    <h2>Aún no tienes estudiantes asignados</h2>
+    <p>Cuando registres estudiantes, sus propuestas y avances aparecerán aquí.</p>
+    {% if perms.estudiante.registrar %}
+        <a class="docente-accion" href="{% url 'personas:estudiantes' %}">
+            Registrar estudiantes
+        </a>
+    {% endif %}
+</div>
+{% else %}
+<section class="docente-bandeja" id="bandeja" aria-label="Bandeja de aprobación de propuestas">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+            <h2>Seguimiento de estudiantes</h2>
+            <p>Consulta el estado de los procesos asociados a tu carrera.</p>
+        </div>
+        <a class="docente-accion" href="{{ url_bandeja }}">Abrir bandeja de propuestas</a>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>Estudiante</th>
+                    <th>Propuesta</th>
+                    <th>Informe</th>
+                    <th>Semáforo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for fila in filas_estudiantes %}
+                    <tr>
+                        <td>
+                            <strong>{{ fila.estudiante.nombre }}</strong>
+                            <div class="small text-muted">{{ fila.estudiante.cedula }}</div>
+                        </td>
+                        <td>
+                            {% if fila.propuesta %}
+                                <span>{{ fila.propuesta.codigo }}</span>
+                                <span class="badge bg-{{ fila.propuesta_badge }}">{{ fila.propuesta.estado }}</span>
+                            {% else %}
+                                <span class="text-muted">Sin propuesta</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if fila.informe %}
+                                <span>{{ fila.informe.codigo }}</span>
+                                <span class="badge bg-{{ fila.informe_badge }}">{{ fila.informe.estado }}</span>
+                            {% else %}
+                                <span class="text-muted">Sin informe</span>
+                            {% endif %}
+                        </td>
+                        <td><span class="badge bg-{{ fila.semaforo.color }}">{{ fila.semaforo.etiqueta }}</span></td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="4" class="text-center text-muted">No hay estudiantes que mostrar.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+        {% endblock %}
+    </section>
+</main>
+
+{% endblock %}
+

@@ -99,16 +99,20 @@ class DashboardVistasTests(TestCase):
         respuesta = self.client.get(reverse('dashboard:inicio'))
         self.assertEqual(respuesta.status_code, 403)
 
-    def test_panel_administrador_muestra_tarjetas_filtros_y_accesos(self):
+    def test_panel_administrador_muestra_accesos_administrativos(self):
         self.client.force_login(self.admin)
         respuesta = self.client.get(reverse('dashboard:inicio'), follow=True)
         self.assertEqual(respuesta.status_code, 200)
-        self.assertContains(respuesta, 'Estudiantes activos')
-        self.assertContains(respuesta, 'Propuestas en revisión')
+        self.assertContains(respuesta, 'SISTRA | Administrador')
+        self.assertContains(respuesta, 'Universidad de Pamplona · Gestión académica')
+        self.assertContains(respuesta, 'Admin Test')
+        self.assertContains(respuesta, 'Admin Unipamplona')
+        self.assertContains(respuesta, 'aria-label="Cerrar sesión"')
+        self.assertContains(respuesta, 'Navegación de administración')
+        self.assertContains(respuesta, 'Panel de administración')
         self.assertContains(respuesta, 'Roles y permisos')
         self.assertContains(respuesta, 'Parametrización')
-        self.assertContains(respuesta, 'Filtros de consulta')
-        self.assertContains(respuesta, 'Panorama por carrera')
+        self.assertContains(respuesta, 'Crear usuario')
         self.assertTrue(
             Auditoria.objects.filter(
                 usuario=self.admin, accion='CONSULTA_DASHBOARD'
@@ -121,10 +125,9 @@ class DashboardVistasTests(TestCase):
         self.assertEqual(respuesta.status_code, 200)
         self.assertContains(respuesta, 'Mis estudiantes')
         self.assertContains(respuesta, 'Propuestas en revisión')
-        self.assertContains(respuesta, 'Subido en UP por verificar')
+        self.assertContains(respuesta, 'Informes por verificar en UP')
         self.assertContains(respuesta, 'Aprobación de propuestas')
         self.assertContains(respuesta, 'Registrar estudiantes')
-        self.assertContains(respuesta, 'Filtros de consulta')
         self.assertContains(respuesta, 'Estudiante Test')
 
     def test_panel_estudiante_muestra_avance_y_accesos_rapidos(self):
@@ -233,7 +236,7 @@ class DashboardIntegracionTests(TestCase):
         casos = [
             (self.estudiante_user, 'usuarios:inicio_estudiante', 'Mi Trabajo Social'),
             (self.director_user, 'usuarios:inicio_director', 'Mis estudiantes'),
-            (self.admin, 'usuarios:inicio_administrador', 'Administración'),
+            (self.admin, 'usuarios:inicio_administrador', 'Panel de administración'),
         ]
         for usuario, ruta_inicio, titulo_esperado in casos:
             with self.subTest(rol=usuario.rol.nombre):
@@ -266,7 +269,7 @@ class DashboardIntegracionTests(TestCase):
         self.client.force_login(self.director_user)
         respuesta = self.client.get(reverse('dashboard:director'))
         self.assertEqual(respuesta.status_code, 200)
-        self.assertContains(respuesta, 'Verificar cargues de informes')
+        self.assertContains(respuesta, 'Verificar cargue de informes')
         self.assertContains(respuesta, reverse('cargue_up:verificacion_informe_lista'))
 
     def test_semaforo_igual_al_de_la_bandeja_con_valores_iniciales(self):

@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+
+{% load static %}
+{% block titulo %}Dashboard administración · SISTRA{% endblock %}
+
+{% block css %}
+<link rel="stylesheet" href="{% static 'dashboard/css/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'dashboard/css/admo.css' %}">
+{% endblock %}
+
+{% block contenido %}
+<header class="admo-topbar">
+  <div class="admo-brand" aria-label="SISTRA Universidad de Pamplona">
+    <span class="admo-brand-mark" aria-hidden="true">UP</span>
+    <span class="admo-brand-copy">
+      <strong>SISTRA | Administrador</strong>
+      <span>Universidad de Pamplona · Gestión académica</span>
+    </span>
+  </div>
+
+  <div class="admo-user">
+    <div class="admo-user-info">
+      <strong>{{ request.user.nombre }}</strong>
+      <small>Admin Unipamplona</small>
+    </div>
+    <div class="admo-avatar" aria-label="Inicial de {{ request.user.nombre }}">
+      {{ request.user.nombre|slice:":1"|upper }}
+    </div>
+    <form method="post" action="{% url 'usuarios:logout' %}" class="admo-logout">
+      {% csrf_token %}
+      <button type="submit" aria-label="Cerrar sesión" title="Cerrar sesión">
+        <svg xmlns="http://www.w3.org/2000/svg" width="19" height="19"
+             fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+          <path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0z"/>
+          <path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708z"/>
+        </svg>
+      </button>
+    </form>
+  </div>
+</header>
+
+<main class="admo-shell">
+  <aside class="admo-sidebar" aria-label="Navegación de administración">
+    <p class="admo-nav-label">Mi espacio</p>
+    <nav class="admo-nav">
+      {% if perms.dashboard.ver %}
+        <a href="{% url 'dashboard:administrador' %}"
+           {% if request.resolver_match.url_name == 'administrador' or request.resolver_match.url_name == 'admo' %}aria-current="page"{% endif %}>
+          <svg class="admo-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m3 10 9-7 9 7"></path><path d="M5 9v11h14V9"></path><path d="M9 20v-7h6v7"></path>
+          </svg>
+          Inicio
+        </a>
+      {% endif %}
+      {% if perms.rol.ver %}
+        <a href="{% url 'usuarios:roles' %}">
+          <svg class="admo-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle>
+            <path d="M19 8v6m3-3h-6"></path>
+          </svg>
+          Roles y permisos
+        </a>
+      {% endif %}
+      {% if perms.usuario.ver %}
+        <a href="{% url 'usuarios:usuarios' %}">
+          <svg class="admo-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle>
+            <path d="M20 8v6m3-3h-6"></path>
+          </svg>
+          Usuarios
+        </a>
+      {% endif %}
+      {% if perms.sistema.parametrizar %}
+        <a href="{% url 'parametrizacion:parametrizacion' %}">
+          <svg class="admo-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.5.9l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.5-.9l-1.7.7-1.4-2.4 1.4-1.1a7 7 0 0 1 0-1.8l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.5-.9l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.5.9l1.7-.7 1.4 2.4-1.4 1.1a7 7 0 0 1-.1 1.7z"></path>
+          </svg>
+          Parametrización
+        </a>
+      {% endif %}
+      {% if perms.dashboard.ver %}
+        <span class="admo-nav-pending" aria-disabled="true">
+          <svg class="admo-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-5 5"></path>
+          </svg>
+          Reportes <small>Próximamente</small>
+        </span>
+      {% endif %}
+    </nav>
+    {% if perms.usuario.crear %}
+      <a class="admo-create-user" href="{% url 'usuarios:usuario_nuevo' %}">
+        <span aria-hidden="true">+</span> Crear usuario
+      </a>
+    {% endif %}
+  </aside>
+
+  <section class="admo-workspace">
+    <div class="admo-welcome">
+      <section class="admo-welcome-banner">
+        <p class="admo-eyebrow">Panel de administración</p>
+        <h1>¡Bienvenido, {{ request.user.nombre }}!</h1>
+        <p>
+          Desde aquí puedes administrar las cuentas y permisos, mantener la configuración
+          institucional y consultar las secciones disponibles. Selecciona una función para
+          comenzar.
+        </p>
+      </section>
+
+      <section class="admo-module-grid" aria-label="Funciones administrativas">
+        {% if perms.rol.ver %}
+          <a class="admo-module-card" href="{% url 'usuarios:roles' %}">
+            <h2>Roles y permisos</h2>
+            <p>Define los permisos y las funciones disponibles para cada rol del sistema.</p>
+            <span>Administrar roles <span aria-hidden="true">→</span></span>
+          </a>
+        {% endif %}
+
+        {% if perms.usuario.ver %}
+          <a class="admo-module-card" href="{% url 'usuarios:usuarios' %}">
+            <h2>Usuarios</h2>
+            <p>Consulta y gestiona las cuentas, sus datos y su estado de acceso.</p>
+            <span>Gestionar usuarios <span aria-hidden="true">→</span></span>
+          </a>
+        {% endif %}
+
+        {% if perms.sistema.parametrizar %}
+          <a class="admo-module-card" href="{% url 'parametrizacion:parametrizacion' %}">
+            <h2>Parametrización</h2>
+            <p>Mantén los periodos, carreras y demás opciones que utiliza el sistema.</p>
+            <span>Configurar el sistema <span aria-hidden="true">→</span></span>
+          </a>
+        {% endif %}
+
+        {% if perms.dashboard.ver %}
+          <div class="admo-module-card">
+            <h2>Reportes</h2>
+            <p>El acceso a reportes estará disponible cuando se publique esa sección.</p>
+          </div>
+        {% endif %}
+      </section>
+
+      {% if perms.usuario.crear %}
+        <section class="admo-welcome-action">
+          <div>
+            <h2>¿Necesitas dar acceso a alguien?</h2>
+            <p class="mb-0">Crea una cuenta y asígnale el rol correspondiente.</p>
+          </div>
+          <a class="btn btn-danger" href="{% url 'usuarios:usuario_nuevo' %}">Crear usuario</a>
+        </section>
+      {% endif %}
+    </div>
+  </section>
+</main>
+{% endblock %}
