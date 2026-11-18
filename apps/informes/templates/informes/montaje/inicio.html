@@ -191,7 +191,7 @@
                             Cancelar
                         </button>
                     {% else %}
-                        <a href="/" class="btn btn-secondary px-4 w-100 w-md-auto">
+                        <a href="{% url 'dashboard:estudiante' %}" class="btn btn-secondary px-4 w-100 w-md-auto">
                             Regresar al inicio
                         </a>
                     {% endif %}
@@ -382,7 +382,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const modal = new bootstrap.Modal(document.getElementById('modalConfirmarCancelar'));
                 modal.show();
             } else {
-                window.location.href = '/';
+                // CORREGIDO: Redirige al dashboard en lugar de la raíz
+                window.location.href = "{% url 'dashboard:estudiante' %}";
             }
         });
     }
@@ -390,7 +391,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnConfirmarCancelar = document.getElementById('btn-confirmar-cancelar');
     if (btnConfirmarCancelar) {
         btnConfirmarCancelar.addEventListener('click', function() {
-            window.location.href = '/';
+            // CORREGIDO: Redirige al dashboard en lugar de la raíz
+            window.location.href = "{% url 'dashboard:estudiante' %}";
         });
     }
 
@@ -401,7 +403,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Calcular avance inicial al cargar la página (esto ahora leerá el contenido guardado)
+    // Calcular avance inicial al cargar la página
     calcularAvance();
 });
 </script>
