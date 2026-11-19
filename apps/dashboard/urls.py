@@ -2,7 +2,7 @@
 
 from django.urls import path
 
-from .views import admo, dashboard, docente
+from .views import dashboard
 
 app_name = 'dashboard'
 
@@ -10,13 +10,11 @@ urlpatterns = [
     # SISTRA-14 · Dashboard
     path('', dashboard.inicio, name='inicio'),
     path('estudiante/', dashboard.dashboard_estudiante, name='estudiante'),
-    path('docente/', docente.docente, name='docente'),
-    path('director/', docente.docente, name='director'),
+    path('director/', dashboard.dashboard_director, name='director'),
+    path('administrador/', dashboard.dashboard_administrador, name='administrador'),
     path(
         'notificaciones/<int:id_notificacion>/abrir/',
-        docente.abrir_notificacion,
+        dashboard.abrir_notificacion,
         name='abrir_notificacion',
     ),
-    path('administracion/', admo.admo, name='admo'),
-    path('administrador/', admo.admo, name='administrador'),
 ]

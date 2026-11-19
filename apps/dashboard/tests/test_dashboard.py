@@ -23,10 +23,10 @@ from apps.personas.models import (
     Estudiante,
     EstudianteCarrera,
 )
-from apps.procesos.models import ProcesoTrabajoSocial
+from apps.procesos.models import EstadoAvance, ProcesoTrabajoSocial
 from apps.propuestas.forms.aprobacion import RESULTADO_EXITO
 from apps.propuestas.models import EstadoTramite, Propuesta
-from apps.seguimiento.models import Auditoria
+from apps.seguimiento.models import Auditoria, Notificacion
 from apps.usuarios.models import Permiso, Rol, RolPermiso
 
 Usuario = get_user_model()
@@ -99,20 +99,16 @@ class DashboardVistasTests(TestCase):
         respuesta = self.client.get(reverse('dashboard:inicio'))
         self.assertEqual(respuesta.status_code, 403)
 
-    def test_panel_administrador_muestra_accesos_administrativos(self):
+    def test_panel_administrador_muestra_tarjetas_filtros_y_accesos(self):
         self.client.force_login(self.admin)
         respuesta = self.client.get(reverse('dashboard:inicio'), follow=True)
         self.assertEqual(respuesta.status_code, 200)
-        self.assertContains(respuesta, 'SISTRA | Administrador')
-        self.assertContains(respuesta, 'Universidad de Pamplona · Gestión académica')
-        self.assertContains(respuesta, 'Admin Test')
-        self.assertContains(respuesta, 'Admin Unipamplona')
-        self.assertContains(respuesta, 'aria-label="Cerrar sesión"')
-        self.assertContains(respuesta, 'Navegación de administración')
-        self.assertContains(respuesta, 'Panel de administración')
+        self.assertContains(respuesta, 'Estudiantes activos')
+        self.assertContains(respuesta, 'Propuestas en revisión')
         self.assertContains(respuesta, 'Roles y permisos')
         self.assertContains(respuesta, 'Parametrización')
-        self.assertContains(respuesta, 'Crear usuario')
+        self.assertContains(respuesta, 'Filtros de consulta')
+        self.assertContains(respuesta, 'Panorama por carrera')
         self.assertTrue(
             Auditoria.objects.filter(
                 usuario=self.admin, accion='CONSULTA_DASHBOARD'
@@ -125,9 +121,10 @@ class DashboardVistasTests(TestCase):
         self.assertEqual(respuesta.status_code, 200)
         self.assertContains(respuesta, 'Mis estudiantes')
         self.assertContains(respuesta, 'Propuestas en revisión')
-        self.assertContains(respuesta, 'Informes por verificar en UP')
+        self.assertContains(respuesta, 'Subido en UP por verificar')
         self.assertContains(respuesta, 'Aprobación de propuestas')
         self.assertContains(respuesta, 'Registrar estudiantes')
+        self.assertContains(respuesta, 'Filtros de consulta')
         self.assertContains(respuesta, 'Estudiante Test')
 
     def test_panel_estudiante_muestra_avance_y_accesos_rapidos(self):
@@ -236,7 +233,7 @@ class DashboardIntegracionTests(TestCase):
         casos = [
             (self.estudiante_user, 'usuarios:inicio_estudiante', 'Mi Trabajo Social'),
             (self.director_user, 'usuarios:inicio_director', 'Mis estudiantes'),
-            (self.admin, 'usuarios:inicio_administrador', 'Panel de administración'),
+            (self.admin, 'usuarios:inicio_administrador', 'Administración'),
         ]
         for usuario, ruta_inicio, titulo_esperado in casos:
             with self.subTest(rol=usuario.rol.nombre):
@@ -269,7 +266,7 @@ class DashboardIntegracionTests(TestCase):
         self.client.force_login(self.director_user)
         respuesta = self.client.get(reverse('dashboard:director'))
         self.assertEqual(respuesta.status_code, 200)
-        self.assertContains(respuesta, 'Verificar cargue de informes')
+        self.assertContains(respuesta, 'Verificar cargues de informes')
         self.assertContains(respuesta, reverse('cargue_up:verificacion_informe_lista'))
 
     def test_semaforo_igual_al_de_la_bandeja_con_valores_iniciales(self):
@@ -349,3 +346,113 @@ class DashboardIntegracionTests(TestCase):
             respuesta.context['inscripcion_actual'].carrera,
             segunda_carrera,
         )
+
+
+class AvisosDashboardTests(DashboardVistasTests):
+    def _crear_propuesta(self):
+        hoy = timezone.localdate()
+        periodo = PeriodoAcademico.objects.create(
+            nombre='2026-2',
+            fecha_inicio=hoy - timedelta(days=30),
+            fecha_fin=hoy + timedelta(days=90),
+            fecha_cierre_propuesta=hoy + timedelta(days=30),
+            fecha_cierre_informe=hoy + timedelta(days=60),
+            estado=EstadoPeriodo.VIGENTE,
+        )
+        proceso = ProcesoTrabajoSocial.objects.create(
+            estudiante_carrera=EstudianteCarrera.objects.get(
+                estudiante=self.estudiante,
+                carrera=self.carrera,
+            ),
+            fecha_inicio=timezone.now(),
+            estado=EstadoAvance.PENDIENTE,
+        )
+        return Propuesta.objects.create(
+            proceso=proceso,
+            periodo_academico=periodo,
+            codigo='PROP-AVISO-001',
+            titulo='Propuesta de prueba',
+            estado=EstadoTramite.EN_REVISION,
+        )
+
+    def test_el_modal_muestra_el_boton_abrir(self):
+        aviso = Notificacion.objects.create(
+            usuario=self.director_user,
+            tipo='Nueva propuesta',
+            mensaje='Tienes una propuesta por revisar.',
+        )
+        self.client.force_login(self.director_user)
+
+        respuesta = self.client.get(reverse('dashboard:inicio'), follow=True)
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(
+            respuesta,
+            f'action="{reverse("dashboard:abrir_notificacion", args=[aviso.pk])}"',
+        )
+        self.assertContains(respuesta, '>Abrir</button>')
+
+    def test_abrir_un_aviso_de_propuesta_lo_marca_leido_y_lleva_a_la_bandeja(self):
+        propuesta = self._crear_propuesta()
+        aviso = Notificacion.objects.create(
+            usuario=self.director_user,
+            propuesta=propuesta,
+            tipo='Nueva propuesta',
+            mensaje='Tienes una propuesta por revisar.',
+        )
+        self.client.force_login(self.director_user)
+
+        respuesta = self.client.post(
+            reverse('dashboard:abrir_notificacion', args=[aviso.pk])
+        )
+
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertEqual(
+            respuesta['Location'],
+            f'{reverse("propuestas:aprobacion")}?buscar={propuesta.codigo}',
+        )
+        aviso.refresh_from_db()
+        self.assertIsNotNone(aviso.fecha_lectura)
+
+        dashboard = self.client.get(reverse('dashboard:inicio'), follow=True)
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertNotContains(dashboard, aviso.mensaje)
+
+    def test_un_aviso_sin_registro_lleva_al_dashboard(self):
+        aviso = Notificacion.objects.create(
+            usuario=self.estudiante_user,
+            tipo='Aviso general',
+            mensaje='Tienes una acción pendiente.',
+        )
+        self.client.force_login(self.estudiante_user)
+
+        respuesta = self.client.post(
+            reverse('dashboard:abrir_notificacion', args=[aviso.pk])
+        )
+
+        self.assertRedirects(respuesta, reverse('dashboard:inicio'), fetch_redirect_response=False)
+
+    def test_no_se_puede_abrir_el_aviso_de_otro(self):
+        aviso = Notificacion.objects.create(
+            usuario=self.director_user,
+            tipo='Nueva propuesta',
+            mensaje='Aviso privado del Director.',
+        )
+        self.client.force_login(self.estudiante_user)
+
+        respuesta = self.client.post(
+            reverse('dashboard:abrir_notificacion', args=[aviso.pk])
+        )
+
+        self.assertEqual(respuesta.status_code, 404)
+        aviso.refresh_from_db()
+        self.assertIsNone(aviso.fecha_lectura)
+
+    def test_abrir_solo_acepta_post(self):
+        self.client.force_login(self.director_user)
+
+        respuesta = self.client.get(
+            reverse('dashboard:abrir_notificacion', args=[1])
+        )
+
+        self.assertEqual(respuesta.status_code, 405)

@@ -366,6 +366,10 @@
               <li class="list-group-item">
                 <div class="small text-muted">{{ n.tipo }} · {{ n.fecha_creacion|date:"d/m/Y H:i" }}</div>
                 <div>{{ n.mensaje }}</div>
+                <form method="post" action="{% url 'dashboard:abrir_notificacion' n.id_notificacion %}" class="mt-2">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-primary">Abrir</button>
+                </form>
               </li>
             {% endfor %}
           </ul>
