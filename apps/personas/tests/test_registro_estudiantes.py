@@ -45,7 +45,7 @@ class BaseRegistro(TestCase):
         self.carrera = self.crear_carrera('Ingeniería de Sistemas', 'IS-01')
         self.otra_carrera = self.crear_carrera('Ingeniería Civil', 'IC-01')
         self.director = self.crear_usuario(
-            'dora.prado@ejemplo.edu.co', 'Dora Prado', '1000000001', self.rol_director
+            'dora.prado@unipamplona.edu.co', 'Dora Prado', '1000000001', self.rol_director
         )
         self.asignar_carrera(self.director, self.carrera)
         self.client.force_login(self.director)
@@ -80,7 +80,7 @@ class BaseRegistro(TestCase):
         datos = {
             'nombre': 'Laura Peña',
             'cedula': '1020304050',
-            'correo': 'laura.pena@ejemplo.edu.co',
+            'correo': 'laura.pena@unipamplona.edu.co',
         }
         datos.update(cambios)
         return self.client.post(self.url, datos, follow=follow)
@@ -117,7 +117,7 @@ class SiembraDeLosPermisos(BaseRegistro):
 
     def test_el_estudiante_no_los_tiene(self):
         estudiante = self.crear_usuario(
-            'sin.permisos@ejemplo.edu.co', 'Sin Permisos', '1099999999', self.rol_estudiante
+            'sin.permisos@unipamplona.edu.co', 'Sin Permisos', '1099999999', self.rol_estudiante
         )
         for permiso in PERMISOS_DEL_REGISTRO:
             self.assertFalse(estudiante.has_perm(permiso))
@@ -173,13 +173,13 @@ class RegistroUnoAUno(BaseRegistro):
 
     def test_lo_inscribe_en_la_carrera_del_director(self):
         self.registrar()
-        inscripcion = self.inscripciones_de('laura.pena@ejemplo.edu.co').get()
+        inscripcion = self.inscripciones_de('laura.pena@unipamplona.edu.co').get()
         self.assertEqual(inscripcion.carrera, self.carrera)
         self.assertEqual(inscripcion.estado, EstadoInscripcion.ACTIVO)
 
     def test_le_crea_su_proceso_de_trabajo_social(self):
         self.registrar()
-        inscripcion = self.inscripciones_de('laura.pena@ejemplo.edu.co').get()
+        inscripcion = self.inscripciones_de('laura.pena@unipamplona.edu.co').get()
         proceso = ProcesoTrabajoSocial.objects.get(estudiante_carrera=inscripcion)
         self.assertEqual(proceso.estado, 'Pendiente')
         self.assertIsNone(proceso.fecha_finalizacion)
@@ -188,7 +188,7 @@ class RegistroUnoAUno(BaseRegistro):
         self.registrar()
         self.assertTrue(
             Estudiante.objects.filter(
-                usuario__correo_institucional='laura.pena@ejemplo.edu.co'
+                usuario__correo_institucional='laura.pena@unipamplona.edu.co'
             ).exists()
         )
 
@@ -208,7 +208,7 @@ class RegistroUnoAUno(BaseRegistro):
 
     def test_sin_el_permiso_no_se_puede_registrar(self):
         estudiante = self.crear_usuario(
-            'otro@ejemplo.edu.co', 'Otro', '1088888888', self.rol_estudiante
+            'otro@unipamplona.edu.co', 'Otro', '1088888888', self.rol_estudiante
         )
         self.client.force_login(estudiante)
         self.assertEqual(self.client.get(self.url).status_code, 403)
@@ -216,7 +216,7 @@ class RegistroUnoAUno(BaseRegistro):
 
     def test_un_director_sin_carrera_no_puede_registrar(self):
         suelto = self.crear_usuario(
-            'sin.carrera@ejemplo.edu.co', 'Sin Carrera', '1077777777', self.rol_director
+            'sin.carrera@unipamplona.edu.co', 'Sin Carrera', '1077777777', self.rol_director
         )
         self.client.force_login(suelto)
         respuesta = self.client.get(self.url)
@@ -246,7 +246,7 @@ class ValidacionDeLosDatos(BaseRegistro):
 
     def test_la_cedula_ya_usada_con_otro_correo_se_rechaza(self):
         self.crear_usuario(
-            'otra.persona@ejemplo.edu.co', 'Otra Persona', '1020304050', self.rol_estudiante
+            'otra.persona@unipamplona.edu.co', 'Otra Persona', '1020304050', self.rol_estudiante
         )
         respuesta = self.registrar()
         self.assertEqual(respuesta.status_code, 200)
@@ -254,7 +254,7 @@ class ValidacionDeLosDatos(BaseRegistro):
 
     def test_el_correo_ya_usado_con_otra_cedula_se_rechaza(self):
         self.crear_usuario(
-            'laura.pena@ejemplo.edu.co', 'Otra Laura', '1066666666', self.rol_estudiante
+            'laura.pena@unipamplona.edu.co', 'Otra Laura', '1066666666', self.rol_estudiante
         )
         respuesta = self.registrar()
         self.assertEqual(respuesta.status_code, 200)
@@ -279,7 +279,7 @@ class EstudianteYaRegistrado(BaseRegistro):
     def test_ya_inscrito_en_esta_carrera_se_omite(self):
         self.registrar()
         self.registrar()
-        self.assertEqual(self.inscripciones_de('laura.pena@ejemplo.edu.co').count(), 1)
+        self.assertEqual(self.inscripciones_de('laura.pena@unipamplona.edu.co').count(), 1)
         self.assertEqual(Usuario.objects.filter(cedula='1020304050').count(), 1)
 
     def test_al_omitirlo_se_le_avisa_al_director(self):
@@ -289,7 +289,7 @@ class EstudianteYaRegistrado(BaseRegistro):
             {
                 'nombre': 'Laura Peña',
                 'cedula': '1020304050',
-                'correo': 'laura.pena@ejemplo.edu.co',
+                'correo': 'laura.pena@unipamplona.edu.co',
             },
             follow=True,
         )
@@ -303,7 +303,7 @@ class EstudianteYaRegistrado(BaseRegistro):
 
     def test_inscrito_en_otra_carrera_solo_suma_la_inscripcion(self):
         otro_director = self.crear_usuario(
-            'luis.mora@ejemplo.edu.co', 'Luis Mora', '1055555555', self.rol_director
+            'luis.mora@unipamplona.edu.co', 'Luis Mora', '1055555555', self.rol_director
         )
         self.asignar_carrera(otro_director, self.otra_carrera)
         self.client.force_login(otro_director)
@@ -312,7 +312,7 @@ class EstudianteYaRegistrado(BaseRegistro):
         self.client.force_login(self.director)
         self.registrar()
 
-        inscripciones = self.inscripciones_de('laura.pena@ejemplo.edu.co')
+        inscripciones = self.inscripciones_de('laura.pena@unipamplona.edu.co')
         self.assertEqual(inscripciones.count(), 2)
         self.assertEqual(Usuario.objects.filter(cedula='1020304050').count(), 1)
         self.assertEqual(
@@ -322,7 +322,7 @@ class EstudianteYaRegistrado(BaseRegistro):
 
     def test_cada_carrera_tiene_su_propio_proceso(self):
         otro_director = self.crear_usuario(
-            'luis.mora@ejemplo.edu.co', 'Luis Mora', '1055555555', self.rol_director
+            'luis.mora@unipamplona.edu.co', 'Luis Mora', '1055555555', self.rol_director
         )
         self.asignar_carrera(otro_director, self.otra_carrera)
         self.client.force_login(otro_director)
@@ -338,7 +338,7 @@ class EstudianteYaRegistrado(BaseRegistro):
 
     def test_a_un_estudiante_ya_existente_no_se_le_manda_contrasena_nueva(self):
         otro_director = self.crear_usuario(
-            'luis.mora@ejemplo.edu.co', 'Luis Mora', '1055555555', self.rol_director
+            'luis.mora@unipamplona.edu.co', 'Luis Mora', '1055555555', self.rol_director
         )
         self.asignar_carrera(otro_director, self.otra_carrera)
         self.client.force_login(otro_director)
@@ -355,14 +355,14 @@ class EstudianteYaRegistrado(BaseRegistro):
     def test_una_cuenta_sin_ninguna_inscripcion_se_completa_no_se_omite(self):
         # Es el usuario que crea el ADMO: existe, pero sin carrera ni proceso.
         creado_por_el_admo = self.crear_usuario(
-            'laura.pena@ejemplo.edu.co', 'Laura Peña', '1020304050', self.rol_estudiante
+            'laura.pena@unipamplona.edu.co', 'Laura Peña', '1020304050', self.rol_estudiante
         )
         self.assertFalse(Estudiante.objects.filter(usuario=creado_por_el_admo).exists())
 
         self.registrar()
 
         self.assertTrue(Estudiante.objects.filter(usuario=creado_por_el_admo).exists())
-        inscripcion = self.inscripciones_de('laura.pena@ejemplo.edu.co').get()
+        inscripcion = self.inscripciones_de('laura.pena@unipamplona.edu.co').get()
         self.assertEqual(inscripcion.carrera, self.carrera)
         self.assertTrue(
             ProcesoTrabajoSocial.objects.filter(estudiante_carrera=inscripcion).exists()
@@ -371,7 +371,7 @@ class EstudianteYaRegistrado(BaseRegistro):
 
     def test_completar_una_cuenta_queda_en_auditoria(self):
         self.crear_usuario(
-            'laura.pena@ejemplo.edu.co', 'Laura Peña', '1020304050', self.rol_estudiante
+            'laura.pena@unipamplona.edu.co', 'Laura Peña', '1020304050', self.rol_estudiante
         )
         self.registrar()
         self.assertTrue(
@@ -386,7 +386,7 @@ class CorreoDeCredenciales(BaseRegistro):
         mail.outbox.clear()
         self.registrar()
         self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(mail.outbox[0].to, ['laura.pena@ejemplo.edu.co'])
+        self.assertEqual(mail.outbox[0].to, ['laura.pena@unipamplona.edu.co'])
 
     def test_el_correo_lleva_el_usuario_de_ingreso_y_la_contrasena(self):
         mail.outbox.clear()
@@ -396,7 +396,7 @@ class CorreoDeCredenciales(BaseRegistro):
         ):
             self.registrar()
         cuerpo = mail.outbox[0].body
-        self.assertIn('laura.pena@ejemplo.edu.co', cuerpo)
+        self.assertIn('laura.pena@unipamplona.edu.co', cuerpo)
         self.assertIn('ClaveTemporalDePrueba', cuerpo)
 
     def test_el_envio_queda_en_auditoria(self):
@@ -426,7 +426,7 @@ class CorreoDeCredenciales(BaseRegistro):
             side_effect=OSError('sin servicio de correo'),
         ):
             self.registrar()
-        self.assertEqual(self.inscripciones_de('laura.pena@ejemplo.edu.co').count(), 1)
+        self.assertEqual(self.inscripciones_de('laura.pena@unipamplona.edu.co').count(), 1)
 
 
 class CargueCsv(BaseRegistro):
@@ -438,8 +438,8 @@ class CargueCsv(BaseRegistro):
     def test_registra_las_filas_validas(self):
         contenido = self.csv_de(
             [
-                self.fila('Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co'),
-                self.fila('Beto Ruiz', '2000000002', 'beto.ruiz@ejemplo.edu.co'),
+                self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co'),
+                self.fila('Beto Ruiz', '2000000002', 'beto.ruiz@unipamplona.edu.co'),
             ]
         )
         respuesta = self.subir(contenido)
@@ -448,9 +448,9 @@ class CargueCsv(BaseRegistro):
         self.assertEqual(Usuario.objects.filter(rol=self.rol_estudiante).count(), 2)
 
     def test_a_cada_uno_le_crea_inscripcion_y_proceso(self):
-        contenido = self.csv_de([self.fila('Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co')])
+        contenido = self.csv_de([self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co')])
         self.subir(contenido)
-        inscripcion = self.inscripciones_de('ana.gil@ejemplo.edu.co').get()
+        inscripcion = self.inscripciones_de('ana.gil@unipamplona.edu.co').get()
         self.assertEqual(inscripcion.carrera, self.carrera)
         self.assertTrue(
             ProcesoTrabajoSocial.objects.filter(estudiante_carrera=inscripcion).exists()
@@ -459,9 +459,9 @@ class CargueCsv(BaseRegistro):
     def test_las_filas_malas_no_tumban_las_buenas(self):
         contenido = self.csv_de(
             [
-                self.fila('Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co'),
-                self.fila('Mala Fila', 'ABC', 'mala.fila@ejemplo.edu.co'),
-                self.fila('Beto Ruiz', '2000000002', 'beto.ruiz@ejemplo.edu.co'),
+                self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co'),
+                self.fila('Mala Fila', 'ABC', 'mala.fila@unipamplona.edu.co'),
+                self.fila('Beto Ruiz', '2000000002', 'beto.ruiz@unipamplona.edu.co'),
             ]
         )
         respuesta = self.subir(contenido)
@@ -475,8 +475,8 @@ class CargueCsv(BaseRegistro):
     def test_el_log_de_errores_dice_la_fila_y_el_motivo(self):
         contenido = self.csv_de(
             [
-                self.fila('Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co'),
-                self.fila('Mala Fila', 'ABC', 'mala.fila@ejemplo.edu.co'),
+                self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co'),
+                self.fila('Mala Fila', 'ABC', 'mala.fila@unipamplona.edu.co'),
             ]
         )
         respuesta = self.subir(contenido)
@@ -486,12 +486,12 @@ class CargueCsv(BaseRegistro):
         self.assertContains(respuesta, 'solo dígitos')
 
     def test_el_resumen_cuenta_registrados_omitidos_y_errores(self):
-        self.subir(self.csv_de([self.fila('Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co')]))
+        self.subir(self.csv_de([self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co')]))
         contenido = self.csv_de(
             [
-                self.fila('Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co'),
-                self.fila('Beto Ruiz', '2000000002', 'beto.ruiz@ejemplo.edu.co'),
-                self.fila('Mala Fila', '', 'mala.fila@ejemplo.edu.co'),
+                self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co'),
+                self.fila('Beto Ruiz', '2000000002', 'beto.ruiz@unipamplona.edu.co'),
+                self.fila('Mala Fila', '', 'mala.fila@unipamplona.edu.co'),
             ]
         )
         respuesta = self.subir(contenido)
@@ -503,7 +503,7 @@ class CargueCsv(BaseRegistro):
 
     def test_el_mensaje_final_usa_el_texto_del_brd(self):
         respuesta = self.subir(
-            self.csv_de([self.fila('Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co')]),
+            self.csv_de([self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co')]),
         )
         self.assertContains(respuesta, 'Se registraron 1 estudiantes')
         self.assertContains(respuesta, 'ya estaban')
@@ -511,8 +511,8 @@ class CargueCsv(BaseRegistro):
     def test_una_fila_repetida_dentro_del_mismo_archivo_se_omite(self):
         contenido = self.csv_de(
             [
-                self.fila('Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co'),
-                self.fila('Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co'),
+                self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co'),
+                self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co'),
             ]
         )
         respuesta = self.subir(contenido)
@@ -523,7 +523,7 @@ class CargueCsv(BaseRegistro):
 
     def test_una_fila_con_otra_carrera_es_un_error(self):
         contenido = self.csv_de(
-            [self.fila('Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co', 'Ingeniería Civil')]
+            [self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co', 'Ingeniería Civil')]
         )
         respuesta = self.subir(contenido)
         errores = respuesta.context['resumen']['errores']
@@ -533,23 +533,25 @@ class CargueCsv(BaseRegistro):
 
     def test_la_carrera_tambien_se_reconoce_por_su_codigo(self):
         contenido = self.csv_de(
-            [self.fila('Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co', 'IS-01')]
+            [self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co', 'IS-01')]
         )
         respuesta = self.subir(contenido)
         self.assertEqual(respuesta.context['resumen']['registrados'], 1)
 
     def test_la_columna_carrera_vacia_asume_la_del_director(self):
         contenido = self.csv_de(
-            [self.fila('Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co', '')]
+            [self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co', '')]
         )
         respuesta = self.subir(contenido)
         self.assertEqual(respuesta.context['resumen']['registrados'], 1)
-        self.assertEqual(self.inscripciones_de('ana.gil@ejemplo.edu.co').get().carrera, self.carrera)
+        self.assertEqual(
+            self.inscripciones_de('ana.gil@unipamplona.edu.co').get().carrera, self.carrera
+        )
 
     def test_acepta_punto_y_coma_como_separador(self):
         # Excel en Windows exporta así, y es el caso más común en la práctica.
         contenido = self.csv_de(
-            [self.fila('Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co')],
+            [self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co')],
             delimitador=';',
         )
         respuesta = self.subir(contenido)
@@ -557,7 +559,7 @@ class CargueCsv(BaseRegistro):
 
     def test_acepta_un_archivo_guardado_en_cp1252(self):
         contenido = self.csv_de(
-            [self.fila('Ana Gómez Núñez', '2000000001', 'ana.gomez@ejemplo.edu.co')]
+            [self.fila('Ana Gómez Núñez', '2000000001', 'ana.gomez@unipamplona.edu.co')]
         )
         respuesta = self.subir(contenido, codificacion='cp1252')
         self.assertEqual(respuesta.context['resumen']['registrados'], 1)
@@ -567,7 +569,7 @@ class CargueCsv(BaseRegistro):
 
     def test_reconoce_los_encabezados_con_tilde(self):
         contenido = self.csv_de(
-            [self.fila('Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co')],
+            [self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co')],
             columnas=['nombre', 'cédula', 'correo', 'carrera'],
         )
         respuesta = self.subir(contenido)
@@ -575,7 +577,7 @@ class CargueCsv(BaseRegistro):
 
     def test_un_archivo_sin_las_columnas_de_la_plantilla_se_rechaza_completo(self):
         contenido = self.csv_de(
-            [['Ana Gil', 'ana.gil@ejemplo.edu.co']], columnas=['nombre', 'correo']
+            [['Ana Gil', 'ana.gil@unipamplona.edu.co']], columnas=['nombre', 'correo']
         )
         respuesta = self.subir(contenido)
         self.assertIsNone(respuesta.context['resumen'])
@@ -595,7 +597,7 @@ class CargueCsv(BaseRegistro):
     def test_se_puede_volver_a_cargar_despues_de_un_error(self):
         self.subir(self.csv_de([], columnas=['nombre']))
         respuesta = self.subir(
-            self.csv_de([self.fila('Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co')])
+            self.csv_de([self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co')])
         )
         self.assertEqual(respuesta.context['resumen']['registrados'], 1)
 
@@ -603,15 +605,15 @@ class CargueCsv(BaseRegistro):
         mail.outbox.clear()
         contenido = self.csv_de(
             [
-                self.fila('Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co'),
-                self.fila('Beto Ruiz', '2000000002', 'beto.ruiz@ejemplo.edu.co'),
+                self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co'),
+                self.fila('Beto Ruiz', '2000000002', 'beto.ruiz@unipamplona.edu.co'),
             ]
         )
         self.subir(contenido)
         self.assertEqual(len(mail.outbox), 2)
         self.assertEqual(
             {correo.to[0] for correo in mail.outbox},
-            {'ana.gil@ejemplo.edu.co', 'beto.ruiz@ejemplo.edu.co'},
+            {'ana.gil@unipamplona.edu.co', 'beto.ruiz@unipamplona.edu.co'},
         )
 
     def test_el_cargue_solo_acepta_post(self):
@@ -623,12 +625,12 @@ class CargueCsv(BaseRegistro):
             rol=solo_uno, permiso=Permiso.objects.get(nombre='estudiante.registrar')
         )
         usuario = self.crear_usuario(
-            'medio.director@ejemplo.edu.co', 'Medio Director', '1044444444', solo_uno
+            'medio.director@unipamplona.edu.co', 'Medio Director', '1044444444', solo_uno
         )
         self.asignar_carrera(usuario, self.otra_carrera)
         self.client.force_login(usuario)
         respuesta = self.subir(
-            self.csv_de([self.fila('Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co')])
+            self.csv_de([self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co')])
         )
         self.assertEqual(respuesta.status_code, 403)
         self.assertFalse(Usuario.objects.filter(cedula='2000000001').exists())
@@ -639,7 +641,7 @@ class CargueCsv(BaseRegistro):
             rol=solo_uno, permiso=Permiso.objects.get(nombre='estudiante.registrar')
         )
         usuario = self.crear_usuario(
-            'medio.director@ejemplo.edu.co', 'Medio Director', '1044444444', solo_uno
+            'medio.director@unipamplona.edu.co', 'Medio Director', '1044444444', solo_uno
         )
         self.asignar_carrera(usuario, self.otra_carrera)
         self.client.force_login(usuario)
@@ -661,9 +663,9 @@ class MaximoDeFilasDelCsv(BaseRegistro):
     def tres_filas(self):
         return self.csv_de(
             [
-                ['Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co', ''],
-                ['Beto Ruiz', '2000000002', 'beto.ruiz@ejemplo.edu.co', ''],
-                ['Cira Paz', '2000000003', 'cira.paz@ejemplo.edu.co', ''],
+                ['Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co', ''],
+                ['Beto Ruiz', '2000000002', 'beto.ruiz@unipamplona.edu.co', ''],
+                ['Cira Paz', '2000000003', 'cira.paz@unipamplona.edu.co', ''],
             ]
         )
 
@@ -682,6 +684,37 @@ class MaximoDeFilasDelCsv(BaseRegistro):
         self.configurar('5')
         respuesta = self.subir(self.tres_filas())
         self.assertEqual(respuesta.context['resumen']['registrados'], 3)
+
+    def test_lee_el_maximo_guardado_desde_documentos_y_formatos(self):
+        rol_administrador = self.rol_administrador
+        permiso, _ = Permiso.objects.get_or_create(
+            nombre='sistema.parametrizar',
+            defaults={'descripcion': 'Acceso a parametrización', 'estado': 'Activo'},
+        )
+        RolPermiso.objects.get_or_create(rol=rol_administrador, permiso=permiso)
+        administrador = Usuario.objects.create_user(
+            correo_institucional='admin.maximo@unipamplona.edu.co',
+            password='ClaveDePrueba123',
+            nombre='Admin Máximo',
+            cedula='1000000099',
+            nombre_usuario='admin.maximo',
+            rol=rol_administrador,
+            requiere_cambio_contrasena=False,
+        )
+        self.client.force_login(administrador)
+
+        respuesta_configuracion = self.client.post(
+            reverse('parametrizacion:documentos'),
+            {'max_mb_docx': '10', 'max_mb_csv': '2', 'maximo_filas_csv': '2'},
+        )
+        self.assertEqual(respuesta_configuracion.status_code, 302)
+
+        self.client.force_login(self.director)
+        respuesta_csv = self.subir(self.tres_filas())
+
+        self.assertIsNone(respuesta_csv.context['resumen'])
+        self.assertContains(respuesta_csv, 'el máximo por cargue es 2')
+        self.assertFalse(Usuario.objects.filter(cedula='2000000001').exists())
 
     def test_un_valor_invalido_no_rompe_el_cargue(self):
         self.configurar('muchas')
@@ -711,9 +744,9 @@ class ArchivosQueAntesDabanError500(BaseRegistro):
         try:
             contenido = self.csv_de(
                 [
-                    ['"Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co', ''],
-                    ['Beto Ruiz', '2000000002', 'beto.ruiz@ejemplo.edu.co', ''],
-                    ['Cira Paz', '2000000003', 'cira.paz@ejemplo.edu.co', ''],
+                    ['"Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co', ''],
+                    ['Beto Ruiz', '2000000002', 'beto.ruiz@unipamplona.edu.co', ''],
+                    ['Cira Paz', '2000000003', 'cira.paz@unipamplona.edu.co', ''],
                 ]
             )
             respuesta = self.subir(contenido)
@@ -730,9 +763,9 @@ class ArchivosQueAntesDabanError500(BaseRegistro):
         # PostgreSQL, que lo rechaza, y tumbaba el cargue a mitad de camino.
         contenido = self.csv_de(
             [
-                ['Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co', ''],
-                ['Beto\x00Ruiz', '2000000002', 'beto.ruiz@ejemplo.edu.co', ''],
-                ['Cira Paz', '2000000003', 'cira.paz@ejemplo.edu.co', ''],
+                ['Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co', ''],
+                ['Beto\x00Ruiz', '2000000002', 'beto.ruiz@unipamplona.edu.co', ''],
+                ['Cira Paz', '2000000003', 'cira.paz@unipamplona.edu.co', ''],
             ]
         )
         respuesta = self.subir(contenido)
@@ -749,7 +782,7 @@ class ArchivosQueAntesDabanError500(BaseRegistro):
     def test_un_archivo_demasiado_grande_se_rechaza_antes_de_leerlo(self):
         relleno = 'x' * (6 * 1024 * 1024)
         respuesta = self.subir(
-            self.csv_de([[relleno, '2000000001', 'ana.gil@ejemplo.edu.co', '']])
+            self.csv_de([[relleno, '2000000001', 'ana.gil@unipamplona.edu.co', '']])
         )
         self.assertIsNone(respuesta.context['resumen'])
         self.assertContains(respuesta, 'pesa más de')
@@ -788,8 +821,8 @@ class CuandoElCorreoNoSale(BaseRegistro):
     def test_el_resumen_del_csv_cuenta_los_que_quedaron_sin_correo(self):
         contenido = self.csv_de(
             [
-                ['Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co', ''],
-                ['Beto Ruiz', '2000000002', 'beto.ruiz@ejemplo.edu.co', ''],
+                ['Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co', ''],
+                ['Beto Ruiz', '2000000002', 'beto.ruiz@unipamplona.edu.co', ''],
             ]
         )
         with patch(
@@ -806,10 +839,10 @@ class CuandoElCorreoNoSale(BaseRegistro):
 
     def test_a_un_omitido_no_se_le_cuenta_como_sin_correo(self):
         self.subir(
-            self.csv_de([['Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co', '']])
+            self.csv_de([['Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co', '']])
         )
         respuesta = self.subir(
-            self.csv_de([['Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co', '']])
+            self.csv_de([['Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co', '']])
         )
         resumen = respuesta.context['resumen']
         self.assertEqual(resumen['omitidos'], 1)
@@ -837,7 +870,7 @@ class EstudiantesQueQuedabanAMedias(BaseRegistro):
 
     def test_una_cuenta_inactiva_no_se_inscribe_en_silencio(self):
         inactivo = self.crear_usuario(
-            'laura.pena@ejemplo.edu.co', 'Laura Peña', '1020304050', self.rol_estudiante
+            'laura.pena@unipamplona.edu.co', 'Laura Peña', '1020304050', self.rol_estudiante
         )
         inactivo.estado = 'Inactivo'
         inactivo.save(update_fields=['estado'])
@@ -845,14 +878,14 @@ class EstudiantesQueQuedabanAMedias(BaseRegistro):
         respuesta = self.registrar()
         self.assertEqual(respuesta.status_code, 200)
         self.assertContains(respuesta, 'está inactiva')
-        self.assertEqual(self.inscripciones_de('laura.pena@ejemplo.edu.co').count(), 0)
+        self.assertEqual(self.inscripciones_de('laura.pena@unipamplona.edu.co').count(), 0)
 
     def test_una_inscripcion_sin_proceso_se_completa_al_volver_a_cargarla(self):
         # Hoy solo este módulo crea inscripciones, siempre con su proceso; pero
         # falta acordar quién más escribe en `estudiante_carrera`, y sin esto el
         # estudiante quedaría omitido para siempre y sin con qué arrancar.
         usuario = self.crear_usuario(
-            'laura.pena@ejemplo.edu.co', 'Laura Peña', '1020304050', self.rol_estudiante
+            'laura.pena@unipamplona.edu.co', 'Laura Peña', '1020304050', self.rol_estudiante
         )
         estudiante = Estudiante.objects.create(usuario=usuario)
         EstudianteCarrera.objects.create(
@@ -862,14 +895,14 @@ class EstudiantesQueQuedabanAMedias(BaseRegistro):
 
         self.registrar()
 
-        inscripcion = self.inscripciones_de('laura.pena@ejemplo.edu.co').get()
+        inscripcion = self.inscripciones_de('laura.pena@unipamplona.edu.co').get()
         self.assertTrue(
             ProcesoTrabajoSocial.objects.filter(estudiante_carrera=inscripcion).exists()
         )
 
     def test_una_inscripcion_finalizada_se_reporta_en_vez_de_omitirse(self):
         usuario = self.crear_usuario(
-            'laura.pena@ejemplo.edu.co', 'Laura Peña', '1020304050', self.rol_estudiante
+            'laura.pena@unipamplona.edu.co', 'Laura Peña', '1020304050', self.rol_estudiante
         )
         estudiante = Estudiante.objects.create(usuario=usuario)
         EstudianteCarrera.objects.create(
@@ -889,11 +922,11 @@ class ArreglosDeLaAuditoriaYLosPermisos(BaseRegistro):
         # Antes guardaba el id del usuario con tabla_afectada='estudiante_carrera',
         # así que el rastro señalaba la inscripción de otra persona.
         self.crear_usuario(
-            'laura.pena@ejemplo.edu.co', 'Laura Peña', '1020304050', self.rol_estudiante
+            'laura.pena@unipamplona.edu.co', 'Laura Peña', '1020304050', self.rol_estudiante
         )
         self.registrar()
 
-        inscripcion = self.inscripciones_de('laura.pena@ejemplo.edu.co').get()
+        inscripcion = self.inscripciones_de('laura.pena@unipamplona.edu.co').get()
         registro = Auditoria.objects.filter(
             accion='Inscribir estudiante en carrera'
         ).latest('id_auditoria')
@@ -908,13 +941,13 @@ class ArreglosDeLaAuditoriaYLosPermisos(BaseRegistro):
             rol=solo_csv, permiso=Permiso.objects.get(nombre='estudiante.cargar_csv')
         )
         usuario = self.crear_usuario(
-            'solo.csv@ejemplo.edu.co', 'Solo CSV', '1033333333', solo_csv
+            'solo.csv@unipamplona.edu.co', 'Solo CSV', '1033333333', solo_csv
         )
         self.asignar_carrera(usuario, self.otra_carrera)
         self.client.force_login(usuario)
 
         respuesta = self.subir(
-            self.csv_de([['Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co', '']])
+            self.csv_de([['Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co', '']])
         )
         self.assertEqual(respuesta.status_code, 403)
         self.assertFalse(Usuario.objects.filter(cedula='2000000001').exists())
@@ -928,9 +961,9 @@ class NumeroDeFilaDelLogDeErrores(BaseRegistro):
         # devueltas, todo lo que viene después se reportaba una línea antes.
         contenido = (
             'nombre,cedula,correo,carrera\n'
-            'Ana Gil,2000000001,ana.gil@ejemplo.edu.co,\n'
+            'Ana Gil,2000000001,ana.gil@unipamplona.edu.co,\n'
             '\n'
-            'Mala Fila,ABC,mala.fila@ejemplo.edu.co,\n'
+            'Mala Fila,ABC,mala.fila@unipamplona.edu.co,\n'
         )
         respuesta = self.subir(contenido)
         errores = respuesta.context['resumen']['errores']
@@ -951,8 +984,8 @@ class ElMaximoMalConfigurado(BaseRegistro):
     def dos_filas(self):
         return self.csv_de(
             [
-                ['Ana Gil', '2000000001', 'ana.gil@ejemplo.edu.co', ''],
-                ['Beto Ruiz', '2000000002', 'beto.ruiz@ejemplo.edu.co', ''],
+                ['Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co', ''],
+                ['Beto Ruiz', '2000000002', 'beto.ruiz@unipamplona.edu.co', ''],
             ]
         )
 
@@ -977,3 +1010,59 @@ class ElMaximoMalConfigurado(BaseRegistro):
         self.assertContains(
             self.client.get(self.url), 'no hay un máximo de filas configurado'
         )
+
+
+class DominioInstitucionalDelCorreo(BaseRegistro):
+    """SIS-42 · solo se registra con el dominio institucional.
+
+    El login de SISTRA-13 ya exige `@unipamplona.edu.co`, y el correo es el
+    usuario de ingreso (RG-14): una cuenta con otro dominio queda inservible.
+    """
+
+    def fila(self, nombre, cedula, correo, carrera='Ingeniería de Sistemas'):
+        return [nombre, cedula, correo, carrera]
+
+    def test_uno_a_uno_rechaza_un_correo_de_otro_dominio(self):
+        respuesta = self.registrar(correo='laura.pena@ejemplo.edu.co')
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, 'unipamplona.edu.co')
+        self.assertFalse(Usuario.objects.filter(cedula='1020304050').exists())
+
+    def test_uno_a_uno_rechaza_un_dominio_que_solo_se_parece(self):
+        respuesta = self.registrar(correo='laura.pena@mail.unipamplona.edu.co.co')
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertFalse(Usuario.objects.filter(cedula='1020304050').exists())
+
+    def test_uno_a_uno_acepta_el_institucional_con_mayusculas_y_espacios(self):
+        respuesta = self.registrar(correo='  LAURA.PENA@UNIPAMPLONA.EDU.CO  ')
+        self.assertRedirects(respuesta, self.url)
+        usuario = Usuario.objects.get(cedula='1020304050')
+        self.assertEqual(usuario.correo_institucional, 'laura.pena@unipamplona.edu.co')
+
+    def test_en_el_csv_la_fila_de_otro_dominio_se_rechaza_con_su_motivo(self):
+        contenido = self.csv_de(
+            [
+                self.fila('Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co'),
+                self.fila('Mala Fila', '2000000009', 'mala.fila@ejemplo.edu.co'),
+                self.fila('Beto Ruiz', '2000000002', 'beto.ruiz@unipamplona.edu.co'),
+            ]
+        )
+        respuesta = self.subir(contenido)
+        resumen = respuesta.context['resumen']
+        # Las otras dos filas se procesan: una fila mala no tumba el cargue.
+        self.assertEqual(resumen['registrados'], 2)
+        self.assertEqual(len(resumen['errores']), 1)
+        error = resumen['errores'][0]
+        self.assertEqual(error['fila'], 3)
+        self.assertIn('unipamplona.edu.co', error['motivo'])
+        self.assertFalse(Usuario.objects.filter(cedula='2000000009').exists())
+        self.assertTrue(Usuario.objects.filter(cedula='2000000001').exists())
+        self.assertTrue(Usuario.objects.filter(cedula='2000000002').exists())
+
+    def test_en_el_csv_el_institucional_con_mayusculas_y_espacios_se_registra(self):
+        contenido = self.csv_de(
+            [self.fila('Ana Gil', '2000000001', '  ANA.GIL@UNIPAMPLONA.EDU.CO ')]
+        )
+        respuesta = self.subir(contenido)
+        self.assertEqual(respuesta.context['resumen']['registrados'], 1)
+        self.assertTrue(self.inscripciones_de('ana.gil@unipamplona.edu.co').exists())

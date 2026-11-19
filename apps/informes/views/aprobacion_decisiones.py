@@ -7,7 +7,7 @@ from apps.informes.views.aprobacion_mensajes import (
     MENSAJES_DECISION, MSG_07_05, MSG_07_06, aviso_decision,
 )
 
-from django.contrib.auth.decorators import login_required
+from apps.usuarios.permisos import requiere_permiso
 from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
@@ -34,9 +34,9 @@ def _respuesta_error(mensaje, estado=400):
     )
 
 
-@login_required
-@require_POST
 @auditar_intentos("decision_informe")
+@requiere_permiso("informe.aprobar")
+@require_POST
 def decidir(request, id_informe):
     """Procesa una decisión autorizada sobre un informe."""
 

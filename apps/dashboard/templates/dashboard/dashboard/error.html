@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Inicio · SISTRA-UP{% endblock %}
+
+{% block contenido %}
+<main class="container py-5">
+  <div class="alert alert-danger" role="alert">{{ mensaje }}</div>
+  <a class="btn btn-primary" href="{{ request.get_full_path }}">Reintentar</a>
+</main>
+{% endblock %}

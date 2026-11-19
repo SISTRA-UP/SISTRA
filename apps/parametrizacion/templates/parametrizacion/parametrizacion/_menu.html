@@ -1,0 +1,28 @@
+<p class="sis-eyebrow">Parametrización</p>
+<nav class="sis-nav" aria-label="Secciones de parametrización">
+    {% if puede_parametrizar %}
+    {% if seccion == 'periodos' %}
+    <a class="sis-nav-item is-active" href="{% url 'parametrizacion:periodos' %}" aria-current="page">Periodo
+        académico</a>
+    {% else %}
+    <a class="sis-nav-item" href="{% url 'parametrizacion:periodos' %}">Periodo académico</a>
+    {% endif %}
+    {% if seccion == 'documentos' %}
+    <a class="sis-nav-item is-active" href="{% url 'parametrizacion:documentos' %}" aria-current="page">Documentos y formatos</a>
+    {% else %}
+    <a class="sis-nav-item" href="{% url 'parametrizacion:documentos' %}">Documentos y formatos</a>
+    {% endif %}
+    {% if seccion == 'alertas' %}
+    <a class="sis-nav-item is-active" href="{% url 'parametrizacion:alertas' %}" aria-current="page">Alertas y
+        plazos</a>
+    {% else %}
+    <a class="sis-nav-item" href="{% url 'parametrizacion:alertas' %}">Alertas y plazos</a>
+    {% endif %}
+    {% if seccion == 'estados' %}
+    <a class="sis-nav-item is-active" href="{% url 'parametrizacion:estados' %}" aria-current="page">Estados del proceso</a>
+    {% else %}
+    <a class="sis-nav-item" href="{% url 'parametrizacion:estados' %}">Estados del proceso</a>
+    {% endif %}
+    {# Directores — lo agrega SISTRA-10; ruta eliminada de esta rama #}
+    {% endif %}
+</nav>

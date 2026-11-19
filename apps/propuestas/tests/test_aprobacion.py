@@ -60,6 +60,7 @@ from apps.propuestas.forms.aprobacion import (
     RechazoPropuestaForm,
     aplicar_transicion,
     calcular_semaforo,
+    obtener_limites_semaforo,
     puede_revertir_aprobacion,
     sanitizar_texto,
 )
@@ -273,12 +274,12 @@ class TestDominioYSemaforo(BaseAprobacionTestCase):
     def test_calcular_semaforo_parametrizado_desde_bd(self):
         """El semáforo adopta los umbrales configurados en la tabla Parametro (BD)."""
         Parametro.objects.create(
-            clave='dias_semaforo_verde',
+            clave='semaforo.verde_hasta_dias',
             valor='4',
             usuario_actualizacion=self.user_director,
         )
         Parametro.objects.create(
-            clave='dias_semaforo_amarillo',
+            clave='semaforo.amarillo_hasta_dias',
             valor='9',
             usuario_actualizacion=self.user_director,
         )
@@ -290,6 +291,26 @@ class TestDominioYSemaforo(BaseAprobacionTestCase):
 
         prop.fecha_envio = timezone.now() - timedelta(days=10)
         self.assertEqual(calcular_semaforo(prop)['color'], 'rojo')
+
+    def test_umbrales_guardados_por_parametrizacion_se_reflejan_en_la_bandeja(self):
+        """SISTRA-11 criterio 4: cambiar los umbrales en Parametrización se refleja en SISTRA-02."""
+        from apps.parametrizacion import servicios
+
+        servicios.guardar('semaforo.verde_hasta_dias', '2', self.user_director)
+        servicios.guardar('semaforo.amarillo_hasta_dias', '5', self.user_director)
+        prop = self.crear_propuesta(self.estudiante_1, 'P-SEM-ADMO', dias_envio=3)
+
+        self.client.force_login(self.user_director)
+        response = self.client.get(reverse('propuestas:aprobacion'))
+
+        meta = next(m for m in response.context['propuestas_con_meta'] if m['propuesta'].pk == prop.pk)
+        self.assertEqual(meta['semaforo']['color'], 'amarillo')
+        self.assertEqual((response.context['limite_verde'], response.context['limite_amarillo']), (2, 5))
+
+    def test_umbrales_sin_configurar_usan_los_valores_iniciales_de_parametrizacion(self):
+        """Sin filas en `parametro` rigen los valores iniciales de Parametrización (7 y 14)."""
+        self.assertFalse(Parametro.objects.filter(clave__startswith='semaforo.').exists())
+        self.assertEqual(obtener_limites_semaforo(), (7, 14))
 
     def test_calcular_semaforo_pausado_en_otros_estados(self):
         """El semáforo se detiene cuando la propuesta sale de 'En revisión' (RG-07)."""
@@ -414,12 +435,12 @@ class TestFiltroBandejaPropuestasForm(BaseAprobacionTestCase):
     def test_filtro_bandeja_opciones_semaforo_dinamicas_desde_bd(self):
         """Las opciones del selector de semáforo se construyen dinámicamente según Parametro."""
         Parametro.objects.create(
-            clave='dias_semaforo_verde',
+            clave='semaforo.verde_hasta_dias',
             valor='5',
             usuario_actualizacion=self.user_director,
         )
         Parametro.objects.create(
-            clave='dias_semaforo_amarillo',
+            clave='semaforo.amarillo_hasta_dias',
             valor='12',
             usuario_actualizacion=self.user_director,
         )
@@ -1784,12 +1805,12 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
     def test_bandeja_filtro_semaforo_limites_dinamicos_desde_bd(self):
         """El filtrado por semáforo en bandeja obedece los límites dinámicos de Parametro."""
         Parametro.objects.create(
-            clave='dias_semaforo_verde',
+            clave='semaforo.verde_hasta_dias',
             valor='3',
             usuario_actualizacion=self.user_director,
         )
         Parametro.objects.create(
-            clave='dias_semaforo_amarillo',
+            clave='semaforo.amarillo_hasta_dias',
             valor='8',
             usuario_actualizacion=self.user_director,
         )

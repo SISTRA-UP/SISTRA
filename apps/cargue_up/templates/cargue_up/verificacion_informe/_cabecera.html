@@ -1,0 +1,22 @@
+{% load static %}
+{# Encabezado común de SISTRA-09: marca, acciones de sesión y título. Variables: eyebrow, titulo, titulo_em, descripcion. #}
+<header class="vi-hero">
+    <div class="container">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-5">
+            <a class="vi-brand" href="{% url 'usuarios:inicio_director' %}" aria-label="SISTRA-UP, inicio del Director">
+                <span class="vi-brand-mark" aria-hidden="true"><img src="{% static 'img/escudo-unipamplona.png' %}" alt=""></span>
+                <span class="vi-brand-word">SISTRA<span>.</span><small>Universidad de Pamplona</small></span>
+            </a>
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-sm btn-vi-ghost" href="{% url 'usuarios:inicio_director' %}">Inicio</a>
+                <form method="post" action="{% url 'usuarios:logout' %}">
+                    {% csrf_token %}
+                    <button class="btn btn-sm btn-vi-ghost" type="submit">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+        <p class="vi-eyebrow">{{ eyebrow }}</p>
+        <h1 class="vi-title">{{ titulo }} {% if titulo_em %}<em>{{ titulo_em }}</em>{% endif %}</h1>
+        {% if descripcion %}<p class="vi-lead">{{ descripcion }}</p>{% endif %}
+    </div>
+</header>

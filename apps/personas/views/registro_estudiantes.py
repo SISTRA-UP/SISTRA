@@ -4,7 +4,6 @@ Solo el responsable de este requisito edita este archivo.
 """
 
 from django.contrib import messages
-from django.contrib.auth.decorators import permission_required
 from django.core.exceptions import ValidationError
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
@@ -20,6 +19,7 @@ from apps.personas.forms.registro_estudiantes import (
     sin_tildes,
 )
 from apps.personas.models import DirectorCarrera
+from apps.usuarios.permisos import requiere_permiso
 
 PLANTILLA = 'personas/registro_estudiantes/registrar.html'
 
@@ -74,7 +74,7 @@ def _pantalla(request, carrera, formulario=None, cargue=None, resumen=None):
     )
 
 
-@permission_required('estudiante.registrar', raise_exception=True)
+@requiere_permiso('estudiante.registrar')
 def registrar(request):
     """Pantalla del Director: «Uno a uno» y «Archivo CSV».
 
@@ -127,9 +127,7 @@ def registrar(request):
     return _pantalla(request, carrera, formulario=formulario)
 
 
-@permission_required(
-    ('estudiante.registrar', 'estudiante.cargar_csv'), raise_exception=True
-)
+@requiere_permiso(('estudiante.registrar', 'estudiante.cargar_csv'))
 @require_POST
 def cargar_csv(request):
     """Cargue masivo: se procesa fila por fila, no se rechaza el archivo entero.

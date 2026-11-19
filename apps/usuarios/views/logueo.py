@@ -275,15 +275,7 @@ def _inicio_por_rol(request, rol_esperado):
         return redirect('usuarios:cambiar_contrasena')
     if usuario.rol.nombre != rol_esperado:
         return _redirigir_al_inicio(request, usuario)
-    return render(
-        request,
-        'usuarios/logueo/inicio_rol.html',
-        {
-            'nombre_rol': rol_esperado,
-            'nombre_usuario': usuario.nombre,
-            'dashboard_pendiente': True,
-        },
-    )
+    return redirect('dashboard:inicio')
 
 
 @never_cache
