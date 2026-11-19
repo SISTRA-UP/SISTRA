@@ -132,6 +132,13 @@ class DecisionForm(forms.Form):
 class CorreccionForm(forms.Form):
     """TXT-MOTIVO-CORR (siempre) y TXT-OBS-UP (si el nuevo resultado es Rechazado en UP)."""
 
+    resultado = forms.ChoiceField(
+        choices=[
+            (EstadoVerificacion.APROBADO_EN_UP, 'Aprobado en UP'),
+            (EstadoVerificacion.RECHAZADO_EN_UP, 'Rechazado en UP'),
+        ],
+        widget=forms.HiddenInput,
+    )
     id_cargue = forms.IntegerField(min_value=1, widget=forms.HiddenInput)
     motivo = _campo_texto('Motivo de la corrección', 'Explica por qué corriges la verificación.')
     observacion = _campo_texto('Observación para el estudiante', 'Escribe qué no coincide.')

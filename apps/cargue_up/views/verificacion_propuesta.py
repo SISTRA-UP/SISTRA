@@ -137,7 +137,8 @@ def _contexto_detalle(propuesta, *, formulario_decision=None, formulario_correcc
         'formulario_correccion': formulario_correccion
         or (
             CorreccionForm(
-                initial={'id_cargue': ultimo.pk}, resultado_nuevo=resultado_nuevo
+                initial={'id_cargue': ultimo.pk, 'resultado': resultado_nuevo},
+                resultado_nuevo=resultado_nuevo,
             )
             if resultado_nuevo and ultimo
             else None
@@ -313,7 +314,8 @@ def corregir(request: HttpRequest, id_propuesta: int) -> HttpResponse:
     resultado_nuevo = resultado_de_correccion(
         propuesta_vista.estado, ultimo_vista.estado_verificacion if ultimo_vista else None
     )
-    if resultado_nuevo is None:
+    # EX-01: un reenvío del mismo formulario ya no coincide con el resultado calculado.
+    if resultado_nuevo is None or request.POST.get('resultado') != resultado_nuevo:
         messages.warning(request, MSG_05_CORRECCION_NO_DISPONIBLE)
         return redirect('cargue_up:verificacion_propuesta')
 
@@ -345,7 +347,11 @@ def corregir(request: HttpRequest, id_propuesta: int) -> HttpResponse:
                 propuesta.estado, cargue.estado_verificacion if cargue else None
             )
             # Sin nuevo cargue y con el estado que dejó la verificación; si no, no se corrige.
-            if resultado_nuevo is None or cargue.pk != id_cargue:
+            if (
+                resultado_nuevo is None
+                or cargue.pk != id_cargue
+                or formulario.cleaned_data['resultado'] != resultado_nuevo
+            ):
                 messages.warning(request, MSG_05_CORRECCION_NO_DISPONIBLE)
                 return redirect('cargue_up:verificacion_propuesta')
 

@@ -20,6 +20,7 @@ from apps.cargue_up.forms.verificacion_propuesta import (
     MSG_05_06,
     MSG_05_CORRECCION_NO_DISPONIBLE,
     MSG_05_ERROR,
+    resultado_de_correccion,
 )
 from apps.cargue_up.forms.aviso_propuesta import TIPO_NOTIFICACION_AVISO
 from apps.cargue_up.models import CargueUp, EstadoVerificacion, HistorialCargueUp
@@ -151,10 +152,15 @@ class BaseVerificacionTests(TestCase):
             follow=True,
         )
 
-    def corregir(self, propuesta, motivo='', observacion='', id_cargue=None):
+    def corregir(self, propuesta, motivo='', observacion='', id_cargue=None, resultado=None):
+        """Envía el formulario como lo hace la pantalla: con el resultado contrario calculado."""
+        if resultado is None:
+            ultimo = self.ultimo_cargue(propuesta)
+            resultado = resultado_de_correccion(propuesta.estado, ultimo.estado_verificacion) or RECHAZADO_UP
         return self.client.post(
             self.url_corregir(propuesta),
             {
+                'resultado': resultado,
                 'id_cargue': id_cargue or self.ultimo_cargue(propuesta).pk,
                 'motivo': motivo,
                 'observacion': observacion,
@@ -628,6 +634,51 @@ class CorreccionTests(BaseVerificacionTests):
         self.assertEqual(propuesta.estado, EstadoTramite.APROBADO_EN_UP)
         self.assertEqual(cargue.estado_verificacion, APROBADO_UP)
         self.assertEqual(HistorialCargueUp.objects.count(), 0)
+
+    def test_doble_envio_de_correccion_aprobado_a_rechazado_se_registra_una_vez(self):
+        propuesta = self.crear_propuesta('doble1')
+        cargue = self.verificar_directo(propuesta, APROBADO_UP)
+        self.entrar_como_director()
+        datos = dict(motivo='Me equivoqué', observacion='No coincide', resultado=RECHAZADO_UP,
+                     id_cargue=cargue.pk)
+
+        primera = self.corregir(propuesta, **datos)
+        segunda = self.corregir(propuesta, **datos)
+
+        self.assertIn(MSG_05_06, self.mensajes(primera))
+        self.assertIn(MSG_05_CORRECCION_NO_DISPONIBLE, self.mensajes(segunda))
+        propuesta.refresh_from_db()
+        cargue.refresh_from_db()
+        self.assertEqual(propuesta.estado, EstadoTramite.APROBADO)
+        self.assertEqual(cargue.estado_verificacion, RECHAZADO_UP)
+        self.assertEqual(HistorialCargueUp.objects.filter(cargue_up=cargue).count(), 1)
+        self.assertEqual(Notificacion.objects.filter(propuesta=propuesta).count(), 1)
+
+    def test_doble_envio_de_correccion_rechazado_a_aprobado_se_registra_una_vez(self):
+        propuesta = self.crear_propuesta('doble2')
+        cargue = self.verificar_directo(propuesta, RECHAZADO_UP, 'Antes no coincidía')
+        self.entrar_como_director()
+        datos = dict(motivo='Sí coincidía', resultado=APROBADO_UP, id_cargue=cargue.pk)
+
+        primera = self.corregir(propuesta, **datos)
+        segunda = self.corregir(propuesta, **datos)
+
+        self.assertIn(MSG_05_06, self.mensajes(primera))
+        self.assertRedirects(segunda, self.url_lista)
+        self.assertIn(MSG_05_CORRECCION_NO_DISPONIBLE, self.mensajes(segunda))
+        propuesta.refresh_from_db()
+        cargue.refresh_from_db()
+        self.assertEqual(propuesta.estado, EstadoTramite.APROBADO_EN_UP)
+        self.assertEqual(cargue.estado_verificacion, APROBADO_UP)
+        self.assertEqual(HistorialCargueUp.objects.filter(cargue_up=cargue).count(), 1)
+        self.assertEqual(Notificacion.objects.filter(propuesta=propuesta).count(), 1)
+
+    def test_el_formulario_de_correccion_envia_el_resultado_en_un_campo_oculto(self):
+        propuesta = self.crear_propuesta('oculto')
+        self.verificar_directo(propuesta, APROBADO_UP)
+        self.entrar_como_director()
+        respuesta = self.client.get(self.url_detalle(propuesta))
+        self.assertContains(respuesta, f'name="resultado" value="{RECHAZADO_UP}"')
 
 
 class PantallaTests(BaseVerificacionTests):
