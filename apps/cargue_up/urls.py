@@ -12,7 +12,7 @@ from django.urls import path  # noqa: F401
 
 from .views import cargue_propuesta  # noqa: F401  SISTRA-03
 from .views import aviso_propuesta  # noqa: F401  SISTRA-04
-from .views import verificacion_propuesta  # noqa: F401  SISTRA-05
+from apps.cargue_up.views import verificacion_propuesta # noqa: F401  SISTRA-05
 from .views import aviso_informe  # noqa: F401  SISTRA-08
 from .views import verificacion_informe  # noqa: F401  SISTRA-09
 
@@ -37,17 +37,26 @@ urlpatterns = [
     ),
 
     # SISTRA-05 · Notificación de cargue UP – Director
-	 path(
-        'notificaciones/director/',
-        verificacion_propuesta.notificaciones_director,
-        name='notificaciones_director',
-    ),
-    path(
-        'notificaciones/director/<int:id_notificacion>/leida/',
-        verificacion_propuesta.marcar_notificacion_leida,
-        name='marcar_notificacion_leida',
-    ),
-
+	path(
+    'verificar/propuesta/',
+    verificacion_propuesta.lista,
+    name='verificacion_propuesta_lista',
+),
+path(
+    'verificar/propuesta/<int:id_propuesta>/',
+    verificacion_propuesta.detalle,
+    name='verificacion_propuesta_detalle',
+),
+path(
+    'verificar/propuesta/<int:id_propuesta>/decidir/',
+    verificacion_propuesta.decidir,
+    name='verificacion_propuesta_decidir',
+),
+path(
+    'verificar/propuesta/<int:id_propuesta>/corregir/',
+    verificacion_propuesta.corregir,
+    name='verificacion_propuesta_corregir',
+),
     # SISTRA-08 · Notificación de cargue UP (informe)
     path('informe/', aviso_informe.inicio, name='aviso_informe'),
     path('informe/confirmar/', aviso_informe.confirmar, name='aviso_informe_confirmar'),
