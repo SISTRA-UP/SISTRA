@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block titulo %}Verificar propuesta {{ propuesta.codigo }} · SISTRA-UP{% endblock %}
+
+{% block css %}
+<link rel="stylesheet" href="{% static 'cargue_up/css/verificacion_informe.css' %}">
+{% endblock %}
+
+{% block contenido %}
+<div class="vi-page">
+    {% include 'cargue_up/verificacion_informe/_cabecera.html' with eyebrow='Verificación en UP · Propuesta' titulo='Propuesta' titulo_em=propuesta.codigo %}
+
+    <main class="container vi-body">
+        <a class="btn btn-sm btn-vi-outline mb-3 bg-white" href="{% url 'cargue_up:verificacion_propuesta' %}">&larr; Volver a la lista</a>
+
+        {% include 'cargue_up/verificacion_informe/_mensajes.html' %}
+
+        <section class="vi-card p-4 mb-4" aria-labelledby="titulo-resumen">
+            <h2 id="titulo-resumen">Resumen</h2>
+            <dl class="row vi-detail mb-0">
+                <dt class="col-sm-3">Estudiante</dt>
+                <dd class="col-sm-9">{{ estudiante.nombre }} · Cédula {{ estudiante.cedula }}</dd>
+                {% if propuesta.titulo %}
+                <dt class="col-sm-3">Título</dt>
+                <dd class="col-sm-9">{{ propuesta.titulo }}</dd>
+                {% endif %}
+                <dt class="col-sm-3">Estado de la propuesta</dt>
+                <dd class="col-sm-9">{{ propuesta.estado }}</dd>
+                {% if ultimo_cargue %}
+                <dt class="col-sm-3">Fecha del aviso</dt>
+                <dd class="col-sm-9">{{ ultimo_cargue.fecha_declaracion|date:"d/m/Y H:i" }}</dd>
+                <dt class="col-sm-3">Verificación en UP</dt>
+                <dd class="col-sm-9">{{ ultimo_cargue.estado_verificacion }}</dd>
+                {% endif %}
+            </dl>
+        </section>
+
+        {% if pendiente %}
+        <section class="row g-3 mb-4" aria-label="Registrar verificación">
+            <div class="col-md-6">
+                <div class="vi-card h-100 p-4">
+                    <h2>Aprobado en UP</h2>
+                    <p class="vi-muted">Lo cargado en la Plataforma UP coincide con la propuesta aprobada.</p>
+                    {% include 'cargue_up/verificacion_propuesta/_formulario_decision.html' with resultado=aprobacion id_cargue=ultimo_cargue.pk prefijo='detalle' %}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="vi-card h-100 p-4">
+                    <h2>Rechazado en UP</h2>
+                    <p class="vi-muted">No coincide: la propuesta vuelve a Aprobado y el estudiante debe cargarla de nuevo.</p>
+                    {% include 'cargue_up/verificacion_propuesta/_formulario_decision.html' with resultado=rechazo id_cargue=ultimo_cargue.pk prefijo='detalle' observacion_previa=formulario_decision.observacion.value errores_observacion=formulario_decision.observacion.errors %}
+                </div>
+            </div>
+        </section>
+        {% endif %}
+
+        {% if formulario_correccion %}
+        <section class="vi-card p-4 mb-4" aria-labelledby="titulo-correccion">
+            <h2 id="titulo-correccion">Corregir verificación</h2>
+            <p class="vi-muted">
+                Registrarás el resultado contrario: <strong>{{ resultado_correccion }}</strong>.
+                La decisión anterior queda en el historial y se avisa al estudiante.
+            </p>
+            <form method="post" action="{% url 'cargue_up:verificacion_propuesta_corregir' propuesta.pk %}">
+                {% csrf_token %}
+                {{ formulario_correccion.id_cargue }}
+                <div class="mb-3">
+                    <label for="{{ formulario_correccion.motivo.id_for_label }}" class="form-label">{{ formulario_correccion.motivo.label }}</label>
+                    {{ formulario_correccion.motivo }}
+                    {% for error in formulario_correccion.motivo.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+                </div>
+                {% if resultado_correccion == rechazo %}
+                <div class="mb-3">
+                    <label for="{{ formulario_correccion.observacion.id_for_label }}" class="form-label">{{ formulario_correccion.observacion.label }}</label>
+                    {{ formulario_correccion.observacion }}
+                    {% for error in formulario_correccion.observacion.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+                </div>
+                {% endif %}
+                <button type="submit" class="btn btn-vi-red">Corregir verificación</button>
+            </form>
+        </section>
+        {% endif %}
+
+        {% if not pendiente and not formulario_correccion %}
+        <div class="vi-card vi-empty mb-4" role="status">Esta propuesta ya no está pendiente de verificación.</div>
+        {% endif %}
+
+        <section class="vi-card p-4" aria-labelledby="titulo-historial">
+            <h2 id="titulo-historial">Historial de cargues y verificaciones</h2>
+            <div class="table-responsive">
+                <table class="table vi-table align-middle mb-0">
+                    <thead>
+                        <tr><th scope="col">Fecha del aviso</th><th scope="col">Resultado</th><th scope="col">Director</th><th scope="col">Fecha de verificación</th><th scope="col">Observación</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for cargue in cargues %}
+                        <tr>
+                            <td>{{ cargue.fecha_declaracion|date:"d/m/Y H:i" }}</td>
+                            <td>{{ cargue.estado_verificacion }}</td>
+                            <td>{{ cargue.director.usuario.nombre|default:"—" }}</td>
+                            <td>{{ cargue.fecha_verificacion|date:"d/m/Y H:i"|default:"—" }}</td>
+                            <td>{{ cargue.observacion|default:"—" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if historial %}
+            <h3 class="h6 mt-4">Correcciones</h3>
+            <ul class="small mb-0">
+                {% for h in historial %}
+                <li>{{ h.fecha_hora|date:"d/m/Y H:i" }} · {{ h.director.usuario.nombre }}: {{ h.estado_anterior }} &rarr; {{ h.estado_nuevo }}. Motivo: {{ h.motivo_correccion }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </section>
+    </main>
+</div>
+{% endblock %}

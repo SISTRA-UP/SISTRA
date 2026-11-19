@@ -11,6 +11,7 @@ from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
+from apps.cargue_up.forms.aviso_propuesta import TIPO_NOTIFICACION_AVISO
 from apps.dashboard.forms.dashboard import (
     FiltroAdministradorForm,
     FiltroDirectorForm,
@@ -162,6 +163,11 @@ def abrir_notificacion(request, id_notificacion):
 
     usuario = request.user
     if notificacion.propuesta_id and usuario.has_perm('propuesta.aprobar'):
+        if notificacion.tipo == TIPO_NOTIFICACION_AVISO:
+            return redirect(
+                'cargue_up:verificacion_propuesta_detalle',
+                id_propuesta=notificacion.propuesta_id,
+            )
         filtro = urlencode({'buscar': notificacion.propuesta.codigo})
         return redirect(f"{reverse('propuestas:aprobacion')}?{filtro}")
     if notificacion.informe_id and usuario.has_perm('informe.aprobar'):
