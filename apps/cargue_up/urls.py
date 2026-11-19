@@ -37,6 +37,26 @@ urlpatterns = [
     ),
 
     # SISTRA-05 · Notificación de cargue UP – Director
+    path(
+        'verificar/propuesta/',
+        verificacion_propuesta.lista,
+        name='verificacion_propuesta',
+    ),
+    path(
+        'verificar/propuesta/<int:id_propuesta>/',
+        verificacion_propuesta.detalle,
+        name='verificacion_propuesta_detalle',
+    ),
+    path(
+        'verificar/propuesta/<int:id_propuesta>/decidir/',
+        verificacion_propuesta.decidir,
+        name='verificacion_propuesta_decidir',
+    ),
+    path(
+        'verificar/propuesta/<int:id_propuesta>/corregir/',
+        verificacion_propuesta.corregir,
+        name='verificacion_propuesta_corregir',
+    ),
 
     # SISTRA-08 · Notificación de cargue UP (informe)
     path('informe/', aviso_informe.inicio, name='aviso_informe'),
