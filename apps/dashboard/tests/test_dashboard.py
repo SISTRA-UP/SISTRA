@@ -23,10 +23,10 @@ from apps.personas.models import (
     Estudiante,
     EstudianteCarrera,
 )
-from apps.procesos.models import ProcesoTrabajoSocial
+from apps.procesos.models import EstadoAvance, ProcesoTrabajoSocial
 from apps.propuestas.forms.aprobacion import RESULTADO_EXITO
 from apps.propuestas.models import EstadoTramite, Propuesta
-from apps.seguimiento.models import Auditoria
+from apps.seguimiento.models import Auditoria, Notificacion
 from apps.usuarios.models import Permiso, Rol, RolPermiso
 
 Usuario = get_user_model()
@@ -346,3 +346,113 @@ class DashboardIntegracionTests(TestCase):
             respuesta.context['inscripcion_actual'].carrera,
             segunda_carrera,
         )
+
+
+class AvisosDashboardTests(DashboardVistasTests):
+    def _crear_propuesta(self):
+        hoy = timezone.localdate()
+        periodo = PeriodoAcademico.objects.create(
+            nombre='2026-2',
+            fecha_inicio=hoy - timedelta(days=30),
+            fecha_fin=hoy + timedelta(days=90),
+            fecha_cierre_propuesta=hoy + timedelta(days=30),
+            fecha_cierre_informe=hoy + timedelta(days=60),
+            estado=EstadoPeriodo.VIGENTE,
+        )
+        proceso = ProcesoTrabajoSocial.objects.create(
+            estudiante_carrera=EstudianteCarrera.objects.get(
+                estudiante=self.estudiante,
+                carrera=self.carrera,
+            ),
+            fecha_inicio=timezone.now(),
+            estado=EstadoAvance.PENDIENTE,
+        )
+        return Propuesta.objects.create(
+            proceso=proceso,
+            periodo_academico=periodo,
+            codigo='PROP-AVISO-001',
+            titulo='Propuesta de prueba',
+            estado=EstadoTramite.EN_REVISION,
+        )
+
+    def test_el_modal_muestra_el_boton_abrir(self):
+        aviso = Notificacion.objects.create(
+            usuario=self.director_user,
+            tipo='Nueva propuesta',
+            mensaje='Tienes una propuesta por revisar.',
+        )
+        self.client.force_login(self.director_user)
+
+        respuesta = self.client.get(reverse('dashboard:inicio'), follow=True)
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(
+            respuesta,
+            f'action="{reverse("dashboard:abrir_notificacion", args=[aviso.pk])}"',
+        )
+        self.assertContains(respuesta, '>Abrir</button>')
+
+    def test_abrir_un_aviso_de_propuesta_lo_marca_leido_y_lleva_a_la_bandeja(self):
+        propuesta = self._crear_propuesta()
+        aviso = Notificacion.objects.create(
+            usuario=self.director_user,
+            propuesta=propuesta,
+            tipo='Nueva propuesta',
+            mensaje='Tienes una propuesta por revisar.',
+        )
+        self.client.force_login(self.director_user)
+
+        respuesta = self.client.post(
+            reverse('dashboard:abrir_notificacion', args=[aviso.pk])
+        )
+
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertEqual(
+            respuesta['Location'],
+            f'{reverse("propuestas:aprobacion")}?buscar={propuesta.codigo}',
+        )
+        aviso.refresh_from_db()
+        self.assertIsNotNone(aviso.fecha_lectura)
+
+        dashboard = self.client.get(reverse('dashboard:inicio'), follow=True)
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertNotContains(dashboard, aviso.mensaje)
+
+    def test_un_aviso_sin_registro_lleva_al_dashboard(self):
+        aviso = Notificacion.objects.create(
+            usuario=self.estudiante_user,
+            tipo='Aviso general',
+            mensaje='Tienes una acción pendiente.',
+        )
+        self.client.force_login(self.estudiante_user)
+
+        respuesta = self.client.post(
+            reverse('dashboard:abrir_notificacion', args=[aviso.pk])
+        )
+
+        self.assertRedirects(respuesta, reverse('dashboard:inicio'), fetch_redirect_response=False)
+
+    def test_no_se_puede_abrir_el_aviso_de_otro(self):
+        aviso = Notificacion.objects.create(
+            usuario=self.director_user,
+            tipo='Nueva propuesta',
+            mensaje='Aviso privado del Director.',
+        )
+        self.client.force_login(self.estudiante_user)
+
+        respuesta = self.client.post(
+            reverse('dashboard:abrir_notificacion', args=[aviso.pk])
+        )
+
+        self.assertEqual(respuesta.status_code, 404)
+        aviso.refresh_from_db()
+        self.assertIsNone(aviso.fecha_lectura)
+
+    def test_abrir_solo_acepta_post(self):
+        self.client.force_login(self.director_user)
+
+        respuesta = self.client.get(
+            reverse('dashboard:abrir_notificacion', args=[1])
+        )
+
+        self.assertEqual(respuesta.status_code, 405)

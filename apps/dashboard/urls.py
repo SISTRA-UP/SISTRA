@@ -12,4 +12,9 @@ urlpatterns = [
     path('estudiante/', dashboard.dashboard_estudiante, name='estudiante'),
     path('director/', dashboard.dashboard_director, name='director'),
     path('administrador/', dashboard.dashboard_administrador, name='administrador'),
+    path(
+        'notificaciones/<int:id_notificacion>/abrir/',
+        dashboard.abrir_notificacion,
+        name='abrir_notificacion',
+    ),
 ]
