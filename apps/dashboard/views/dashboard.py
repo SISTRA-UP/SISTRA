@@ -12,6 +12,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
 from apps.cargue_up.forms.aviso_propuesta import TIPO_NOTIFICACION_AVISO
+from apps.cargue_up.forms.documentos_extra import TIPO_NOTIFICACION as TIPO_DOCUMENTOS_EXTRA
 from apps.dashboard.forms.dashboard import (
     FiltroAdministradorForm,
     FiltroDirectorForm,
@@ -171,6 +172,8 @@ def abrir_notificacion(request, id_notificacion):
         filtro = urlencode({'buscar': notificacion.propuesta.codigo})
         return redirect(f"{reverse('propuestas:aprobacion')}?{filtro}")
     if notificacion.informe_id and usuario.has_perm('informe.aprobar'):
+        if notificacion.tipo == TIPO_DOCUMENTOS_EXTRA:
+            return redirect('cargue_up:documentos_extra_recibidos')
         if notificacion.tipo == 'Subido en UP':
             return redirect(
                 'cargue_up:verificacion_informe_detalle',

@@ -492,6 +492,25 @@ resultado corregido sea Rechazado en UP, también observación para el
 estudiante. La corrección no crea un nuevo intento si el estudiante no
 volvió a cargar el documento.
 
+### 6.4 `documento_extra`
+
+  Campo                   Tipo PostgreSQL   Restricción / descripción
+  ----------------------- ----------------- ----------------------------
+  `id_documento_extra`    BIGINT IDENTITY   PK
+  `id_informe`            BIGINT            FK a `informe`, NOT NULL
+  `id_usuario`            BIGINT            FK a `usuario` (quien cargó), NOT NULL
+  `nombre_archivo`        VARCHAR(200)      NOT NULL, nombre original para mostrar
+  `ruta_archivo`          TEXT              NOT NULL, ruta relativa a `documentos/`
+  `tamano_bytes`          INTEGER           NOT NULL, CHECK > 0
+  `fecha_carga`           TIMESTAMP         NOT NULL
+
+PRO-16 · Documentos extra (archivos restantes: certificado de horas,
+evidencias, etc.). Definido con la profesora el 20/11/2026: hasta 4 PDF
+por informe, sin etiqueta, cuando el informe está en Aprobado en UP. El
+tamaño máximo por PDF es el parámetro `documentos_extra.max_mb` (10 MB por
+defecto). Al finalizar, `proceso_trabajo_social` queda en Finalizada con
+su `fecha_finalizacion` y ya no se agregan ni quitan documentos.
+
 ## 7. Comunicación y auditoría
 
 ### 7.1 `notificacion`
@@ -610,13 +629,14 @@ permitir una sola versión vigente por plantilla.
 19. `historial_estado`
 20. `cargue_up`
 21. `historial_cargue_up`
-22. `notificacion`
-23. `auditoria`
-24. `parametro`
-25. `plantilla`
-26. `version_plantilla`
+22. `documento_extra`
+23. `notificacion`
+24. `auditoria`
+25. `parametro`
+26. `plantilla`
+27. `version_plantilla`
 
-**Total: 26 tablas.**
+**Total: 27 tablas.**
 
 ## 10. Observaciones para la implementación
 

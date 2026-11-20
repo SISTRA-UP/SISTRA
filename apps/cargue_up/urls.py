@@ -15,6 +15,7 @@ from .views import aviso_propuesta  # noqa: F401  SISTRA-04
 from .views import verificacion_propuesta  # noqa: F401  SISTRA-05
 from .views import aviso_informe  # noqa: F401  SISTRA-08
 from .views import verificacion_informe  # noqa: F401  SISTRA-09
+from .views import documentos_extra  # noqa: F401  PRO-16
 
 app_name = 'cargue_up'
 
@@ -85,4 +86,21 @@ urlpatterns = [
         verificacion_informe.corregir,
         name='verificacion_informe_corregir',
     ),
+
+    # PRO-16 · Cargue de archivos restantes (documentos extra)
+    path('documentos-extra/subir/', documentos_extra.subir, name='documentos_extra_subir'),
+    path(
+        'documentos-extra/<int:id_documento>/quitar/',
+        documentos_extra.quitar,
+        name='documentos_extra_quitar',
+    ),
+    path(
+        'documentos-extra/finalizar/', documentos_extra.finalizar, name='documentos_extra_finalizar'
+    ),
+    path(
+        'documentos-extra/<int:id_documento>/descargar/',
+        documentos_extra.descargar,
+        name='documentos_extra_descargar',
+    ),
+    path('documentos-extra/recibidos/', documentos_extra.recibidos, name='documentos_extra_recibidos'),
 ]
