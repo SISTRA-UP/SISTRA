@@ -471,6 +471,12 @@ def construir_contexto_director(usuario, filtros):
             'clase': 'outline-secondary',
         },
         {
+            'etiqueta': 'Documentos extra recibidos',
+            'descripcion': 'Certificados y evidencias de quienes finalizaron',
+            'url': url_segura('cargue_up:documentos_extra_recibidos'),
+            'clase': 'outline-secondary',
+        },
+        {
             'etiqueta': 'Registrar estudiantes',
             'descripcion': 'Inscripción individual o masiva por CSV',
             'url': url_segura('personas:estudiantes'),

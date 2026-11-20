@@ -1,0 +1,97 @@
+{% comment %}PRO-16 · Documentos extra: se muestra cuando el informe queda en «Aprobado en UP».{% endcomment %}
+{% if perms.cargue_up.avisar %}
+{% load panel_documentos_extra %}
+{% panel_documentos_extra as d %}
+{% if d %}
+    <div class="up-card" id="documentos-extra">
+        <div class="step-card">
+            <div class="step-number {% if d.finalizado %}done{% else %}azul{% endif %}">
+                <i class="bi bi-paperclip"></i>
+            </div>
+            <div class="step-body">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                    <h3 class="mb-0">Documentos extra</h3>
+                    {% if d.finalizado %}
+                        <span class="up-badge aprobado">Proceso finalizado</span>
+                    {% else %}
+                        <span class="up-badge revision">{{ d.documentos|length }} de {{ d.maximo }}</span>
+                    {% endif %}
+                </div>
+
+                {% if d.finalizado %}
+                    <div class="up-alert success">
+                        <i class="bi bi-check-circle-fill up-alert-icon"></i>
+                        <div>Finalizaste tu proceso de Trabajo Social el {{ d.proceso.fecha_finalizacion|date:"d/m/Y" }}. Tu Director ya recibió el aviso.</div>
+                    </div>
+                {% else %}
+                    <p class="step-description">Carga hasta {{ d.maximo }} archivos PDF (certificado de horas, evidencias, etc.), de máximo {{ d.max_mb }} MB cada uno. Puedes quitarlos y volver a cargarlos hasta que pulses «Finalizar».</p>
+                {% endif %}
+
+                {% if d.documentos %}
+                    <ul class="list-group mb-3">
+                        {% for doc in d.documentos %}
+                            <li class="list-group-item d-flex flex-wrap align-items-center justify-content-between gap-2">
+                                <div class="text-break">
+                                    <i class="bi bi-file-earmark-pdf me-1"></i>{{ doc.nombre_archivo }}
+                                    <span class="text-muted small">· {{ doc.tamano_bytes|filesizeformat }} · {{ doc.fecha_carga|date:"d/m/Y" }}</span>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <a class="btn btn-sm btn-up-outline" href="{% url 'cargue_up:documentos_extra_descargar' doc.pk %}">Descargar</a>
+                                    {% if not d.finalizado %}
+                                        <form method="post" action="{% url 'cargue_up:documentos_extra_quitar' doc.pk %}" class="mb-0">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Quitar</button>
+                                        </form>
+                                    {% endif %}
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+
+                {% if d.puede_cargar %}
+                    <form method="post" action="{% url 'cargue_up:documentos_extra_subir' %}" enctype="multipart/form-data"
+                          class="d-flex flex-wrap gap-2 mb-3" onsubmit="this.querySelector('button[type=submit]').disabled = true;">
+                        {% csrf_token %}
+                        <input type="file" name="archivo" accept=".pdf,application/pdf" class="form-control" style="max-width: 26rem;" required aria-label="Documento PDF">
+                        <button type="submit" class="btn btn-up-primary"><i class="bi bi-upload"></i>Cargar PDF</button>
+                    </form>
+                {% elif not d.finalizado %}
+                    <div class="up-alert neutral mb-3">
+                        <i class="bi bi-info-circle up-alert-icon"></i>
+                        <div>Ya cargaste el máximo de {{ d.maximo }} documentos. Quita uno si quieres cambiarlo.</div>
+                    </div>
+                {% endif %}
+
+                {% if not d.finalizado and d.documentos %}
+                    <div class="step-actions">
+                        <button type="button" class="btn btn-up-primary" data-bs-toggle="modal" data-bs-target="#modal-finalizar-documentos">
+                            <i class="bi bi-flag"></i>Finalizar
+                        </button>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% if not d.finalizado and d.documentos %}
+    <div class="modal fade" id="modal-finalizar-documentos" tabindex="-1" aria-labelledby="titulo-finalizar-documentos" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content" method="post" action="{% url 'cargue_up:documentos_extra_finalizar' %}"
+                onsubmit="this.querySelector('button[type=submit]').disabled = true;">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="titulo-finalizar-documentos">Finalizar proceso</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">Vas a enviar {{ d.documentos|length }} documento(s) extra y finalizar tu proceso de Trabajo Social. Después ya no podrás quitar ni cargar documentos. ¿Continuar?</div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-up-outline" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-up-primary">Finalizar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+{% endif %}
+{% endif %}

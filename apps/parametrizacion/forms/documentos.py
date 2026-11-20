@@ -40,6 +40,17 @@ class DocumentosParametrosForm(forms.Form):
         },
         widget=forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 50}),
     )
+    # PRO-16. Opcional: si no llega en el formulario se conserva el valor vigente.
+    max_mb_documentos_extra = forms.IntegerField(
+        label='Tamaño máximo de documentos extra (.pdf)', min_value=1, max_value=50, required=False,
+        error_messages={
+            'required': 'Este campo es obligatorio.',
+            'invalid': 'Ingrese un número entero entre 1 y 50.',
+            'min_value': 'El valor debe ser mayor que 0.',
+            'max_value': 'El valor máximo permitido es 50.',
+        },
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 50}),
+    )
     maximo_filas_csv = forms.IntegerField(
         label='Máximo de filas por CSV de estudiantes', min_value=1, max_value=5000,
         error_messages={

@@ -70,6 +70,7 @@ class DocumentosView(ParametrizarRequeridoMixin, View):
     PARAMETROS_A_CAMPOS = {
         'max_mb_docx': 'propuesta.max_mb_docx',
         'max_mb_csv': 'registro_estudiantes.max_mb_csv',
+        'max_mb_documentos_extra': 'documentos_extra.max_mb',
         'maximo_filas_csv': 'registro_estudiantes.maximo_filas_csv',
     }
 
@@ -87,6 +88,8 @@ class DocumentosView(ParametrizarRequeridoMixin, View):
                 cambios = sum(
                     param_servicios.guardar(clave, form.cleaned_data[campo], request.user)
                     for campo, clave in self.PARAMETROS_A_CAMPOS.items()
+                    # Un campo opcional que no llega conserva el valor vigente.
+                    if form.cleaned_data[campo] is not None
                 )
             if cambios:
                 messages.success(request, 'Los parámetros se guardaron correctamente.')

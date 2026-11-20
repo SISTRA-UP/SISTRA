@@ -25,19 +25,22 @@
         <h2 id="titulo-limites-documentos" class="h5">Límites de carga</h2>
         <p class="sis-sub">Define el tamaño de los archivos y el máximo de filas para la carga de estudiantes.</p>
         <div class="row">
-            <div class="col-md-4">
+            <div class="col-md-6 col-lg-3">
                 {% include 'parametrizacion/_campo.html' with campo=form_parametros.max_mb_docx %}
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6 col-lg-3">
                 {% include 'parametrizacion/_campo.html' with campo=form_parametros.max_mb_csv %}
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6 col-lg-3">
+                {% include 'parametrizacion/_campo.html' with campo=form_parametros.max_mb_documentos_extra %}
+            </div>
+            <div class="col-md-6 col-lg-3">
                 {% include 'parametrizacion/_campo.html' with campo=form_parametros.maximo_filas_csv %}
             </div>
         </div>
         <div class="mb-3">
             <span class="form-label fw-semibold">Formatos permitidos</span>
-            <div class="form-text">Propuesta: solo .docx. Estudiantes: solo .csv.</div>
+            <div class="form-text">Propuesta: solo .docx. Estudiantes: solo .csv. Documentos extra: solo .pdf, máximo 4 por estudiante.</div>
         </div>
         <div class="d-flex justify-content-end">
             <button type="submit" class="btn btn-primary">Guardar límites</button>
