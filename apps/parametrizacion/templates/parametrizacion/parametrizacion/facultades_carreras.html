@@ -1,0 +1,42 @@
+{% extends 'parametrizacion/parametrizacion/_pagina.html' %}
+
+{% block titulo %}Facultades y carreras · Parametrización · SISTRA-UP{% endblock %}
+
+{% block principal %}
+<p class="sis-eyebrow">Parametrización · SISTRA-11</p>
+<h1 class="sis-titulo mb-4">Facultades y carreras</h1>
+
+<section class="sis-card mb-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
+        <div><h2 class="h5 mb-1">Facultades</h2><p class="sis-sub mb-0">Facultades registradas en SISTRA.</p></div>
+        <a class="btn btn-primary" href="{% url 'parametrizacion:facultad_nueva' %}">Crear facultad</a>
+    </div>
+    {% if facultades %}
+    <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+        <thead><tr><th>Nombre</th><th>Descripción</th><th>Estado</th><th></th></tr></thead>
+        <tbody>{% for facultad in facultades %}<tr>
+            <td class="fw-semibold">{{ facultad.nombre }}</td><td>{{ facultad.descripcion|default:'—' }}</td>
+            <td>{% if facultad.estado == 'Activo' %}<span class="badge text-bg-success">Activo</span>{% else %}<span class="badge text-bg-secondary">Inactivo</span>{% endif %}</td>
+            <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{% url 'parametrizacion:facultad_editar' facultad.pk %}">Editar</a></td>
+        </tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="sis-sub mb-0">Todavía no hay facultades registradas.</p>{% endif %}
+</section>
+
+<section class="sis-card">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
+        <div><h2 class="h5 mb-1">Carreras</h2><p class="sis-sub mb-0">Cada carrera pertenece a una facultad.</p></div>
+        <a class="btn btn-primary" href="{% url 'parametrizacion:carrera_nueva' %}">Crear carrera</a>
+    </div>
+    {% if carreras %}
+    <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+        <thead><tr><th>Nombre</th><th>Código</th><th>Facultad</th><th>Estado</th><th></th></tr></thead>
+        <tbody>{% for carrera in carreras %}<tr>
+            <td class="fw-semibold">{{ carrera.nombre }}</td><td>{{ carrera.codigo }}</td><td>{{ carrera.facultad.nombre }}</td>
+            <td>{% if carrera.estado == 'Activo' %}<span class="badge text-bg-success">Activo</span>{% else %}<span class="badge text-bg-secondary">Inactivo</span>{% endif %}</td>
+            <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{% url 'parametrizacion:carrera_editar' carrera.pk %}">Editar</a></td>
+        </tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="sis-sub mb-0">Todavía no hay carreras registradas.</p>{% endif %}
+</section>
+{% endblock %}
