@@ -50,6 +50,7 @@ from apps.propuestas.forms.aprobacion import (
     MSG_02_05,
     MSG_02_06,
     MSG_02_07,
+    MSG_PROPUESTA_DESACTUALIZADA,
     RESULTADO_BLOQUEADO,
     AprobacionPropuestaForm,
     FiltroBandejaPropuestasForm,
@@ -1463,11 +1464,67 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         url = reverse('propuestas:cambiar_estado', args=[prop.pk])
         response = self.client.post(
             url,
-            {'nuevo_estado': EstadoTramite.APROBADO, 'observacion': 'Aprobada por endpoint web.'},
+            {'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.APROBADO, 'observacion': 'Aprobada por endpoint web.'},
         )
         self.assertEqual(response.status_code, 302)
         prop.refresh_from_db()
         self.assertEqual(prop.estado, EstadoTramite.APROBADO)
+
+    def test_pestana_vieja_no_cambia_una_propuesta_ya_decidida(self):
+        """SIS-54 · E2: con la versión vista al abrir la bandeja, la segunda decisión responde 409.
+
+        Simula dos pestañas: ambas abren la bandeja; en una se aprueba y la otra, desactualizada,
+        intenta pedir modificación. No cambia nada y el intento queda auditado como Bloqueado.
+        """
+        prop = self.crear_propuesta(self.estudiante_1, 'PROP-PESTANA-VIEJA')
+        self.client.force_login(self.user_director)
+
+        html = self.client.get(reverse('propuestas:aprobacion')).content.decode('utf-8')
+        version_vista = prop.fecha_actualizacion.isoformat()
+        self.assertIn(f'data-version="{version_vista}"', html)
+
+        url = reverse('propuestas:cambiar_estado', args=[prop.pk])
+        self.client.post(url, {'nuevo_estado': EstadoTramite.APROBADO, 'fecha_actualizacion': version_vista})
+        prop.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.APROBADO)
+
+        response = self.client.post(
+            url,
+            {
+                'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION,
+                'observacion': 'Decisión enviada desde la pestaña vieja.',
+                'fecha_actualizacion': version_vista,
+            },
+        )
+
+        self.assertEqual(response.status_code, 409)
+        prop.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.APROBADO)
+        self.assertEqual(
+            HistorialEstado.objects.filter(propuesta=prop).count(), 1,
+            'Solo debe quedar la aprobación en el historial.',
+        )
+        mensajes = [str(m) for m in self.client.get(reverse('propuestas:aprobacion')).context['messages']]
+        self.assertIn(MSG_PROPUESTA_DESACTUALIZADA, mensajes)
+        fila = Auditoria.objects.get(resultado=RESULTADO_BLOQUEADO, id_registro_afectado=prop.pk)
+        self.assertIn(MSG_PROPUESTA_DESACTUALIZADA, fila.detalle)
+
+    def test_decision_sin_version_se_rechaza_sin_cambiar_nada(self):
+        """SIS-54 · E2: si no llega la versión (pantalla anterior al cambio) se pide actualizar."""
+        prop = self.crear_propuesta(self.estudiante_1, 'PROP-SIN-VERSION')
+        self.client.force_login(self.user_director)
+
+        response = self.client.post(
+            reverse('propuestas:cambiar_estado', args=[prop.pk]),
+            {'nuevo_estado': EstadoTramite.APROBADO},
+        )
+
+        self.assertEqual(response.status_code, 409)
+        prop.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.EN_REVISION)
+        self.assertTrue(
+            Auditoria.objects.filter(resultado=RESULTADO_BLOQUEADO, id_registro_afectado=prop.pk).exists()
+        )
 
     def test_bandeja_incluye_visor_real_del_pdf_y_avisos_de_procesando(self):
         """El detalle trae el visor real del PDF (sin la hoja simulada ni 'Pág. 1 / 1' fijo)
@@ -1548,7 +1605,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
             (
                 AprobacionPropuestaForm,
                 reverse('propuestas:cambiar_estado', args=[prop.pk]),
-                {'nuevo_estado': EstadoTramite.APROBADO},
+                {'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.APROBADO},
                 prop.pk,
             ),
             (
@@ -1593,7 +1650,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         casos = [
             (
                 reverse('propuestas:cambiar_estado', args=[prop.pk]),
-                {'nuevo_estado': EstadoTramite.APROBADO},
+                {'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.APROBADO},
             ),
             (
                 reverse('propuestas:reactivar_propuesta', args=[rechazada.pk]),
@@ -1624,7 +1681,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         casos = [
             (
                 reverse('propuestas:cambiar_estado', args=[prop.pk]),
-                {'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION, 'observacion': 'corto'},
+                {'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION, 'observacion': 'corto'},
             ),
             (
                 reverse('propuestas:reactivar_propuesta', args=[rechazada.pk]),
@@ -1650,7 +1707,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         response = self.client.post(
             url,
             {
-                'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION,
+                'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION,
                 'observacion': 'Corregir el capítulo segundo y ajustar el presupuesto.',
             },
         )
@@ -1667,7 +1724,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         response = self.client.post(
             url,
             {
-                'nuevo_estado': EstadoTramite.RECHAZADO,
+                'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.RECHAZADO,
                 'tipo_rechazo': self.tipo_rechazo_activo.pk,
                 'observacion': 'Rechazada formalmente por el Director de carrera.',
             },
@@ -1684,7 +1741,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.client.force_login(self.user_director)
 
         url = reverse('propuestas:cambiar_estado', args=[prop.pk])
-        response = self.client.post(url, {'nuevo_estado': EstadoTramite.APROBADO})
+        response = self.client.post(url, {'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.APROBADO})
         self.assertEqual(response.status_code, 302)
 
         prop.refresh_from_db()
@@ -1699,7 +1756,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.client.force_login(self.user_director)
 
         url = reverse('propuestas:cambiar_estado', args=[prop.pk])
-        response = self.client.post(url, {'nuevo_estado': EstadoTramite.APROBADO})
+        response = self.client.post(url, {'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.APROBADO})
         self.assertEqual(response.status_code, 302)
 
         prop.refresh_from_db()
@@ -1714,7 +1771,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.client.force_login(self.user_director)
 
         url = reverse('propuestas:cambiar_estado', args=[prop.pk])
-        response = self.client.post(url, {'nuevo_estado': EstadoTramite.APROBADO})
+        response = self.client.post(url, {'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.APROBADO})
         self.assertEqual(response.status_code, 302)
 
         prop.refresh_from_db()
@@ -1736,7 +1793,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         response = self.client.post(
             url,
             {
-                'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION,
+                'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION,
                 'observacion': 'Ajuste posterior al cargue oficial',
             },
         )
@@ -1762,7 +1819,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         response = self.client.post(
             url,
             {
-                'nuevo_estado': EstadoTramite.RECHAZADO,
+                'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.RECHAZADO,
                 'tipo_rechazo': self.tipo_rechazo_activo.pk,
                 'observacion': 'x' * 5000,
             },
@@ -1789,7 +1846,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.client.post(
             url,
             {
-                'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION,
+                'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION,
                 'observacion': 'Ajustar el cronograma propuesto',
             },
         )
@@ -2160,7 +2217,7 @@ class TestPermisoAprobacion(BaseAprobacionTestCase):
             ('get', reverse('propuestas:aprobacion'), {}),
             ('get', reverse('propuestas:detalle_propuesta', args=[prop.pk]), {}),
             ('get', reverse('propuestas:descargar_documento', args=[prop.pk]), {}),
-            ('post', reverse('propuestas:cambiar_estado', args=[prop.pk]), {'nuevo_estado': EstadoTramite.APROBADO}),
+            ('post', reverse('propuestas:cambiar_estado', args=[prop.pk]), {'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.APROBADO}),
             (
                 'post',
                 reverse('propuestas:reactivar_propuesta', args=[rechazada.pk]),

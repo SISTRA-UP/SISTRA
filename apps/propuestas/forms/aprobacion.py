@@ -28,6 +28,9 @@ MSG_02_05 = 'Completa los campos obligatorios para continuar.'
 MSG_02_06 = 'No es posible reactivar: el estudiante {nombre} ya tiene una propuesta activa.'
 MSG_02_07 = 'No puedes cambiar la decisión: el estudiante ya pulsó Subido en UP o inició su informe.'
 MSG_02_08 = 'Tu propuesta cambió a {estado}.'
+# SIS-54 · E2: la pantalla con la que se decide está desactualizada (otra pestaña ya decidió).
+MSG_PROPUESTA_DESACTUALIZADA = 'La propuesta cambió desde que abriste la pantalla. Actualiza antes de decidir.'
+MSG_SIN_VERSION = 'Actualiza la pantalla antes de confirmar la decisión.'
 
 LONGITUD_MAXIMA_TEXTO = 1000
 LONGITUD_MINIMA_OBSERVACION = 10
@@ -57,6 +60,19 @@ OPCIONES_ESTADO_FILTRO = [
 
 class PropuestaBloqueadaError(Exception):
     """Regla RN-02-04 / EX-05: El estudiante ya pulsó Subido en UP o inició informe."""
+
+
+class PropuestaDesactualizadaError(Exception):
+    """SIS-54 · E2: la decisión viene de una pantalla abierta antes del último cambio."""
+
+
+def _verificar_version(lock: Propuesta, version: str | None) -> None:
+    """Compara la versión que vio el Director con la de la fila ya bloqueada.
+
+    `version=None` es una llamada directa al formulario (sin pantalla); la vista siempre la envía.
+    """
+    if version is not None and lock.fecha_actualizacion.isoformat() != version:
+        raise PropuestaDesactualizadaError(MSG_PROPUESTA_DESACTUALIZADA)
 
 
 class ReactivacionInvalidaError(Exception):
@@ -334,10 +350,11 @@ class AprobacionPropuestaForm(forms.Form):
     def clean_observacion(self) -> str:
         return sanitizar_texto(self.cleaned_data.get('observacion', ''))
 
-    def procesar(self, propuesta: Propuesta, usuario) -> None:
+    def procesar(self, propuesta: Propuesta, usuario, version: str | None = None) -> None:
         """Aplica la aprobación de forma atómica."""
         with transaction.atomic():
             lock = Propuesta.objects.select_for_update().select_related('proceso__estudiante_carrera__estudiante__usuario').get(pk=propuesta.pk)
+            _verificar_version(lock, version)
             if lock.estado == EstadoTramite.RECHAZADO:
                 raise ValidationError('Una propuesta rechazada solo puede ser reactivada mediante el modal de reactivación justificando el motivo.')
             if lock.estado == EstadoTramite.APROBADO:
@@ -365,7 +382,7 @@ class ModificacionPropuestaForm(forms.Form):
     def clean_observacion(self) -> str:
         return sanitizar_texto(self.cleaned_data['observacion'])
 
-    def procesar(self, propuesta: Propuesta, usuario) -> None:
+    def procesar(self, propuesta: Propuesta, usuario, version: str | None = None) -> None:
         """Aplica la solicitud de modificación de forma atómica."""
         if propuesta.estado == EstadoTramite.APROBADO:
             puede, motivo = puede_revertir_aprobacion(propuesta)
@@ -384,6 +401,7 @@ class ModificacionPropuestaForm(forms.Form):
 
         with transaction.atomic():
             lock = Propuesta.objects.select_for_update().select_related('proceso__estudiante_carrera__estudiante__usuario').get(pk=propuesta.pk)
+            _verificar_version(lock, version)
             if lock.estado == EstadoTramite.RECHAZADO:
                 raise ValidationError('Una propuesta rechazada solo puede ser reactivada mediante el modal de reactivación justificando el motivo.')
             if lock.estado == EstadoTramite.REQUIERE_MODIFICACION:
@@ -425,7 +443,7 @@ class RechazoPropuestaForm(forms.Form):
     def clean_observacion(self) -> str:
         return sanitizar_texto(self.cleaned_data['observacion'])
 
-    def procesar(self, propuesta: Propuesta, usuario) -> None:
+    def procesar(self, propuesta: Propuesta, usuario, version: str | None = None) -> None:
         """Aplica el rechazo de forma atómica."""
         if propuesta.estado == EstadoTramite.APROBADO:
             puede, motivo = puede_revertir_aprobacion(propuesta)
@@ -445,6 +463,7 @@ class RechazoPropuestaForm(forms.Form):
 
         with transaction.atomic():
             lock = Propuesta.objects.select_for_update().select_related('proceso__estudiante_carrera__estudiante__usuario').get(pk=propuesta.pk)
+            _verificar_version(lock, version)
             if lock.estado == EstadoTramite.RECHAZADO:
                 return
             if lock.estado not in [EstadoTramite.EN_REVISION, EstadoTramite.APROBADO]:

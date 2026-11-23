@@ -259,6 +259,8 @@
             <form method="post" id="form-decision" class="w" style="width: 100%;">
                 {% csrf_token %}
                 <input type="hidden" name="nuevo_estado" id="dec-nuevo-estado" value="">
+                {# Versión vista al abrir la bandeja: detecta pestañas desactualizadas (SIS-54) #}
+                <input type="hidden" name="fecha_actualizacion" id="dec-version" value="">
 
                 <h2 id="dec-titulo">Confirmar Aprobación de Propuesta(s)</h2>
                 <div class="s" id="dec-subtitulo">Cargando propuesta...</div>

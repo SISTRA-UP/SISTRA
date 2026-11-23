@@ -24,6 +24,7 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
@@ -39,12 +40,15 @@ from apps.propuestas.forms.aprobacion import (
     MSG_02_04,
     MSG_02_05,
     MSG_02_07,
+    MSG_PROPUESTA_DESACTUALIZADA,
+    MSG_SIN_VERSION,
     RESULTADO_BLOQUEADO,
     RESULTADO_FALLO,
     AprobacionPropuestaForm,
     FiltroBandejaPropuestasForm,
     ModificacionPropuestaForm,
     PropuestaBloqueadaError,
+    PropuestaDesactualizadaError,
     ReactivacionInvalidaError,
     ReactivacionPropuestaForm,
     RechazoPropuestaForm,
@@ -91,6 +95,37 @@ def _registrar_fallo(request: HttpRequest, accion: str, propuesta: Propuesta | N
     except Exception:
         # Si tampoco se puede auditar (p. ej. base caída), queda solo el log.
         logger.exception('No se pudo auditar el fallo de %s', accion)
+
+
+def _auditar_decision_bloqueada(
+    request: HttpRequest, propuesta: Propuesta, nuevo_estado: str, motivo: str
+) -> None:
+    """El BRD exige auditar también los intentos bloqueados. El POST llega sin validar:
+    se recorta antes de guardarlo y la causal solo se registra si existe."""
+    id_causal = request.POST.get('tipo_rechazo', '')
+    causal = TipoRechazo.objects.filter(pk=id_causal).first() if id_causal.isdigit() else None
+    _auditar(
+        request.user,
+        'CAMBIAR_ESTADO_BLOQUEADO',
+        propuesta,
+        estado_anterior=propuesta.estado,
+        estado_nuevo=nuevo_estado[:LONGITUD_MAXIMA_ESTADO],
+        tipo_rechazo=causal.nombre if causal else '',
+        observacion=sanitizar_texto(request.POST.get('observacion', '').replace('\x00', ''))[:LONGITUD_MAXIMA_TEXTO],
+        detalle_extra=motivo,
+        resultado=RESULTADO_BLOQUEADO,
+    )
+
+
+def _conflicto_volver_a_bandeja(request: HttpRequest, mensaje: str) -> HttpResponse:
+    """SIS-54 · E2: responde 409 y devuelve al Director a la bandeja, donde ve el mensaje."""
+    messages.error(request, mensaje)
+    url = reverse('propuestas:aprobacion')
+    return HttpResponse(
+        f'<!doctype html><meta http-equiv="refresh" content="0;url={url}">'
+        f'<a href="{url}">Volver a la bandeja</a>',
+        status=409,
+    )
 
 
 def _mostrar_errores(request: HttpRequest, form) -> None:
@@ -393,6 +428,11 @@ def cambiar_estado(request: HttpRequest, id_propuesta: int) -> HttpResponse:
 
     # Se quitan los NUL: PostgreSQL los rechaza al guardar el intento en auditoría.
     nuevo_estado = request.POST.get('nuevo_estado', '').replace('\x00', '').strip()
+    # Versión de la propuesta cuando se abrió la pantalla; sin ella no se sabe si está vieja.
+    version = request.POST.get('fecha_actualizacion', '').strip()
+    if not version:
+        _auditar_decision_bloqueada(request, propuesta, nuevo_estado, MSG_SIN_VERSION)
+        return _conflicto_volver_a_bandeja(request, MSG_SIN_VERSION)
 
     motivo_bloqueo = ''
     if propuesta.estado == EstadoTramite.RECHAZADO:
@@ -406,21 +446,7 @@ def cambiar_estado(request: HttpRequest, id_propuesta: int) -> HttpResponse:
         )
 
     if motivo_bloqueo:
-        # El BRD exige auditar también los intentos bloqueados. El POST llega sin validar:
-        # se recorta antes de guardarlo y la causal solo se registra si existe.
-        id_causal = request.POST.get('tipo_rechazo', '')
-        causal = TipoRechazo.objects.filter(pk=id_causal).first() if id_causal.isdigit() else None
-        _auditar(
-            request.user,
-            'CAMBIAR_ESTADO_BLOQUEADO',
-            propuesta,
-            estado_anterior=propuesta.estado,
-            estado_nuevo=nuevo_estado[:LONGITUD_MAXIMA_ESTADO],
-            tipo_rechazo=causal.nombre if causal else '',
-            observacion=sanitizar_texto(request.POST.get('observacion', '').replace('\x00', ''))[:LONGITUD_MAXIMA_TEXTO],
-            detalle_extra=motivo_bloqueo,
-            resultado=RESULTADO_BLOQUEADO,
-        )
+        _auditar_decision_bloqueada(request, propuesta, nuevo_estado, motivo_bloqueo)
         messages.error(request, motivo_bloqueo)
         return redirect('propuestas:aprobacion')
 
@@ -430,7 +456,7 @@ def cambiar_estado(request: HttpRequest, id_propuesta: int) -> HttpResponse:
             if not form.is_valid():
                 _mostrar_errores(request, form)
                 return redirect('propuestas:aprobacion')
-            form.procesar(propuesta, request.user)
+            form.procesar(propuesta, request.user, version=version)
             messages.success(request, MSG_02_01)
 
         elif nuevo_estado == EstadoTramite.REQUIERE_MODIFICACION:
@@ -438,7 +464,7 @@ def cambiar_estado(request: HttpRequest, id_propuesta: int) -> HttpResponse:
             if not form.is_valid():
                 _mostrar_errores(request, form)
                 return redirect('propuestas:aprobacion')
-            form.procesar(propuesta, request.user)
+            form.procesar(propuesta, request.user, version=version)
             messages.success(request, MSG_02_02)
 
         elif nuevo_estado == EstadoTramite.RECHAZADO:
@@ -446,12 +472,16 @@ def cambiar_estado(request: HttpRequest, id_propuesta: int) -> HttpResponse:
             if not form.is_valid():
                 _mostrar_errores(request, form)
                 return redirect('propuestas:aprobacion')
-            form.procesar(propuesta, request.user)
+            form.procesar(propuesta, request.user, version=version)
             messages.success(request, MSG_02_03)
 
         else:
             messages.error(request, 'El estado seleccionado no es válido.')
 
+    except PropuestaDesactualizadaError as e:
+        # Otra pestaña (u otra persona) ya cambió la propuesta: no se aplica nada.
+        _auditar_decision_bloqueada(request, propuesta, nuevo_estado, str(e))
+        return _conflicto_volver_a_bandeja(request, str(e))
     except PropuestaBloqueadaError as e:
         messages.error(request, str(e))
     except ValidationError as e:
