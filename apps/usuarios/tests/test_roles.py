@@ -723,6 +723,10 @@ class CorreoDeCredencialesDelAdmo(BaseRoles):
         # Aviso, no éxito: el ADMO tiene que enterarse de que hay que reenviarlo.
         self.assertEqual(avisos[0].level_tag, 'warning')
         self.assertIn('no se pudo enviar el correo', str(avisos[0]))
+        # Y se ve de verdad en la pantalla, no solo en el contexto: la lista
+        # incluye `_mensajes.html`, que lo pinta como `alert-warning`.
+        self.assertContains(respuesta, 'no se pudo enviar el correo')
+        self.assertContains(respuesta, 'alert-warning')
 
     def test_si_el_correo_sale_se_ve_el_mensaje_de_exito(self):
         respuesta = self.crear(follow=True)
@@ -730,6 +734,7 @@ class CorreoDeCredencialesDelAdmo(BaseRoles):
         self.assertEqual(len(avisos), 1)
         self.assertEqual(avisos[0].level_tag, 'success')
         self.assertIn('Se creó a Diana Directora', str(avisos[0]))
+        self.assertContains(respuesta, 'alert-success')
 
     def test_editar_un_usuario_no_manda_ningun_correo(self):
         self.crear()
