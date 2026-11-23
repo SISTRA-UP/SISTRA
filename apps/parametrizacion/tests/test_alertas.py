@@ -45,6 +45,7 @@ class AlertasTests(TestCase):
         respuesta = self.client.get(self.url)
         self.assertContains(respuesta, 'value="7"')
         self.assertContains(respuesta, 'value="14"')
+        self.assertEqual(respuesta.content.decode().count('value="30"'), 2)
         self.assertContains(respuesta, '15 días o más')
 
     def test_guarda_valores_nuevos_y_audita(self):
