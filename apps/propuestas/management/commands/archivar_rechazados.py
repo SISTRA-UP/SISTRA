@@ -11,6 +11,7 @@ Uso (programarlo una vez al día): uv run python manage.py archivar_rechazados
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand
+from django.db import transaction
 from django.db.models import Max, Q
 from django.utils import timezone
 
@@ -45,19 +46,21 @@ class Command(BaseCommand):
 
         archivadas = 0
         for propuesta in vencidas:
-            # Se vuelve a exigir Rechazado y no archivada en el mismo UPDATE: si el Director la
-            # reactivó entre la consulta y este punto, no se archiva.
-            if not Propuesta.objects.filter(
-                pk=propuesta.pk, estado=EstadoTramite.RECHAZADO, archivada=False
-            ).update(archivada=True, fecha_archivado=ahora):
-                continue
-            _auditar(
-                None,
-                'ARCHIVAR_PROPUESTA_RECHAZADA',
-                propuesta,
-                detalle_extra=f'Archivada automáticamente: rechazada hace más de {plazo} días (RG-13).',
-                resultado=RESULTADO_EXITO,
-            )
+            # Archivado y auditoría en la misma transacción: si la auditoría falla, no se archiva.
+            with transaction.atomic():
+                # Se vuelve a exigir Rechazado y no archivada en el mismo UPDATE: si el Director la
+                # reactivó entre la consulta y este punto, no se archiva.
+                if not Propuesta.objects.filter(
+                    pk=propuesta.pk, estado=EstadoTramite.RECHAZADO, archivada=False
+                ).update(archivada=True, fecha_archivado=ahora):
+                    continue
+                _auditar(
+                    None,
+                    'ARCHIVAR_PROPUESTA_RECHAZADA',
+                    propuesta,
+                    detalle_extra=f'Archivada automáticamente: rechazada hace más de {plazo} días (RG-13).',
+                    resultado=RESULTADO_EXITO,
+                )
             archivadas += 1
 
         self.stdout.write(f'Propuestas archivadas: {archivadas} (plazo: {plazo} días).')

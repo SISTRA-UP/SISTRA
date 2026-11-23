@@ -109,3 +109,19 @@ class TestArchivarRechazados(BaseAprobacionTestCase):
 
         prop.refresh_from_db()
         self.assertFalse(prop.archivada)
+
+    def test_si_falla_la_auditoria_no_queda_archivada_sin_registro(self):
+        """El archivado y su auditoría van juntos: si la auditoría falla, no se archiva."""
+        from unittest import mock
+
+        servicios.guardar(PLAZO, '30', self.user_director)
+        prop = self._rechazada_hace(self.estudiante_1, 'PROP-AUD', 31)
+        with mock.patch(
+            'apps.propuestas.management.commands.archivar_rechazados._auditar',
+            side_effect=RuntimeError('falla la auditoría'),
+        ):
+            with self.assertRaises(RuntimeError):
+                self._archivar()
+        prop.refresh_from_db()
+        self.assertFalse(prop.archivada)
+        self.assertIsNone(prop.fecha_archivado)
