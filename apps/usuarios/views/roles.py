@@ -5,7 +5,8 @@ Solo el responsable de este requisito edita este archivo.
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
-from django.db import transaction
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.db.models import Count, ProtectedError, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -295,47 +296,65 @@ def crear_usuario(request):
     """
     formulario = _formulario_de_usuario(request)
     if request.method == 'POST' and formulario.is_valid():
-        # La auditoría va en la misma transacción: un usuario creado sin
-        # registro incumpliría el criterio.
-        with transaction.atomic():
-            usuario = formulario.save()
+        try:
+            # La auditoría va en la misma transacción: un usuario creado sin
+            # registro incumpliría el criterio.
+            with transaction.atomic():
+                usuario = formulario.save()
+                _auditar(
+                    request,
+                    'Crear usuario',
+                    'usuario',
+                    usuario.pk,
+                    _juntar(_retrato(usuario), formulario.cambio_de_carrera),
+                )
+        except (ValidationError, IntegrityError):
+            # Dos envíos simultáneos: los dos pasan la validación del formulario
+            # y el segundo choca al guardar, contra los únicos de la base o
+            # contra el Director único por carrera. Sin esto sería un error 500.
             _auditar(
                 request,
                 'Crear usuario',
                 'usuario',
-                usuario.pk,
-                _juntar(_retrato(usuario), formulario.cambio_de_carrera),
+                None,
+                f'correo: {formulario.cleaned_data["correo_institucional"]}',
+                RESULTADO_FALLO,
             )
-        # Después de confirmar la transacción, nunca dentro: si el envío tardara
-        # y algo fallara después, se habría mandado la contraseña de una cuenta
-        # que no quedó.
-        enviado = enviar_credenciales(usuario, formulario.contrasena_temporal)
-        _auditar(
-            request,
-            'Enviar credenciales',
-            'usuario',
-            usuario.pk,
-            f'correo: {usuario.correo_institucional}',
-            RESULTADO_EXITO if enviado else RESULTADO_FALLO,
-        )
-        if enviado:
-            messages.success(
-                request,
-                f'Se creó a {usuario.nombre}. Entrará con '
-                f'{usuario.correo_institucional} y la contraseña temporal que le '
-                f'acaba de llegar a ese correo, que deberá cambiar en su primer '
-                f'ingreso.',
+            formulario.add_error(
+                None,
+                'Otro envío se adelantó: revisa la lista antes de volver a intentarlo.',
             )
         else:
-            # MSG-10-08: la contraseña solo existía en ese correo, así que
-            # callar el fallo dejaría una cuenta creada e inservible.
-            messages.warning(
+            # Después de confirmar la transacción, nunca dentro: si el envío
+            # tardara y algo fallara después, se habría mandado la contraseña de
+            # una cuenta que no quedó.
+            enviado = enviar_credenciales(usuario, formulario.contrasena_temporal)
+            _auditar(
                 request,
-                f'Se creó a {usuario.nombre}, pero no se pudo enviar el correo '
-                f'con las credenciales a {usuario.correo_institucional}. Hay que '
-                f'reenviarlo.',
+                'Enviar credenciales',
+                'usuario',
+                usuario.pk,
+                f'correo: {usuario.correo_institucional}',
+                RESULTADO_EXITO if enviado else RESULTADO_FALLO,
             )
-        return redirect('usuarios:usuarios')
+            if enviado:
+                messages.success(
+                    request,
+                    f'Se creó a {usuario.nombre}. Entrará con '
+                    f'{usuario.correo_institucional} y la contraseña temporal que le '
+                    f'acaba de llegar a ese correo, que deberá cambiar en su primer '
+                    f'ingreso.',
+                )
+            else:
+                # MSG-10-08: la contraseña solo existía en ese correo, así que
+                # callar el fallo dejaría una cuenta creada e inservible.
+                messages.warning(
+                    request,
+                    f'Se creó a {usuario.nombre}, pero no se pudo enviar el correo '
+                    f'con las credenciales a {usuario.correo_institucional}. Hay que '
+                    f'reenviarlo.',
+                )
+            return redirect('usuarios:usuarios')
     return render(
         request,
         'usuarios/roles/usuario_formulario.html',

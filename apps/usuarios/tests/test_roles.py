@@ -4,13 +4,15 @@ Solo el responsable de este requisito edita este archivo.
 Se ejecutan con: uv run python manage.py test
 """
 
+import threading
+import time
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.db import connection
 from django.db.models import ProtectedError
-from django.test import Client, TestCase
+from django.test import Client, TestCase, TransactionTestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
@@ -743,6 +745,93 @@ class CorreoDeCredencialesDelAdmo(BaseRoles):
             },
         )
         self.assertEqual(len(mail.outbox), 0)
+
+
+class DobleEnvioAlCrearUsuario(TransactionTestCase):
+    """C9 · caja gris: dos POST simultáneos dejan una cuenta y un solo correo.
+
+    El plan de cambios lo pide para toda acción que guarde algo. Sin el arreglo,
+    los dos hilos pasan la validación de únicos y el segundo revienta con
+    `IntegrityError` después de haber generado su propia contraseña.
+    """
+
+    serialized_rollback = True
+
+    def setUp(self):
+        self.rol_administrador = Rol.objects.get(nombre='Administrador')
+        self.administrador = Usuario.objects.create_user(
+            correo_institucional='admin@unipamplona.edu.co',
+            password='ClaveDePrueba123',
+            nombre='Ana Admin',
+            cedula='1000000001',
+            nombre_usuario='admin',
+            rol=self.rol_administrador,
+            requiere_cambio_contrasena=False,
+        )
+        mail.outbox.clear()
+
+    def test_dos_envios_simultaneos_crean_un_solo_usuario(self):
+        datos = {
+            'nombre': 'Diana Directora',
+            'cedula': '1020304050',
+            'correo_institucional': 'diana.directora@unipamplona.edu.co',
+            'rol': self.rol_administrador.pk,
+            'carrera': '',
+        }
+        url = reverse('usuarios:usuario_nuevo')
+        respuestas, fallos = [], []
+        listos = threading.Barrier(2)
+
+        def clave_lenta(_longitud):
+            # El retraso deja a los dos hilos entre la validación y el INSERT,
+            # que es donde se pelean: así la carrera es reproducible.
+            time.sleep(0.2)
+            return 'ClaveTemporalDePrueba'
+
+        def enviar():
+            cliente = Client()
+            cliente.force_login(self.administrador)
+            try:
+                listos.wait(timeout=10)
+                respuestas.append(cliente.post(url, datos))
+            except Exception as error:  # el 500 que no debe pasar
+                fallos.append(error)
+            finally:
+                connection.close()
+
+        with patch(
+            'apps.usuarios.forms.roles.get_random_string', side_effect=clave_lenta
+        ):
+            hilos = [threading.Thread(target=enviar) for _ in range(2)]
+            for hilo in hilos:
+                hilo.start()
+            for hilo in hilos:
+                hilo.join(timeout=30)
+
+        self.assertEqual(fallos, [])
+        self.assertEqual(Usuario.objects.filter(cedula='1020304050').count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(
+            Auditoria.objects.filter(accion='Enviar credenciales').count(), 1
+        )
+        # Los dos intentos dejan huella: el que entró con Éxito y el rechazado
+        # con Fallo, que es lo que pide la regla de auditoría del plan.
+        self.assertEqual(
+            Auditoria.objects.filter(accion='Crear usuario', resultado='Éxito').count(),
+            1,
+        )
+        self.assertEqual(
+            Auditoria.objects.filter(accion='Crear usuario', resultado='Fallo').count(),
+            1,
+        )
+        codigos = sorted(respuesta.status_code for respuesta in respuestas)
+        # Uno redirige al listado; el otro se queda en el formulario con el error.
+        self.assertEqual(codigos, [200, 302])
+        rechazada = next(
+            respuesta for respuesta in respuestas if respuesta.status_code == 200
+        )
+        # Sin esto, el 200 podría ser un formulario mudo y la prueba seguiría verde.
+        self.assertContains(rechazada, 'Otro envío se adelantó')
 
 
 class EditarUsuarios(BaseRoles):
