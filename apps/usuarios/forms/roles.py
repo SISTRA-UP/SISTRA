@@ -169,9 +169,9 @@ class UsuarioForm(forms.ModelForm):
       `usuario.inactivar`. Si estuviera aquí, cualquiera con `usuario.editar`
       podría inactivar a alguien sin ese permiso.
     - la contraseña: al crear se genera una **temporal aleatoria** y el usuario
-      queda con `requiere_cambio_contrasena`. No se muestra en pantalla ni se
-      envía desde aquí; entregarla es el correo de SIS-19 (RG-09), y cambiarla
-      en el primer ingreso es SISTRA-13 (RN-10-06).
+      queda con `requiere_cambio_contrasena`. No se muestra en pantalla: queda
+      en `contrasena_temporal` para que la vista la mande al correo del usuario
+      (RG-09), y cambiarla en el primer ingreso es SISTRA-13 (RN-10-06).
     - `nombre_usuario`: es la parte del correo anterior a la `@` (nota técnica
       del BRD §5.11), así que se deriva y no se pide.
 
@@ -214,6 +214,9 @@ class UsuarioForm(forms.ModelForm):
         # no es campo del modelo `Usuario`, así que no aparece en `self.initial`
         # y el valor anterior se perdería.
         self.cambio_de_carrera = ''
+        # La contraseña temporal del usuario nuevo, para que la vista la mande
+        # por correo (RG-09). Solo se llena al crear; al editar se queda en None.
+        self.contrasena_temporal = None
         # Un rol inactivo deja sin permisos a sus usuarios, así que no se ofrece;
         # el que ya tenga el usuario sí se conserva, para no romper la edición.
         self.fields['rol'].queryset = Rol.objects.filter(
@@ -304,10 +307,12 @@ class UsuarioForm(forms.ModelForm):
                 )
             usuario = super().save(commit=commit)
         else:
+            # Temporal y aleatoria. No se guarda en claro ni se muestra: queda
+            # en el formulario solo para que la vista la mande por correo.
+            self.contrasena_temporal = get_random_string(16)
             usuario = Usuario.objects.create_user(
                 correo_institucional=self.cleaned_data['correo_institucional'],
-                # Temporal y aleatoria: nadie la ve, se reemplaza en el primer ingreso.
-                password=get_random_string(16),
+                password=self.contrasena_temporal,
                 nombre=self.cleaned_data['nombre'],
                 cedula=self.cleaned_data['cedula'],
                 nombre_usuario=self._nombre_usuario_libre(

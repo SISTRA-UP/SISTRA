@@ -7,9 +7,10 @@ Se ejecutan con: uv run python manage.py test
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.db import connection
 from django.db.models import ProtectedError
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
@@ -24,6 +25,7 @@ from apps.personas.models import (
 )
 from apps.procesos.models import EstadoAvance, ProcesoTrabajoSocial
 from apps.seguimiento.models import Auditoria
+from apps.usuarios.forms.roles import UsuarioForm
 from apps.usuarios.models import Estado, Permiso, Rol, RolPermiso
 
 Usuario = get_user_model()
@@ -607,6 +609,142 @@ class CrearUsuarios(BaseRoles):
         self.assertContains(respuesta, reverse('usuarios:usuario_nuevo'))
 
 
+class CorreoDeCredencialesDelAdmo(BaseRoles):
+    """SIS-69 · B3 · el usuario que crea el ADMO recibe su contraseña (RG-09, RN-10-06)."""
+
+    CLAVE = 'ClaveTemporalDePrueba'
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.administrador)
+        self.rol_director = Rol.objects.get(nombre='Director')
+        self.carrera = self.crear_carrera('Trabajo Social', 'TS-01')
+        mail.outbox.clear()
+
+    def datos(self, **cambios):
+        datos = {
+            'nombre': 'Diana Directora',
+            'cedula': '1020304050',
+            'correo_institucional': 'diana.directora@unipamplona.edu.co',
+            'rol': self.rol_director.pk,
+            'carrera': self.carrera.pk,
+        }
+        datos.update(cambios)
+        return datos
+
+    def crear(self, **cambios):
+        seguir = cambios.pop('follow', False)
+        return self.client.post(
+            reverse('usuarios:usuario_nuevo'), self.datos(**cambios), follow=seguir
+        )
+
+    def crear_con_clave_conocida(self, **cambios):
+        with patch(
+            'apps.usuarios.forms.roles.get_random_string', return_value=self.CLAVE
+        ):
+            return self.crear(**cambios)
+
+    def ultimo_envio(self):
+        return Auditoria.objects.filter(accion='Enviar credenciales').latest(
+            'id_auditoria'
+        )
+
+    def test_el_formulario_guarda_la_contrasena_temporal_al_crear(self):
+        formulario = UsuarioForm(data=self.datos())
+        self.assertTrue(formulario.is_valid(), formulario.errors)
+        usuario = formulario.save()
+        self.assertIsNotNone(formulario.contrasena_temporal)
+        # Es la contraseña real de la cuenta, no una cadena cualquiera.
+        self.assertTrue(usuario.check_password(formulario.contrasena_temporal))
+
+    def test_al_editar_no_hay_contrasena_temporal(self):
+        formulario = UsuarioForm(
+            data={
+                'nombre': 'Ana Corregida',
+                'cedula': self.administrador.cedula,
+                'correo_institucional': self.administrador.correo_institucional,
+                'rol': self.rol_administrador.pk,
+                'carrera': '',
+            },
+            instance=self.administrador,
+        )
+        self.assertTrue(formulario.is_valid(), formulario.errors)
+        formulario.save()
+        self.assertIsNone(formulario.contrasena_temporal)
+
+    def test_se_manda_un_correo_al_usuario_nuevo(self):
+        self.crear()
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['diana.directora@unipamplona.edu.co'])
+
+    def test_el_correo_lleva_el_usuario_de_ingreso_y_la_contrasena(self):
+        self.crear_con_clave_conocida()
+        cuerpo = mail.outbox[0].body
+        self.assertIn('diana.directora@unipamplona.edu.co', cuerpo)
+        self.assertIn(self.CLAVE, cuerpo)
+
+    def test_con_esa_contrasena_el_usuario_entra_y_debe_cambiarla(self):
+        self.crear_con_clave_conocida()
+        self.assertTrue(
+            Client().login(
+                correo_institucional='diana.directora@unipamplona.edu.co',
+                password=self.CLAVE,
+            )
+        )
+        usuario = Usuario.objects.get(cedula='1020304050')
+        self.assertTrue(usuario.requiere_cambio_contrasena)
+
+    def test_el_envio_queda_en_auditoria(self):
+        self.crear()
+        usuario = Usuario.objects.get(cedula='1020304050')
+        registro = self.ultimo_envio()
+        self.assertEqual(registro.resultado, 'Éxito')
+        self.assertEqual(registro.tabla_afectada, 'usuario')
+        self.assertEqual(registro.id_registro_afectado, usuario.pk)
+
+    def test_la_contrasena_no_queda_en_la_auditoria(self):
+        self.crear_con_clave_conocida()
+        for detalle in Auditoria.objects.values_list('detalle', flat=True):
+            self.assertNotIn(self.CLAVE, detalle or '')
+
+    def test_si_el_correo_falla_el_usuario_queda_creado_y_se_avisa(self):
+        # MSG-10-08 y EX-03 del BRD: la cuenta se crea y el fallo se registra.
+        with patch(
+            'apps.personas.forms.registro_estudiantes.send_mail',
+            side_effect=OSError('sin servicio de correo'),
+        ):
+            respuesta = self.crear(follow=True)
+        self.assertTrue(Usuario.objects.filter(cedula='1020304050').exists())
+        self.assertEqual(self.ultimo_envio().resultado, 'Fallo')
+        avisos = list(respuesta.context['messages'])
+        self.assertEqual(len(avisos), 1)
+        # Aviso, no éxito: el ADMO tiene que enterarse de que hay que reenviarlo.
+        self.assertEqual(avisos[0].level_tag, 'warning')
+        self.assertIn('no se pudo enviar el correo', str(avisos[0]))
+
+    def test_si_el_correo_sale_se_ve_el_mensaje_de_exito(self):
+        respuesta = self.crear(follow=True)
+        avisos = list(respuesta.context['messages'])
+        self.assertEqual(len(avisos), 1)
+        self.assertEqual(avisos[0].level_tag, 'success')
+        self.assertIn('Se creó a Diana Directora', str(avisos[0]))
+
+    def test_editar_un_usuario_no_manda_ningun_correo(self):
+        self.crear()
+        mail.outbox.clear()
+        self.client.post(
+            reverse('usuarios:usuario_editar', args=[self.administrador.pk]),
+            {
+                'nombre': 'Ana Corregida',
+                'cedula': self.administrador.cedula,
+                'correo_institucional': self.administrador.correo_institucional,
+                'rol': self.rol_administrador.pk,
+                'carrera': '',
+            },
+        )
+        self.assertEqual(len(mail.outbox), 0)
+
+
 class EditarUsuarios(BaseRoles):
     """C6 · El ADMO edita los datos de un usuario y le cambia el rol."""
 
@@ -828,8 +966,13 @@ class AuditoriaDeLosCambios(BaseRoles):
             rol=self.rol_estudiante,
         )
 
-    def ultima(self):
-        return Auditoria.objects.latest('id_auditoria')
+    def ultima(self, accion=None):
+        # Crear un usuario deja dos registros desde SIS-69 (B3): «Crear usuario»
+        # y «Enviar credenciales». Quien mire uno concreto lo pide por su acción.
+        registros = Auditoria.objects.all()
+        if accion is not None:
+            registros = registros.filter(accion=accion)
+        return registros.latest('id_auditoria')
 
     def test_crear_un_usuario_queda_registrado(self):
         self.client.post(
@@ -843,7 +986,7 @@ class AuditoriaDeLosCambios(BaseRoles):
             },
         )
         creado = Usuario.objects.get(cedula='1099999999')
-        registro = self.ultima()
+        registro = self.ultima('Crear usuario')
         self.assertEqual(registro.accion, 'Crear usuario')
         self.assertEqual(registro.tabla_afectada, 'usuario')
         self.assertEqual(registro.id_registro_afectado, creado.pk)
@@ -1118,8 +1261,13 @@ class ArreglosDeLaRevision(BaseRoles):
             reverse('usuarios:usuario_editar', args=[usuario.pk]), datos
         )
 
-    def ultima(self):
-        return Auditoria.objects.latest('id_auditoria')
+    def ultima(self, accion=None):
+        # Crear un usuario deja dos registros desde SIS-69 (B3): «Crear usuario»
+        # y «Enviar credenciales». Quien mire uno concreto lo pide por su acción.
+        registros = Auditoria.objects.all()
+        if accion is not None:
+            registros = registros.filter(accion=accion)
+        return registros.latest('id_auditoria')
 
     # --- C-1 · la auditoría guardaba "—" como carrera anterior ---
 
@@ -1134,7 +1282,8 @@ class ArreglosDeLaRevision(BaseRoles):
                 'carrera': self.sistemas.pk,
             },
         )
-        self.assertIn('carrera: — → Ingeniería de Sistemas', self.ultima().detalle)
+        detalle = self.ultima('Crear usuario').detalle
+        self.assertIn('carrera: — → Ingeniería de Sistemas', detalle)
 
     def test_cambiarle_la_carrera_guarda_la_anterior_y_la_nueva(self):
         self.editar(self.usuario, rol=self.rol_director.pk, carrera=self.sistemas.pk)

@@ -11,6 +11,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from apps.parametrizacion.models import Carrera
+# El envío de credenciales es de SISTRA-10 igual que esta vista: vive en
+# `personas` porque allá nació, con el registro de estudiantes (SIS-19).
+from apps.personas.forms.registro_estudiantes import enviar_credenciales
 from apps.seguimiento.models import Auditoria
 from apps.usuarios.forms.roles import (
     ROLES_BASE,
@@ -283,11 +286,12 @@ def _formulario_de_usuario(request, usuario=None):
 
 @requiere_permiso('usuario.crear')
 def crear_usuario(request):
-    """Crea un usuario con una contraseña temporal que nadie ve.
+    """Crea un usuario y le manda su contraseña temporal al correo (RG-09).
 
-    La contraseña se genera aleatoria y el usuario queda con
-    `requiere_cambio_contrasena`. Entregársela es el correo de SIS-19 (RG-09) y
-    cambiarla en el primer ingreso es SISTRA-13.
+    La contraseña se genera aleatoria, nadie la ve en pantalla y el usuario
+    queda con `requiere_cambio_contrasena`: cambiarla en el primer ingreso es
+    SISTRA-13 (RN-10-06). Si el correo no sale, la cuenta **queda creada** y se
+    avisa con MSG-10-08, que es la excepción EX-03 del BRD.
     """
     formulario = _formulario_de_usuario(request)
     if request.method == 'POST' and formulario.is_valid():
@@ -302,11 +306,35 @@ def crear_usuario(request):
                 usuario.pk,
                 _juntar(_retrato(usuario), formulario.cambio_de_carrera),
             )
-        messages.success(
+        # Después de confirmar la transacción, nunca dentro: si el envío tardara
+        # y algo fallara después, se habría mandado la contraseña de una cuenta
+        # que no quedó.
+        enviado = enviar_credenciales(usuario, formulario.contrasena_temporal)
+        _auditar(
             request,
-            f'Se creó a {usuario.nombre}. Entrará con {usuario.correo_institucional} y '
-            f'una contraseña temporal que deberá cambiar en su primer ingreso.',
+            'Enviar credenciales',
+            'usuario',
+            usuario.pk,
+            f'correo: {usuario.correo_institucional}',
+            RESULTADO_EXITO if enviado else RESULTADO_FALLO,
         )
+        if enviado:
+            messages.success(
+                request,
+                f'Se creó a {usuario.nombre}. Entrará con '
+                f'{usuario.correo_institucional} y la contraseña temporal que le '
+                f'acaba de llegar a ese correo, que deberá cambiar en su primer '
+                f'ingreso.',
+            )
+        else:
+            # MSG-10-08: la contraseña solo existía en ese correo, así que
+            # callar el fallo dejaría una cuenta creada e inservible.
+            messages.warning(
+                request,
+                f'Se creó a {usuario.nombre}, pero no se pudo enviar el correo '
+                f'con las credenciales a {usuario.correo_institucional}. Hay que '
+                f'reenviarlo.',
+            )
         return redirect('usuarios:usuarios')
     return render(
         request,
