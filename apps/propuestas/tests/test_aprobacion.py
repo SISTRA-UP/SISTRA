@@ -2223,3 +2223,107 @@ class TestPermisoAprobacion(BaseAprobacionTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(prop.pk, [m['propuesta'].pk for m in response.context['propuestas_con_meta']])
+
+
+class TestAccionMasivaRevalidaConBloqueo(BaseAprobacionTestCase):
+    """SIS-53 · E1: el lote se revisa otra vez con las filas bloqueadas; si una ya no cumple,
+    no cambia ninguna (sin historial ni avisos duplicados)."""
+
+    def _form(self, accion: str, ids: list[int], **extra):
+        datos = {'accion': accion, 'propuestas_ids': ','.join(map(str, ids)), 'observacion': 'Decisión del lote de prueba.'}
+        form = AccionMasivaForm(data={**datos, **extra})
+        self.assertTrue(form.is_valid(), form.errors)
+        return form
+
+    def _cambio_justo_antes_del_bloqueo(self, cambio):
+        """Ejecuta `cambio` (otro Director u otro envío) entre la revisión inicial y el bloqueo."""
+        from contextlib import contextmanager
+        from types import SimpleNamespace
+        from unittest import mock
+
+        from django.db import transaction as transaccion_real
+
+        @contextmanager
+        def atomic_con_cambio(*args, **kwargs):
+            cambio()
+            with transaccion_real.atomic(*args, **kwargs):
+                yield
+
+        return mock.patch(
+            'apps.propuestas.forms.aprobacion_masiva.transaction',
+            SimpleNamespace(atomic=atomic_con_cambio),
+        )
+
+    def test_doble_envio_de_aprobacion_masiva_aplica_una_sola_vez(self):
+        """El segundo envío de la misma aprobación se bloquea: un historial y un aviso por propuesta."""
+        props = [
+            self.crear_propuesta(self.estudiante_1, 'PROP-E1-DOBLE-1'),
+            self.crear_propuesta(self.estudiante_2, 'PROP-E1-DOBLE-2'),
+        ]
+        ids = [p.pk for p in props]
+
+        self._form('aprobar', ids).procesar(self.carrera, self.user_director)
+        with self.assertRaises(ValidationError):
+            self._form('aprobar', ids).procesar(self.carrera, self.user_director)
+
+        for prop in props:
+            self.assertEqual(
+                HistorialEstado.objects.filter(propuesta=prop, tipo_accion='Aprobación masiva').count(), 1
+            )
+            self.assertEqual(Notificacion.objects.filter(propuesta=prop).count(), 1)
+
+    def test_cambio_entre_la_revision_y_el_bloqueo_bloquea_todo_el_lote(self):
+        """Si otra persona aprueba una propuesta a mitad de camino, no se cambia ninguna."""
+        prop_1 = self.crear_propuesta(self.estudiante_1, 'PROP-E1-CARRERA-1')
+        prop_2 = self.crear_propuesta(self.estudiante_2, 'PROP-E1-CARRERA-2')
+        form = self._form('rechazar', [prop_1.pk, prop_2.pk], tipo_rechazo=self.tipo_rechazo_activo.pk)
+
+        def otro_director_aprueba():
+            Propuesta.objects.filter(pk=prop_2.pk).update(estado=EstadoTramite.APROBADO)
+
+        with self._cambio_justo_antes_del_bloqueo(otro_director_aprueba), self.assertRaises(ValidationError):
+            form.procesar(self.carrera, self.user_director)
+
+        prop_1.refresh_from_db()
+        prop_2.refresh_from_db()
+        self.assertEqual(prop_1.estado, EstadoTramite.EN_REVISION)
+        self.assertEqual(prop_2.estado, EstadoTramite.APROBADO)
+        self.assertFalse(HistorialEstado.objects.filter(propuesta__in=[prop_1, prop_2]).exists())
+        self.assertFalse(Notificacion.objects.filter(propuesta__in=[prop_1, prop_2]).exists())
+        self.assertEqual(
+            Auditoria.objects.filter(accion='RECHAZO_MASIVO_BLOQUEADO', resultado=RESULTADO_BLOQUEADO).count(), 2
+        )
+
+    def test_reactivacion_masiva_se_bloquea_si_una_se_archiva_a_mitad_de_camino(self):
+        """Reactivar en lote: si una se archiva entre la revisión y el bloqueo, no se reactiva ninguna."""
+        prop_1 = self.crear_propuesta(self.estudiante_1, 'PROP-E1-ARCH-1', estado=EstadoTramite.RECHAZADO)
+        prop_2 = self.crear_propuesta(self.estudiante_2, 'PROP-E1-ARCH-2', estado=EstadoTramite.RECHAZADO)
+        form = self._form('reactivar', [prop_1.pk, prop_2.pk])
+
+        def se_archiva():
+            Propuesta.objects.filter(pk=prop_2.pk).update(archivada=True, fecha_archivado=timezone.now())
+
+        with self._cambio_justo_antes_del_bloqueo(se_archiva), self.assertRaises(ValidationError):
+            form.procesar(self.carrera, self.user_director)
+
+        prop_1.refresh_from_db()
+        self.assertEqual(prop_1.estado, EstadoTramite.RECHAZADO)
+        self.assertFalse(HistorialEstado.objects.filter(propuesta__in=[prop_1, prop_2]).exists())
+
+    def test_reactivacion_masiva_se_bloquea_si_aparece_otra_propuesta_activa(self):
+        """RG-05: si el estudiante envía otra propuesta a mitad de camino, no se reactiva ninguna."""
+        prop = self.crear_propuesta(self.estudiante_1, 'PROP-E1-RG05', estado=EstadoTramite.RECHAZADO)
+        form = self._form('reactivar', [prop.pk])
+
+        def el_estudiante_envia_otra():
+            self.crear_propuesta(self.estudiante_1, 'PROP-E1-RG05-NUEVA')
+
+        with self._cambio_justo_antes_del_bloqueo(el_estudiante_envia_otra), \
+                self.assertRaises(ReactivacionInvalidaError):
+            form.procesar(self.carrera, self.user_director)
+
+        prop.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.RECHAZADO)
+        self.assertTrue(
+            Auditoria.objects.filter(accion='REACTIVACION_MASIVA_BLOQUEADA', id_registro_afectado=prop.pk).exists()
+        )
