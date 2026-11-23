@@ -102,9 +102,9 @@ class SemaforoInformeTests(SimpleTestCase):
         )
 
         self.assertEqual(resultado["color"], "amarillo")
-    def test_reactivacion_conserva_dias_y_excluye_tiempo_rechazado(self):
-        # Base efectiva: 10 días conservados + 2 desde la reactivación.
-        informe = self.crear_informe(dias=12)
+    def test_reactivacion_a_modificacion_mantiene_semaforo_detenido(self):
+        # La reactivación no inicia otro período de revisión.
+        informe = self.crear_informe(dias=20, estado=EstadoTramite.REQUIERE_MODIFICACION)
 
         historial = [
             SimpleNamespace(
@@ -115,7 +115,7 @@ class SemaforoInformeTests(SimpleTestCase):
             SimpleNamespace(
                 fecha_hora=self.ahora - timedelta(days=2),
                 estado_anterior=EstadoTramite.RECHAZADO,
-                estado_nuevo=EstadoTramite.EN_REVISION,
+                estado_nuevo=EstadoTramite.REQUIERE_MODIFICACION,
             ),
         ]
 
@@ -126,9 +126,10 @@ class SemaforoInformeTests(SimpleTestCase):
             historial=historial,
         )
 
-        # 10 días antes del rechazo + 2 después de reactivar.
-        self.assertEqual(resultado["dias"], 12)
-        self.assertEqual(resultado["color"], "amarillo")
+        # Solo se conserva el plazo de la decisión anterior, detenido.
+        self.assertIsNone(resultado["dias"])
+        self.assertEqual(resultado["dias_acumulados"], 10)
+        self.assertEqual(resultado["color"], "detenido")
 
     def test_informe_rechazado_conserva_tiempo_sin_seguir_contando(self):
         informe = self.crear_informe(
@@ -154,31 +155,12 @@ class SemaforoInformeTests(SimpleTestCase):
         self.assertEqual(resultado["color"], "detenido")
         self.assertEqual(resultado["dias_acumulados"], 10)
 
-    def test_suma_horas_antes_de_calcular_dias_completos(self):
+    def test_veintiseis_horas_son_un_dia_completo(self):
         informe = self.crear_informe()
         informe.fecha_envio = self.ahora - timedelta(hours=26)
-
-        historial = [
-            SimpleNamespace(
-                fecha_hora=self.ahora - timedelta(hours=37),
-                estado_anterior=EstadoTramite.EN_REVISION,
-                estado_nuevo=EstadoTramite.RECHAZADO,
-            ),
-            SimpleNamespace(
-                fecha_hora=self.ahora - timedelta(hours=13),
-                estado_anterior=EstadoTramite.RECHAZADO,
-                estado_nuevo=EstadoTramite.EN_REVISION,
-            ),
-        ]
-
         resultado = calcular_semaforo_informe(
-            informe,
-            limites=(7, 14),
-            ahora=self.ahora,
-            historial=historial,
+            informe, limites=(7, 14), ahora=self.ahora, historial=[],
         )
-
-        # 13 horas + 13 horas = 26 horas: un día completo.
         self.assertEqual(resultado["dias"], 1)
         self.assertEqual(resultado["color"], "verde")
 
