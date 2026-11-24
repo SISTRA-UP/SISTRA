@@ -7,7 +7,7 @@ from apps.informes.views.aprobacion_mensajes import (
     MSG_REACTIVACION, MSG_07_05, aviso_decision,
 )
 
-from django.contrib.auth.decorators import login_required
+from apps.usuarios.permisos import requiere_permiso
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.http import JsonResponse
@@ -41,9 +41,9 @@ def _error(mensaje, estado=400):
     )
 
 
-@login_required
-@require_POST
 @auditar_intentos("reactivacion_masiva_informe")
+@requiere_permiso("informe.aprobar")
+@require_POST
 def reactivar_masivo(request):
     """Reactiva toda la selección o no modifica ningún informe."""
 

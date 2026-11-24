@@ -13,7 +13,8 @@ from django.utils import timezone
 
 from apps.cargue_up.models import CargueUp, EstadoVerificacion
 from apps.informes.models import Informe
-from apps.parametrizacion.models import Parametro, TipoRechazo
+from apps.parametrizacion import servicios as servicios_parametrizacion
+from apps.parametrizacion.models import TipoRechazo
 from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.seguimiento.models import Auditoria, HistorialEstado, Notificacion
 from apps.usuarios.models import Estado
@@ -27,6 +28,9 @@ MSG_02_05 = 'Completa los campos obligatorios para continuar.'
 MSG_02_06 = 'No es posible reactivar: el estudiante {nombre} ya tiene una propuesta activa.'
 MSG_02_07 = 'No puedes cambiar la decisión: el estudiante ya pulsó Subido en UP o inició su informe.'
 MSG_02_08 = 'Tu propuesta cambió a {estado}.'
+# SIS-54 · E2: la pantalla con la que se decide está desactualizada (otra pestaña ya decidió).
+MSG_PROPUESTA_DESACTUALIZADA = 'La propuesta cambió desde que abriste la pantalla. Actualiza antes de decidir.'
+MSG_SIN_VERSION = 'Actualiza la pantalla antes de confirmar la decisión.'
 
 LONGITUD_MAXIMA_TEXTO = 1000
 LONGITUD_MINIMA_OBSERVACION = 10
@@ -58,6 +62,19 @@ class PropuestaBloqueadaError(Exception):
     """Regla RN-02-04 / EX-05: El estudiante ya pulsó Subido en UP o inició informe."""
 
 
+class PropuestaDesactualizadaError(Exception):
+    """SIS-54 · E2: la decisión viene de una pantalla abierta antes del último cambio."""
+
+
+def _verificar_version(lock: Propuesta, version: str | None) -> None:
+    """Compara la versión que vio el Director con la de la fila ya bloqueada.
+
+    `version=None` es una llamada directa al formulario (sin pantalla); la vista siempre la envía.
+    """
+    if version is not None and lock.fecha_actualizacion.isoformat() != version:
+        raise PropuestaDesactualizadaError(MSG_PROPUESTA_DESACTUALIZADA)
+
+
 class ReactivacionInvalidaError(Exception):
     """Regla RG-05 / EX-02: El estudiante ya registra otra propuesta activa en la carrera."""
 
@@ -68,25 +85,14 @@ def sanitizar_texto(valor: str) -> str:
 
 
 def obtener_limites_semaforo() -> tuple[int, int]:
-    """Obtiene los umbrales de días del semáforo desde Parametro en BD con fallback a 7 y 14."""
-    """SUJETO A CAMBIOS. Esperando Parametrizacion"""
-    verde = DIAS_SEMAFORO_VERDE
-    amarillo = DIAS_SEMAFORO_AMARILLO
-    try:
-        p_verde = Parametro.objects.filter(
-            clave__in=['dias_semaforo_verde', 'semaforo_verde', 'DIAS_SEMAFORO_VERDE']
-        ).first()
-        if p_verde and p_verde.valor.strip().isdigit():
-            verde = int(p_verde.valor.strip())
+    """Umbrales del semáforo (RG-07) configurados por el ADMO en Parametrización (SISTRA-11).
 
-        p_amarillo = Parametro.objects.filter(
-            clave__in=['dias_semaforo_amarillo', 'semaforo_amarillo', 'DIAS_SEMAFORO_AMARILLO']
-        ).first()
-        if p_amarillo and p_amarillo.valor.strip().isdigit():
-            amarillo = int(p_amarillo.valor.strip())
-    except Exception:
-        pass
-    return verde, amarillo
+    Se leen con la API de SISTRA-11; si un valor no es un entero válido se usan 7 y 14.
+    """
+    return (
+        servicios_parametrizacion.obtener_entero('semaforo.verde_hasta_dias', DIAS_SEMAFORO_VERDE),
+        servicios_parametrizacion.obtener_entero('semaforo.amarillo_hasta_dias', DIAS_SEMAFORO_AMARILLO),
+    )
 
 
 def _salidas_de_revision(propuesta):
@@ -344,10 +350,11 @@ class AprobacionPropuestaForm(forms.Form):
     def clean_observacion(self) -> str:
         return sanitizar_texto(self.cleaned_data.get('observacion', ''))
 
-    def procesar(self, propuesta: Propuesta, usuario) -> None:
+    def procesar(self, propuesta: Propuesta, usuario, version: str | None = None) -> None:
         """Aplica la aprobación de forma atómica."""
         with transaction.atomic():
             lock = Propuesta.objects.select_for_update().select_related('proceso__estudiante_carrera__estudiante__usuario').get(pk=propuesta.pk)
+            _verificar_version(lock, version)
             if lock.estado == EstadoTramite.RECHAZADO:
                 raise ValidationError('Una propuesta rechazada solo puede ser reactivada mediante el modal de reactivación justificando el motivo.')
             if lock.estado == EstadoTramite.APROBADO:
@@ -375,7 +382,7 @@ class ModificacionPropuestaForm(forms.Form):
     def clean_observacion(self) -> str:
         return sanitizar_texto(self.cleaned_data['observacion'])
 
-    def procesar(self, propuesta: Propuesta, usuario) -> None:
+    def procesar(self, propuesta: Propuesta, usuario, version: str | None = None) -> None:
         """Aplica la solicitud de modificación de forma atómica."""
         if propuesta.estado == EstadoTramite.APROBADO:
             puede, motivo = puede_revertir_aprobacion(propuesta)
@@ -394,6 +401,7 @@ class ModificacionPropuestaForm(forms.Form):
 
         with transaction.atomic():
             lock = Propuesta.objects.select_for_update().select_related('proceso__estudiante_carrera__estudiante__usuario').get(pk=propuesta.pk)
+            _verificar_version(lock, version)
             if lock.estado == EstadoTramite.RECHAZADO:
                 raise ValidationError('Una propuesta rechazada solo puede ser reactivada mediante el modal de reactivación justificando el motivo.')
             if lock.estado == EstadoTramite.REQUIERE_MODIFICACION:
@@ -435,7 +443,7 @@ class RechazoPropuestaForm(forms.Form):
     def clean_observacion(self) -> str:
         return sanitizar_texto(self.cleaned_data['observacion'])
 
-    def procesar(self, propuesta: Propuesta, usuario) -> None:
+    def procesar(self, propuesta: Propuesta, usuario, version: str | None = None) -> None:
         """Aplica el rechazo de forma atómica."""
         if propuesta.estado == EstadoTramite.APROBADO:
             puede, motivo = puede_revertir_aprobacion(propuesta)
@@ -455,6 +463,7 @@ class RechazoPropuestaForm(forms.Form):
 
         with transaction.atomic():
             lock = Propuesta.objects.select_for_update().select_related('proceso__estudiante_carrera__estudiante__usuario').get(pk=propuesta.pk)
+            _verificar_version(lock, version)
             if lock.estado == EstadoTramite.RECHAZADO:
                 return
             if lock.estado not in [EstadoTramite.EN_REVISION, EstadoTramite.APROBADO]:

@@ -5,6 +5,8 @@
 {% block contenido %}
 <main class="container py-4">
 
+  {% include 'usuarios/roles/_menu.html' %}
+
   <div class="mb-4">
     <h1 class="h3 mb-1">Registrar estudiantes</h1>
     {% if carrera %}
@@ -101,11 +103,7 @@
                 {{ cargue.archivo }}
                 <div class="form-text">
                   Columnas: {% for columna in columnas %}<code>{{ columna }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}.
-                  {% if maximo_filas %}
-                    Máximo {{ maximo_filas }} filas por archivo.
-                  {% else %}
-                    Todavía no hay un máximo de filas configurado.
-                  {% endif %}
+                  Máximo {{ maximo_filas }} filas y {{ maximo_mb }} MB por archivo.
                 </div>
                 {% for error in cargue.archivo.errors %}
                   <div class="invalid-feedback d-block">{{ error }}</div>

@@ -138,3 +138,45 @@ class HistorialCargueUp(models.Model):
 
     def __str__(self):
         return f'{self.cargue_up} · {self.estado_anterior} → {self.estado_nuevo}'
+
+
+class DocumentoExtra(models.Model):
+    """PRO-16 · Documentos extra que el estudiante carga al cierre del proceso.
+
+    PDF sin etiqueta (certificado de horas, evidencias, etc.), máximo 4 por informe.
+    Se habilitan cuando el informe queda en «Aprobado en UP»; al finalizar, el
+    proceso de Trabajo Social queda Finalizado y ya no se pueden cambiar.
+    El archivo vive en MEDIA_ROOT; aquí se guarda su ruta relativa.
+    """
+
+    id_documento_extra = models.BigAutoField(primary_key=True)
+    informe = models.ForeignKey(
+        'informes.Informe',
+        on_delete=models.PROTECT,
+        db_column='id_informe',
+        related_name='documentos_extra',
+    )
+    usuario = models.ForeignKey(
+        'usuarios.Usuario',
+        on_delete=models.PROTECT,
+        db_column='id_usuario',
+        related_name='documentos_extra_cargados',
+    )
+    nombre_archivo = models.CharField(max_length=200)
+    ruta_archivo = models.TextField()
+    tamano_bytes = models.PositiveIntegerField()
+    fecha_carga = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'documento_extra'
+        verbose_name = 'documento extra'
+        verbose_name_plural = 'documentos extra'
+        ordering = ['fecha_carga', 'id_documento_extra']
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(tamano_bytes__gt=0), name='documento_extra_tamano_positivo'
+            ),
+        ]
+
+    def __str__(self):
+        return self.nombre_archivo

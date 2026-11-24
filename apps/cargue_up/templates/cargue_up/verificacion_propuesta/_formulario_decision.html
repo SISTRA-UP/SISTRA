@@ -1,0 +1,20 @@
+{# Formulario de confirmación de una decisión; lo usan el modal de la lista y la página de detalle. #}
+<form method="post" action="{% url 'cargue_up:verificacion_propuesta_decidir' propuesta.pk %}">
+    {% csrf_token %}
+    <input type="hidden" name="resultado" value="{{ resultado }}">
+    <input type="hidden" name="id_cargue" value="{{ id_cargue }}">
+    {% if resultado == rechazo %}
+    <div class="mb-3">
+        <label for="obs-{{ prefijo }}-{{ propuesta.pk }}" class="form-label">Observación para el estudiante</label>
+        <textarea name="observacion" id="obs-{{ prefijo }}-{{ propuesta.pk }}" class="form-control" rows="3"
+                  maxlength="1000" required>{{ observacion_previa }}</textarea>
+        {% for error in errores_observacion %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+    </div>
+    {% endif %}
+    <div class="d-flex gap-2 justify-content-end">
+        {% if cancelar_modal %}<button type="button" class="btn btn-vi-ghost" data-bs-dismiss="modal">Cancelar</button>{% endif %}
+        <button type="submit" class="btn {% if resultado == rechazo %}btn-vi-red{% else %}btn-vi-navy{% endif %}">
+            {% if resultado == rechazo %}Confirmar Rechazado en UP{% else %}Confirmar Aprobado en UP{% endif %}
+        </button>
+    </div>
+</form>

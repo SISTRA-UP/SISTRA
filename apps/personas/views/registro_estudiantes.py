@@ -4,7 +4,6 @@ Solo el responsable de este requisito edita este archivo.
 """
 
 from django.contrib import messages
-from django.contrib.auth.decorators import permission_required
 from django.core.exceptions import ValidationError
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
@@ -15,11 +14,15 @@ from apps.personas.forms.registro_estudiantes import (
     CargueCsvForm,
     FilaInvalida,
     RegistroEstudianteForm,
+    conexion_del_lote,
     maximo_de_filas_csv,
+    reabrir_conexion,
+    maximo_mb_csv,
     registrar_estudiante,
     sin_tildes,
 )
 from apps.personas.models import DirectorCarrera
+from apps.usuarios.permisos import requiere_permiso
 
 PLANTILLA = 'personas/registro_estudiantes/registrar.html'
 
@@ -70,11 +73,12 @@ def _pantalla(request, carrera, formulario=None, cargue=None, resumen=None):
             'resumen': resumen,
             'columnas': COLUMNAS_DEL_CSV,
             'maximo_filas': maximo_de_filas_csv(),
+            'maximo_mb': maximo_mb_csv(),
         },
     )
 
 
-@permission_required('estudiante.registrar', raise_exception=True)
+@requiere_permiso('estudiante.registrar')
 def registrar(request):
     """Pantalla del Director: «Uno a uno» y «Archivo CSV».
 
@@ -127,9 +131,7 @@ def registrar(request):
     return _pantalla(request, carrera, formulario=formulario)
 
 
-@permission_required(
-    ('estudiante.registrar', 'estudiante.cargar_csv'), raise_exception=True
-)
+@requiere_permiso(('estudiante.registrar', 'estudiante.cargar_csv'))
 @require_POST
 def cargar_csv(request):
     """Cargue masivo: se procesa fila por fila, no se rechaza el archivo entero.
@@ -156,27 +158,33 @@ def cargar_csv(request):
         return _pantalla(request, carrera, cargue=cargue)
 
     registrados, omitidos, sin_correo, errores = 0, 0, 0, []
-    for fila in filas:
-        try:
-            _verificar_carrera_de_la_fila(fila['carrera'], carrera)
-            resultado, _, enviado = registrar_estudiante(
-                carrera=carrera,
-                nombre=fila['nombre'],
-                cedula=fila['cedula'],
-                correo=fila['correo'],
-                autor=request.user,
-            )
-        except FilaInvalida as error:
-            errores.append(
-                {'fila': fila['linea'], 'datos': fila, 'motivo': str(error)}
-            )
-        else:
-            if resultado == OMITIDO:
-                omitidos += 1
+    # Una sola conexión de correo para todo el lote: con una por fila, un CSV
+    # de 100 estudiantes puede pasarse del tiempo máximo del servidor web y
+    # cortarse a la mitad.
+    with conexion_del_lote() as conexion:
+        for fila in filas:
+            try:
+                _verificar_carrera_de_la_fila(fila['carrera'], carrera)
+                resultado, _, enviado = registrar_estudiante(
+                    carrera=carrera,
+                    nombre=fila['nombre'],
+                    cedula=fila['cedula'],
+                    correo=fila['correo'],
+                    autor=request.user,
+                    conexion=conexion,
+                )
+            except FilaInvalida as error:
+                errores.append(
+                    {'fila': fila['linea'], 'datos': fila, 'motivo': str(error)}
+                )
             else:
-                registrados += 1
-                if enviado is False:
-                    sin_correo += 1
+                if resultado == OMITIDO:
+                    omitidos += 1
+                else:
+                    registrados += 1
+                    if enviado is False:
+                        sin_correo += 1
+                        reabrir_conexion(conexion)
 
     resumen = {
         'registrados': registrados,

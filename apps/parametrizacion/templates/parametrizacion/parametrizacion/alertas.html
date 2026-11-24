@@ -1,0 +1,69 @@
+{% extends 'parametrizacion/parametrizacion/_pagina.html' %}
+
+{% block titulo %}Alertas y plazos · Parametrización · SISTRA-UP{% endblock %}
+
+{% block principal %}
+<p class="sis-eyebrow">Parametrización · SISTRA-11</p>
+<h1 class="sis-titulo">Alertas y plazos</h1>
+<p class="sis-sub">Semáforo de aprobación, recordatorios y plazos de archivado.</p>
+
+<form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+    <div class="alert alert-danger" role="alert">
+        {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <section class="sis-card mb-4" aria-labelledby="t-semaforo">
+        <h2 id="t-semaforo">Semáforo de aprobación</h2>
+        <p class="sis-sub">Días calendario que una propuesta lleva en «En revisión».</p>
+        <div class="row">
+            <div class="col-md-6">
+                {% include 'parametrizacion/_campo.html' with campo=form.verde_hasta_dias %}
+            </div>
+            <div class="col-md-6">
+                {% include 'parametrizacion/_campo.html' with campo=form.amarillo_hasta_dias %}
+            </div>
+        </div>
+        <ul class="list-unstyled mb-0 small">
+            <li><span class="badge text-bg-success">Verde</span> 0 a {{ verde }} días</li>
+            <li>
+                <span class="badge text-bg-warning">Amarillo</span>
+                {{ verde|add:1 }} a {{ amarillo }} días
+            </li>
+            <li><span class="badge text-bg-danger">Rojo</span> {{ amarillo|add:1 }} días o más</li>
+        </ul>
+        <p class="form-text mb-0 mt-2">
+            Resumen con los valores guardados. Al entrar en amarillo o rojo se avisa al Director.
+        </p>
+    </section>
+
+    <section class="sis-card mb-4" aria-labelledby="t-recordatorio">
+        <h2 id="t-recordatorio">Recordatorios</h2>
+        {% include 'parametrizacion/_campo.html' with campo=form.frecuencia_recordatorio_dias %}
+    </section>
+
+    <section class="sis-card mb-4" aria-labelledby="t-archivado">
+        <h2 id="t-archivado">Archivado de rechazados</h2>
+        <div class="row">
+            <div class="col-md-6">
+                {% include 'parametrizacion/_campo.html' with campo=form.dias_archivado_propuesta %}
+            </div>
+            <div class="col-md-6">
+                {% include 'parametrizacion/_campo.html' with campo=form.dias_archivado_informe %}
+            </div>
+        </div>
+    </section>
+
+    <section class="sis-card mb-4" aria-labelledby="t-up">
+        <h2 id="t-up">Plataforma UP</h2>
+        {% include 'parametrizacion/_campo.html' with campo=form.url_up %}
+    </section>
+
+    <div class="d-flex justify-content-end">
+        <button type="submit" class="btn btn-primary">Guardar parámetros</button>
+    </div>
+</form>
+{% endblock %}

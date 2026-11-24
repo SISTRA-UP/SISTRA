@@ -50,6 +50,7 @@ from apps.propuestas.forms.aprobacion import (
     MSG_02_05,
     MSG_02_06,
     MSG_02_07,
+    MSG_PROPUESTA_DESACTUALIZADA,
     RESULTADO_BLOQUEADO,
     AprobacionPropuestaForm,
     FiltroBandejaPropuestasForm,
@@ -60,6 +61,7 @@ from apps.propuestas.forms.aprobacion import (
     RechazoPropuestaForm,
     aplicar_transicion,
     calcular_semaforo,
+    obtener_limites_semaforo,
     puede_revertir_aprobacion,
     sanitizar_texto,
 )
@@ -273,12 +275,12 @@ class TestDominioYSemaforo(BaseAprobacionTestCase):
     def test_calcular_semaforo_parametrizado_desde_bd(self):
         """El semáforo adopta los umbrales configurados en la tabla Parametro (BD)."""
         Parametro.objects.create(
-            clave='dias_semaforo_verde',
+            clave='semaforo.verde_hasta_dias',
             valor='4',
             usuario_actualizacion=self.user_director,
         )
         Parametro.objects.create(
-            clave='dias_semaforo_amarillo',
+            clave='semaforo.amarillo_hasta_dias',
             valor='9',
             usuario_actualizacion=self.user_director,
         )
@@ -290,6 +292,26 @@ class TestDominioYSemaforo(BaseAprobacionTestCase):
 
         prop.fecha_envio = timezone.now() - timedelta(days=10)
         self.assertEqual(calcular_semaforo(prop)['color'], 'rojo')
+
+    def test_umbrales_guardados_por_parametrizacion_se_reflejan_en_la_bandeja(self):
+        """SISTRA-11 criterio 4: cambiar los umbrales en Parametrización se refleja en SISTRA-02."""
+        from apps.parametrizacion import servicios
+
+        servicios.guardar('semaforo.verde_hasta_dias', '2', self.user_director)
+        servicios.guardar('semaforo.amarillo_hasta_dias', '5', self.user_director)
+        prop = self.crear_propuesta(self.estudiante_1, 'P-SEM-ADMO', dias_envio=3)
+
+        self.client.force_login(self.user_director)
+        response = self.client.get(reverse('propuestas:aprobacion'))
+
+        meta = next(m for m in response.context['propuestas_con_meta'] if m['propuesta'].pk == prop.pk)
+        self.assertEqual(meta['semaforo']['color'], 'amarillo')
+        self.assertEqual((response.context['limite_verde'], response.context['limite_amarillo']), (2, 5))
+
+    def test_umbrales_sin_configurar_usan_los_valores_iniciales_de_parametrizacion(self):
+        """Sin filas en `parametro` rigen los valores iniciales de Parametrización (7 y 14)."""
+        self.assertFalse(Parametro.objects.filter(clave__startswith='semaforo.').exists())
+        self.assertEqual(obtener_limites_semaforo(), (7, 14))
 
     def test_calcular_semaforo_pausado_en_otros_estados(self):
         """El semáforo se detiene cuando la propuesta sale de 'En revisión' (RG-07)."""
@@ -414,12 +436,12 @@ class TestFiltroBandejaPropuestasForm(BaseAprobacionTestCase):
     def test_filtro_bandeja_opciones_semaforo_dinamicas_desde_bd(self):
         """Las opciones del selector de semáforo se construyen dinámicamente según Parametro."""
         Parametro.objects.create(
-            clave='dias_semaforo_verde',
+            clave='semaforo.verde_hasta_dias',
             valor='5',
             usuario_actualizacion=self.user_director,
         )
         Parametro.objects.create(
-            clave='dias_semaforo_amarillo',
+            clave='semaforo.amarillo_hasta_dias',
             valor='12',
             usuario_actualizacion=self.user_director,
         )
@@ -1442,11 +1464,67 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         url = reverse('propuestas:cambiar_estado', args=[prop.pk])
         response = self.client.post(
             url,
-            {'nuevo_estado': EstadoTramite.APROBADO, 'observacion': 'Aprobada por endpoint web.'},
+            {'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.APROBADO, 'observacion': 'Aprobada por endpoint web.'},
         )
         self.assertEqual(response.status_code, 302)
         prop.refresh_from_db()
         self.assertEqual(prop.estado, EstadoTramite.APROBADO)
+
+    def test_pestana_vieja_no_cambia_una_propuesta_ya_decidida(self):
+        """SIS-54 · E2: con la versión vista al abrir la bandeja, la segunda decisión responde 409.
+
+        Simula dos pestañas: ambas abren la bandeja; en una se aprueba y la otra, desactualizada,
+        intenta pedir modificación. No cambia nada y el intento queda auditado como Bloqueado.
+        """
+        prop = self.crear_propuesta(self.estudiante_1, 'PROP-PESTANA-VIEJA')
+        self.client.force_login(self.user_director)
+
+        html = self.client.get(reverse('propuestas:aprobacion')).content.decode('utf-8')
+        version_vista = prop.fecha_actualizacion.isoformat()
+        self.assertIn(f'data-version="{version_vista}"', html)
+
+        url = reverse('propuestas:cambiar_estado', args=[prop.pk])
+        self.client.post(url, {'nuevo_estado': EstadoTramite.APROBADO, 'fecha_actualizacion': version_vista})
+        prop.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.APROBADO)
+
+        response = self.client.post(
+            url,
+            {
+                'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION,
+                'observacion': 'Decisión enviada desde la pestaña vieja.',
+                'fecha_actualizacion': version_vista,
+            },
+        )
+
+        self.assertEqual(response.status_code, 409)
+        prop.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.APROBADO)
+        self.assertEqual(
+            HistorialEstado.objects.filter(propuesta=prop).count(), 1,
+            'Solo debe quedar la aprobación en el historial.',
+        )
+        mensajes = [str(m) for m in self.client.get(reverse('propuestas:aprobacion')).context['messages']]
+        self.assertIn(MSG_PROPUESTA_DESACTUALIZADA, mensajes)
+        fila = Auditoria.objects.get(resultado=RESULTADO_BLOQUEADO, id_registro_afectado=prop.pk)
+        self.assertIn(MSG_PROPUESTA_DESACTUALIZADA, fila.detalle)
+
+    def test_decision_sin_version_se_rechaza_sin_cambiar_nada(self):
+        """SIS-54 · E2: si no llega la versión (pantalla anterior al cambio) se pide actualizar."""
+        prop = self.crear_propuesta(self.estudiante_1, 'PROP-SIN-VERSION')
+        self.client.force_login(self.user_director)
+
+        response = self.client.post(
+            reverse('propuestas:cambiar_estado', args=[prop.pk]),
+            {'nuevo_estado': EstadoTramite.APROBADO},
+        )
+
+        self.assertEqual(response.status_code, 409)
+        prop.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.EN_REVISION)
+        self.assertTrue(
+            Auditoria.objects.filter(resultado=RESULTADO_BLOQUEADO, id_registro_afectado=prop.pk).exists()
+        )
 
     def test_bandeja_incluye_visor_real_del_pdf_y_avisos_de_procesando(self):
         """El detalle trae el visor real del PDF (sin la hoja simulada ni 'Pág. 1 / 1' fijo)
@@ -1527,7 +1605,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
             (
                 AprobacionPropuestaForm,
                 reverse('propuestas:cambiar_estado', args=[prop.pk]),
-                {'nuevo_estado': EstadoTramite.APROBADO},
+                {'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.APROBADO},
                 prop.pk,
             ),
             (
@@ -1572,7 +1650,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         casos = [
             (
                 reverse('propuestas:cambiar_estado', args=[prop.pk]),
-                {'nuevo_estado': EstadoTramite.APROBADO},
+                {'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.APROBADO},
             ),
             (
                 reverse('propuestas:reactivar_propuesta', args=[rechazada.pk]),
@@ -1603,7 +1681,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         casos = [
             (
                 reverse('propuestas:cambiar_estado', args=[prop.pk]),
-                {'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION, 'observacion': 'corto'},
+                {'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION, 'observacion': 'corto'},
             ),
             (
                 reverse('propuestas:reactivar_propuesta', args=[rechazada.pk]),
@@ -1629,7 +1707,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         response = self.client.post(
             url,
             {
-                'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION,
+                'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION,
                 'observacion': 'Corregir el capítulo segundo y ajustar el presupuesto.',
             },
         )
@@ -1646,7 +1724,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         response = self.client.post(
             url,
             {
-                'nuevo_estado': EstadoTramite.RECHAZADO,
+                'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.RECHAZADO,
                 'tipo_rechazo': self.tipo_rechazo_activo.pk,
                 'observacion': 'Rechazada formalmente por el Director de carrera.',
             },
@@ -1663,7 +1741,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.client.force_login(self.user_director)
 
         url = reverse('propuestas:cambiar_estado', args=[prop.pk])
-        response = self.client.post(url, {'nuevo_estado': EstadoTramite.APROBADO})
+        response = self.client.post(url, {'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.APROBADO})
         self.assertEqual(response.status_code, 302)
 
         prop.refresh_from_db()
@@ -1678,7 +1756,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.client.force_login(self.user_director)
 
         url = reverse('propuestas:cambiar_estado', args=[prop.pk])
-        response = self.client.post(url, {'nuevo_estado': EstadoTramite.APROBADO})
+        response = self.client.post(url, {'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.APROBADO})
         self.assertEqual(response.status_code, 302)
 
         prop.refresh_from_db()
@@ -1693,7 +1771,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.client.force_login(self.user_director)
 
         url = reverse('propuestas:cambiar_estado', args=[prop.pk])
-        response = self.client.post(url, {'nuevo_estado': EstadoTramite.APROBADO})
+        response = self.client.post(url, {'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.APROBADO})
         self.assertEqual(response.status_code, 302)
 
         prop.refresh_from_db()
@@ -1715,7 +1793,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         response = self.client.post(
             url,
             {
-                'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION,
+                'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION,
                 'observacion': 'Ajuste posterior al cargue oficial',
             },
         )
@@ -1741,7 +1819,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         response = self.client.post(
             url,
             {
-                'nuevo_estado': EstadoTramite.RECHAZADO,
+                'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.RECHAZADO,
                 'tipo_rechazo': self.tipo_rechazo_activo.pk,
                 'observacion': 'x' * 5000,
             },
@@ -1768,7 +1846,7 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.client.post(
             url,
             {
-                'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION,
+                'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.REQUIERE_MODIFICACION,
                 'observacion': 'Ajustar el cronograma propuesto',
             },
         )
@@ -1784,12 +1862,12 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
     def test_bandeja_filtro_semaforo_limites_dinamicos_desde_bd(self):
         """El filtrado por semáforo en bandeja obedece los límites dinámicos de Parametro."""
         Parametro.objects.create(
-            clave='dias_semaforo_verde',
+            clave='semaforo.verde_hasta_dias',
             valor='3',
             usuario_actualizacion=self.user_director,
         )
         Parametro.objects.create(
-            clave='dias_semaforo_amarillo',
+            clave='semaforo.amarillo_hasta_dias',
             valor='8',
             usuario_actualizacion=self.user_director,
         )
@@ -2139,7 +2217,7 @@ class TestPermisoAprobacion(BaseAprobacionTestCase):
             ('get', reverse('propuestas:aprobacion'), {}),
             ('get', reverse('propuestas:detalle_propuesta', args=[prop.pk]), {}),
             ('get', reverse('propuestas:descargar_documento', args=[prop.pk]), {}),
-            ('post', reverse('propuestas:cambiar_estado', args=[prop.pk]), {'nuevo_estado': EstadoTramite.APROBADO}),
+            ('post', reverse('propuestas:cambiar_estado', args=[prop.pk]), {'fecha_actualizacion': prop.fecha_actualizacion.isoformat(), 'nuevo_estado': EstadoTramite.APROBADO}),
             (
                 'post',
                 reverse('propuestas:reactivar_propuesta', args=[rechazada.pk]),
@@ -2202,3 +2280,107 @@ class TestPermisoAprobacion(BaseAprobacionTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(prop.pk, [m['propuesta'].pk for m in response.context['propuestas_con_meta']])
+
+
+class TestAccionMasivaRevalidaConBloqueo(BaseAprobacionTestCase):
+    """SIS-53 · E1: el lote se revisa otra vez con las filas bloqueadas; si una ya no cumple,
+    no cambia ninguna (sin historial ni avisos duplicados)."""
+
+    def _form(self, accion: str, ids: list[int], **extra):
+        datos = {'accion': accion, 'propuestas_ids': ','.join(map(str, ids)), 'observacion': 'Decisión del lote de prueba.'}
+        form = AccionMasivaForm(data={**datos, **extra})
+        self.assertTrue(form.is_valid(), form.errors)
+        return form
+
+    def _cambio_justo_antes_del_bloqueo(self, cambio):
+        """Ejecuta `cambio` (otro Director u otro envío) entre la revisión inicial y el bloqueo."""
+        from contextlib import contextmanager
+        from types import SimpleNamespace
+        from unittest import mock
+
+        from django.db import transaction as transaccion_real
+
+        @contextmanager
+        def atomic_con_cambio(*args, **kwargs):
+            cambio()
+            with transaccion_real.atomic(*args, **kwargs):
+                yield
+
+        return mock.patch(
+            'apps.propuestas.forms.aprobacion_masiva.transaction',
+            SimpleNamespace(atomic=atomic_con_cambio),
+        )
+
+    def test_doble_envio_de_aprobacion_masiva_aplica_una_sola_vez(self):
+        """El segundo envío de la misma aprobación se bloquea: un historial y un aviso por propuesta."""
+        props = [
+            self.crear_propuesta(self.estudiante_1, 'PROP-E1-DOBLE-1'),
+            self.crear_propuesta(self.estudiante_2, 'PROP-E1-DOBLE-2'),
+        ]
+        ids = [p.pk for p in props]
+
+        self._form('aprobar', ids).procesar(self.carrera, self.user_director)
+        with self.assertRaises(ValidationError):
+            self._form('aprobar', ids).procesar(self.carrera, self.user_director)
+
+        for prop in props:
+            self.assertEqual(
+                HistorialEstado.objects.filter(propuesta=prop, tipo_accion='Aprobación masiva').count(), 1
+            )
+            self.assertEqual(Notificacion.objects.filter(propuesta=prop).count(), 1)
+
+    def test_cambio_entre_la_revision_y_el_bloqueo_bloquea_todo_el_lote(self):
+        """Si otra persona aprueba una propuesta a mitad de camino, no se cambia ninguna."""
+        prop_1 = self.crear_propuesta(self.estudiante_1, 'PROP-E1-CARRERA-1')
+        prop_2 = self.crear_propuesta(self.estudiante_2, 'PROP-E1-CARRERA-2')
+        form = self._form('rechazar', [prop_1.pk, prop_2.pk], tipo_rechazo=self.tipo_rechazo_activo.pk)
+
+        def otro_director_aprueba():
+            Propuesta.objects.filter(pk=prop_2.pk).update(estado=EstadoTramite.APROBADO)
+
+        with self._cambio_justo_antes_del_bloqueo(otro_director_aprueba), self.assertRaises(ValidationError):
+            form.procesar(self.carrera, self.user_director)
+
+        prop_1.refresh_from_db()
+        prop_2.refresh_from_db()
+        self.assertEqual(prop_1.estado, EstadoTramite.EN_REVISION)
+        self.assertEqual(prop_2.estado, EstadoTramite.APROBADO)
+        self.assertFalse(HistorialEstado.objects.filter(propuesta__in=[prop_1, prop_2]).exists())
+        self.assertFalse(Notificacion.objects.filter(propuesta__in=[prop_1, prop_2]).exists())
+        self.assertEqual(
+            Auditoria.objects.filter(accion='RECHAZO_MASIVO_BLOQUEADO', resultado=RESULTADO_BLOQUEADO).count(), 2
+        )
+
+    def test_reactivacion_masiva_se_bloquea_si_una_se_archiva_a_mitad_de_camino(self):
+        """Reactivar en lote: si una se archiva entre la revisión y el bloqueo, no se reactiva ninguna."""
+        prop_1 = self.crear_propuesta(self.estudiante_1, 'PROP-E1-ARCH-1', estado=EstadoTramite.RECHAZADO)
+        prop_2 = self.crear_propuesta(self.estudiante_2, 'PROP-E1-ARCH-2', estado=EstadoTramite.RECHAZADO)
+        form = self._form('reactivar', [prop_1.pk, prop_2.pk])
+
+        def se_archiva():
+            Propuesta.objects.filter(pk=prop_2.pk).update(archivada=True, fecha_archivado=timezone.now())
+
+        with self._cambio_justo_antes_del_bloqueo(se_archiva), self.assertRaises(ValidationError):
+            form.procesar(self.carrera, self.user_director)
+
+        prop_1.refresh_from_db()
+        self.assertEqual(prop_1.estado, EstadoTramite.RECHAZADO)
+        self.assertFalse(HistorialEstado.objects.filter(propuesta__in=[prop_1, prop_2]).exists())
+
+    def test_reactivacion_masiva_se_bloquea_si_aparece_otra_propuesta_activa(self):
+        """RG-05: si el estudiante envía otra propuesta a mitad de camino, no se reactiva ninguna."""
+        prop = self.crear_propuesta(self.estudiante_1, 'PROP-E1-RG05', estado=EstadoTramite.RECHAZADO)
+        form = self._form('reactivar', [prop.pk])
+
+        def el_estudiante_envia_otra():
+            self.crear_propuesta(self.estudiante_1, 'PROP-E1-RG05-NUEVA')
+
+        with self._cambio_justo_antes_del_bloqueo(el_estudiante_envia_otra), \
+                self.assertRaises(ReactivacionInvalidaError):
+            form.procesar(self.carrera, self.user_director)
+
+        prop.refresh_from_db()
+        self.assertEqual(prop.estado, EstadoTramite.RECHAZADO)
+        self.assertTrue(
+            Auditoria.objects.filter(accion='REACTIVACION_MASIVA_BLOQUEADA', id_registro_afectado=prop.pk).exists()
+        )

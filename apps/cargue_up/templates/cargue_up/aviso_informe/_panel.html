@@ -1,0 +1,108 @@
+{% if perms.cargue_up.avisar %}
+    {% load panel_informe %}
+    {% panel_informe as p %}
+    <div class="up-card" id="panel-informe">
+        <div class="step-card">
+            <div class="step-number {% if p.informe.estado == 'Aprobado en UP' %}done{% else %}azul{% endif %}">
+                <i class="bi bi-journal-check"></i>
+            </div>
+            <div class="step-body">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                    <h3 class="mb-0">Mi informe</h3>
+                    {% if not p.informe %}
+                        <span class="up-badge revision">Sin informe</span>
+                    {% elif p.informe.estado == 'Aprobado' or p.informe.estado == 'Aprobado en UP' %}
+                        <span class="up-badge aprobado">{{ p.informe.estado }}</span>
+                    {% elif p.informe.estado == 'Subido en UP' %}
+                        <span class="up-badge cargado">{{ p.informe.estado }}</span>
+                    {% else %}
+                        <span class="up-badge revision">{{ p.informe.estado }}</span>
+                    {% endif %}
+                </div>
+
+                <div class="stepper mb-4">
+                    <div class="stepper-item {% if p.informe.estado == 'Aprobado' %}active{% elif p.informe.estado == 'Subido en UP' or p.informe.estado == 'Aprobado en UP' %}completed{% endif %}">
+                        <div class="step-indicator">{% if p.informe.estado == 'Subido en UP' or p.informe.estado == 'Aprobado en UP' %}<i class="bi bi-check-lg"></i>{% else %}1{% endif %}</div>
+                        <div class="step-content"><div class="step-name">Aprobado</div></div>
+                    </div>
+                    <div class="stepper-item {% if p.informe.estado == 'Subido en UP' %}active{% elif p.informe.estado == 'Aprobado en UP' %}completed{% endif %}">
+                        <div class="step-indicator">{% if p.informe.estado == 'Aprobado en UP' %}<i class="bi bi-check-lg"></i>{% else %}2{% endif %}</div>
+                        <div class="step-content"><div class="step-name">Subido en UP</div></div>
+                    </div>
+                    <div class="stepper-item {% if p.informe.estado == 'Aprobado en UP' %}completed{% endif %}">
+                        <div class="step-indicator">{% if p.informe.estado == 'Aprobado en UP' %}<i class="bi bi-check-lg"></i>{% else %}3{% endif %}</div>
+                        <div class="step-content"><div class="step-name">Aprobado en UP</div></div>
+                    </div>
+                </div>
+
+                {% if p.estado == 'habilitado' %}
+                    <div class="step-actions">
+                        <a href="{% url 'cargue_up:aviso_informe_descargar' %}" class="btn btn-up-outline">
+                            <i class="bi bi-download"></i>Descargar informe
+                        </a>
+                        {% if p.url_up %}
+                            <a href="{% url 'cargue_up:aviso_informe_ir_up' %}" target="_blank" rel="noopener noreferrer" class="btn btn-up-primary">
+                                <i class="bi bi-box-arrow-up-right"></i>Ir a la Plataforma UP
+                            </a>
+                        {% else %}
+                            <div>
+                                <button type="button" class="btn btn-up-primary" disabled>
+                                    <i class="bi bi-box-arrow-up-right"></i>Ir a la Plataforma UP
+                                </button>
+                                <span class="text-muted small d-block mt-1">El enlace a la Plataforma UP no está disponible por ahora.</span>
+                            </div>
+                        {% endif %}
+                        <button type="button" class="btn btn-up-primary" data-bs-toggle="modal" data-bs-target="#modal-confirmar-informe">
+                            <i class="bi bi-check2-circle"></i>Subido en UP
+                        </button>
+                    </div>
+                {% elif p.estado == 'cargado' %}
+                    <div class="up-alert {% if p.informe.estado == 'Aprobado en UP' %}success{% else %}info{% endif %}">
+                        <i class="bi bi-check-circle-fill up-alert-icon"></i>
+                        <div>
+                            {% if p.informe.estado == 'Aprobado en UP' %}
+                                Tu director verificó el informe en la Plataforma UP.
+                            {% else %}
+                                Ya avisaste a tu director que subiste el informe el {{ p.ultimo_cargue.fecha_declaracion|date:"d/m/Y" }}. Lo verificará en la Plataforma UP.
+                            {% endif %}
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="step-actions">
+                        <button type="button" class="btn btn-up-outline" disabled><i class="bi bi-download"></i>Descargar informe</button>
+                        <button type="button" class="btn btn-up-primary" disabled><i class="bi bi-box-arrow-up-right"></i>Ir a la Plataforma UP</button>
+                        <button type="button" class="btn btn-up-primary" disabled><i class="bi bi-check2-circle"></i>Subido en UP</button>
+                    </div>
+                    <div class="up-alert neutral mt-3">
+                        <i class="bi bi-clock-history up-alert-icon"></i>
+                        <div>Esta sección se habilita cuando tu Director apruebe el informe.</div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% if p.estado == 'habilitado' %}
+    <div class="modal fade" id="modal-confirmar-informe" tabindex="-1" aria-labelledby="titulo-confirmar-informe" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form class="modal-content" method="post" action="{% url 'cargue_up:aviso_informe_confirmar' %}"
+                onsubmit="this.querySelector('button[type=submit]').disabled = true;">
+                {% csrf_token %}
+                <input type="hidden" name="id_informe" value="{{ p.informe.pk }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="titulo-confirmar-informe">Confirmar cargue</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">¿Confirmas que ya cargaste tu informe en la Plataforma UP?</div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-up-outline" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-up-primary">Confirmar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+{% endif %}
+
+{# PRO-16 · Documentos extra: aparece debajo de «Mi informe» cuando el informe queda Aprobado en UP. #}
+{% include 'cargue_up/documentos_extra/_panel.html' %}

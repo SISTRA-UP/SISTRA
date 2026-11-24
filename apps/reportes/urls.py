@@ -1,19 +1,16 @@
-"""Rutas de la app reportes.
 
-Agrega tus rutas debajo del comentario de tu requisito, por ejemplo:
+"""Rutas de la app reportes."""
 
-    path('...', reportes.inicio, name='reportes'),
+from django.urls import path
 
-En las plantillas se enlazan con el nombre de la app:
-{% url 'reportes:reportes' %}.
-"""
-
-from django.urls import path  # noqa: F401
-
-from .views import reportes  # noqa: F401  SISTRA-12
+from .views import reportes
 
 app_name = 'reportes'
 
 urlpatterns = [
-    # SISTRA-12 · Reportes
+    path(
+        '',
+        reportes.reportes,
+        name='reportes',
+    ),
 ]

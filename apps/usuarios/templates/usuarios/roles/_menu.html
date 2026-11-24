@@ -1,0 +1,21 @@
+{% load menu_sistra %}{% menu_por_permisos as grupos_del_menu %}
+{% if grupos_del_menu %}
+  <nav aria-label="Opciones disponibles para tu rol">
+    {% for grupo in grupos_del_menu %}
+      {% if grupo.titulo %}
+        <p class="text-uppercase small fw-semibold text-body-secondary mb-1 mt-3">{{ grupo.titulo }}</p>
+      {% endif %}
+      <ul class="nav nav-pills flex-row flex-wrap gap-1 mb-0">
+        {% for opcion in grupo.opciones %}
+          <li class="nav-item">
+            {% if request.path == opcion.url %}
+              <a class="nav-link active" href="{{ opcion.url }}" aria-current="page">{{ opcion.etiqueta }}</a>
+            {% else %}
+              <a class="nav-link link-body-emphasis" href="{{ opcion.url }}">{{ opcion.etiqueta }}</a>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% endfor %}
+  </nav>
+{% endif %}

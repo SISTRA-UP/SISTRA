@@ -15,11 +15,15 @@ from .views import aviso_propuesta  # noqa: F401  SISTRA-04
 from .views import verificacion_propuesta  # noqa: F401  SISTRA-05
 from .views import aviso_informe  # noqa: F401  SISTRA-08
 from .views import verificacion_informe  # noqa: F401  SISTRA-09
+from .views import documentos_extra  # noqa: F401  PRO-16
 
 app_name = 'cargue_up'
 
 urlpatterns = [
     # SISTRA-03 · Cargue al sistema de UP
+    path('', cargue_propuesta.inicio, name='cargue_propuesta'),
+    path('descargar/<int:id_propuesta>/', cargue_propuesta.descargar_propuesta, name='descargar_propuesta'),
+    path('ir-up/<int:id_propuesta>/', cargue_propuesta.ir_a_up, name='ir_a_up'),
 
     # SISTRA-04 · Notificación de cargue UP
     path(
@@ -34,8 +38,69 @@ urlpatterns = [
     ),
 
     # SISTRA-05 · Notificación de cargue UP – Director
+    path(
+        'verificar/propuesta/',
+        verificacion_propuesta.lista,
+        name='verificacion_propuesta',
+    ),
+    path(
+        'verificar/propuesta/<int:id_propuesta>/',
+        verificacion_propuesta.detalle,
+        name='verificacion_propuesta_detalle',
+    ),
+    path(
+        'verificar/propuesta/<int:id_propuesta>/decidir/',
+        verificacion_propuesta.decidir,
+        name='verificacion_propuesta_decidir',
+    ),
+    path(
+        'verificar/propuesta/<int:id_propuesta>/corregir/',
+        verificacion_propuesta.corregir,
+        name='verificacion_propuesta_corregir',
+    ),
 
     # SISTRA-08 · Notificación de cargue UP (informe)
+    path('informe/', aviso_informe.inicio, name='aviso_informe'),
+    path('informe/confirmar/', aviso_informe.confirmar, name='aviso_informe_confirmar'),
+    path('informe/ir-up/', aviso_informe.ir_a_up, name='aviso_informe_ir_up'),
+    path('informe/descargar/', aviso_informe.descargar, name='aviso_informe_descargar'),
 
     # SISTRA-09 · Notificación de cargue UP – Director (informe)
+    path(
+        'verificar/informe/',
+        verificacion_informe.lista,
+        name='verificacion_informe_lista',
+    ),
+    path(
+        'verificar/informe/<int:id_informe>/',
+        verificacion_informe.detalle,
+        name='verificacion_informe_detalle',
+    ),
+    path(
+        'verificar/informe/<int:id_informe>/decidir/',
+        verificacion_informe.decidir,
+        name='verificacion_informe_decidir',
+    ),
+    path(
+        'verificar/informe/<int:id_informe>/corregir/',
+        verificacion_informe.corregir,
+        name='verificacion_informe_corregir',
+    ),
+
+    # PRO-16 · Cargue de archivos restantes (documentos extra)
+    path('documentos-extra/subir/', documentos_extra.subir, name='documentos_extra_subir'),
+    path(
+        'documentos-extra/<int:id_documento>/quitar/',
+        documentos_extra.quitar,
+        name='documentos_extra_quitar',
+    ),
+    path(
+        'documentos-extra/finalizar/', documentos_extra.finalizar, name='documentos_extra_finalizar'
+    ),
+    path(
+        'documentos-extra/<int:id_documento>/descargar/',
+        documentos_extra.descargar,
+        name='documentos_extra_descargar',
+    ),
+    path('documentos-extra/recibidos/', documentos_extra.recibidos, name='documentos_extra_recibidos'),
 ]

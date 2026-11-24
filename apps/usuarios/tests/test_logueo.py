@@ -151,7 +151,7 @@ class LoginTests(TestCase):
 
     def test_login_estudiante_correcto_crea_sesion_y_audita_con_vocabulario_estandar(self):
         response = self.enviar_login(correo='ESTUDIANTE1@UNIPAMPLONA.EDU.CO')
-        self.assertRedirects(response, self.url_inicio_estudiante)
+        self.assertRedirects(response, self.url_inicio_estudiante, fetch_redirect_response=False)
         self.assertEqual(self.client.session[SESSION_KEY], str(self.usuario.pk))
         self.usuario.refresh_from_db()
         self.assertIsNotNone(self.usuario.last_login)
@@ -160,6 +160,7 @@ class LoginTests(TestCase):
         auditoria = Auditoria.objects.get(accion='Iniciar sesión', usuario=self.usuario)
         self.assertEqual(auditoria.resultado, 'Éxito')
         self.assertTrue(self.usuario.password.startswith('pbkdf2_sha256$'))
+        
 
     def test_login_director_conduce_a_su_inicio(self):
         director = self.crear_usuario(
@@ -171,8 +172,9 @@ class LoginTests(TestCase):
         )
         Director.objects.create(usuario=director)
         response = self.enviar_login(director.correo_institucional)
-        self.assertRedirects(response, self.url_inicio_director)
+        self.assertRedirects(response, self.url_inicio_director, fetch_redirect_response=False)
         self.assertEqual(self.client.session[SESSION_KEY], str(director.pk))
+        
 
     def test_login_admo_administrador_conduce_a_su_inicio(self):
         administrador = self.crear_usuario(
@@ -183,7 +185,7 @@ class LoginTests(TestCase):
             rol=self.rol_administrador,
         )
         response = self.enviar_login(administrador.correo_institucional)
-        self.assertRedirects(response, self.url_inicio_administrador)
+        self.assertRedirects(response, self.url_inicio_administrador, fetch_redirect_response=False)
         self.assertEqual(self.client.session[SESSION_KEY], str(administrador.pk))
 
     def test_director_sin_perfil_no_inicia_sesion_ni_omite_hash(self):
@@ -281,11 +283,11 @@ class LoginTests(TestCase):
 
     def test_login_rechaza_next_externo_y_conserva_inicio_del_rol(self):
         response = self.enviar_login(next_url='https://sitio-malicioso.example/')
-        self.assertRedirects(response, self.url_inicio_estudiante)
+        self.assertRedirects(response, self.url_inicio_estudiante, fetch_redirect_response=False)
 
     def test_login_rechaza_next_protocol_relative(self):
         response = self.enviar_login(next_url='//evil.example/path')
-        self.assertRedirects(response, self.url_inicio_estudiante)
+        self.assertRedirects(response, self.url_inicio_estudiante, fetch_redirect_response=False)
 
     def test_usuario_con_cambio_obligatorio_no_llega_al_inicio_antes_de_cambiar(self):
         self.usuario.requiere_cambio_contrasena = True
@@ -527,8 +529,12 @@ class LoginTests(TestCase):
         Director.objects.create(usuario=director)
         self.client.force_login(director)
         respuesta = self.client.get(self.url_inicio_estudiante)
-        self.assertRedirects(respuesta, self.url_inicio_director)
-        self.assertEqual(self.client.get(self.url_inicio_director).status_code, 200)
+        self.assertRedirects(respuesta, self.url_inicio_director, fetch_redirect_response=False)
+        self.assertRedirects(
+            self.client.get(self.url_inicio_director),
+            reverse('dashboard:inicio'),
+            fetch_redirect_response=False,
+        )
 
     def test_logout_audita_cierre_y_finaliza_sesion(self):
         self.enviar_login()
@@ -550,7 +556,7 @@ class LoginTests(TestCase):
         self.assertEqual(respuesta_sin_csrf.status_code, 403)
         self.assertIn(SESSION_KEY, cliente_seguro.session)
 
-        cliente_seguro.get(self.url_inicio_estudiante)
+        cliente_seguro.get(self.url_inicio_estudiante, follow=True)
         token_csrf = cliente_seguro.cookies['csrftoken'].value
         respuesta_logout = cliente_seguro.post(
             self.url_logout,

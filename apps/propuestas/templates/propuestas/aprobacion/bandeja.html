@@ -621,7 +621,8 @@
                                      data-id="{{ prop.pk }}"
                                      data-codigo="{{ prop.codigo }}"
                                      data-estudiante="{{ prop.proceso.estudiante_carrera.estudiante.usuario.nombre }}"
-                                     data-estado="{{ prop.estado }}">
+                                     data-estado="{{ prop.estado }}"
+                                     data-version="{{ prop.fecha_actualizacion.isoformat }}">
                                     <button type="button" role="radio" aria-checked="{% if prop.estado == 'Rechazado' %}true{% else %}false{% endif %}"
                                             class="btn-sl {% if prop.estado == 'Rechazado' %}r1{% endif %}"
                                             data-target="Rechazado">
@@ -1197,6 +1198,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const form = document.getElementById('form-decision');
             form.action = `/propuestas/aprobacion/${idPropuesta}/decidir/`;
             document.getElementById('dec-nuevo-estado').value = targetEstado;
+            document.getElementById('dec-version').value = sl.dataset.version;
             document.getElementById('dec-subtitulo').textContent = `${codigo} · ${estudiante}`;
 
             const banner = document.getElementById('dec-banner');

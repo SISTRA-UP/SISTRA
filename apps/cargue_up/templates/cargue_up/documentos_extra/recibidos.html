@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block titulo %}Documentos extra recibidos · SISTRA-UP{% endblock %}
+
+{% block css %}
+<link rel="stylesheet" href="{% static 'cargue_up/css/verificacion_informe.css' %}">
+{% endblock %}
+
+{% block contenido %}
+<div class="vi-page">
+    {% include 'cargue_up/verificacion_informe/_cabecera.html' with eyebrow='Portal académico · Trabajo Social' titulo='Documentos extra' titulo_em='recibidos.' descripcion='Documentos finales (certificado de horas, evidencias, etc.) de los estudiantes que finalizaron su proceso.' %}
+
+    <main class="container vi-body">
+        {% include 'cargue_up/verificacion_informe/_mensajes.html' %}
+
+        {% if filas %}
+        <div class="vi-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table vi-table align-middle">
+                    <caption class="visually-hidden">Documentos extra recibidos</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Estudiante</th>
+                            <th scope="col">Cédula</th>
+                            <th scope="col">Informe</th>
+                            <th scope="col">Finalizó</th>
+                            <th scope="col">Documentos</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for fila in filas %}
+                        <tr>
+                            <td class="vi-student">{{ fila.estudiante.nombre }}</td>
+                            <td>{{ fila.estudiante.cedula }}</td>
+                            <td>{{ fila.informe.codigo }}</td>
+                            <td>{{ fila.fecha_finalizacion|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                <ul class="list-unstyled mb-0">
+                                    {% for doc in fila.documentos %}
+                                    <li class="text-break"><a href="{% url 'cargue_up:documentos_extra_descargar' doc.pk %}"><i class="bi bi-file-earmark-pdf me-1"></i>{{ doc.nombre_archivo }}</a></li>
+                                    {% endfor %}
+                                </ul>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% if pagina.has_other_pages %}
+        <nav class="mt-3" aria-label="Paginación">
+            <ul class="pagination">
+                {% if pagina.has_previous %}
+                <li class="page-item"><a class="page-link" href="?pagina={{ pagina.previous_page_number }}">Anterior</a></li>
+                {% endif %}
+                <li class="page-item disabled"><span class="page-link">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span></li>
+                {% if pagina.has_next %}
+                <li class="page-item"><a class="page-link" href="?pagina={{ pagina.next_page_number }}">Siguiente</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+        {% else %}
+        <div class="vi-card vi-empty" role="status">Todavía ningún estudiante ha finalizado con documentos extra.</div>
+        {% endif %}
+    </main>
+</div>
+{% endblock %}

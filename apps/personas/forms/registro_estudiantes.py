@@ -13,9 +13,11 @@ import csv
 import io
 import re
 import unicodedata
+from contextlib import contextmanager, suppress
 
 from django import forms
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
@@ -23,10 +25,12 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 
-from apps.parametrizacion.models import Parametro
+from apps.parametrizacion.servicios import obtener_entero
 from apps.personas.models import EstadoInscripcion, Estudiante, EstudianteCarrera
 from apps.procesos.models import EstadoAvance, ProcesoTrabajoSocial
 from apps.seguimiento.models import Auditoria
+# Un solo lugar para el dominio: lo define el login (SISTRA-13), que es quien lo exige.
+from apps.usuarios.forms.logueo import DOMINIO_INSTITUCIONAL
 from apps.usuarios.models import Estado, Rol
 
 Usuario = get_user_model()
@@ -46,17 +50,12 @@ COLUMNAS_DEL_CSV = ('nombre', 'cedula', 'correo', 'carrera')
 # volverían a coincidir con la cédula real. La cédula es la clave de identidad
 # de todo el contrato, así que se exige dígitos ASCII y nada más.
 CEDULA = re.compile(r'[0-9]{1,15}\Z')
-SOLO_DIGITOS = re.compile(r'[0-9]+\Z')
 
-# Límite técnico propio, mientras SISTRA-11 no defina uno: el BRD acota el
-# cargue por **filas** (NUM-FILAS-CSV), no por tamaño, y sin un tope el archivo
-# se lee entero en memoria antes de poder contar sus filas. 5 MB son del orden
-# de 60.000 filas de este formato, muy por encima de cualquier cohorte real.
-TAMANO_MAXIMO_DEL_ARCHIVO = 5 * 1024 * 1024
-
-# Clave del parámetro con el máximo de filas por cargue (BRD §5.12,
-# NUM-FILAS-CSV). La configura el ADMO en SISTRA-11; **el nombre exacto está por
-# confirmar con Ivan Ospino**. Si no está configurada, no se limita.
+# Los dos límites del cargue los configura el ADMO en SISTRA-11 y aquí solo se
+# leen: el tamaño en MB y el máximo de filas (BRD §5.12, NUM-FILAS-CSV). Los
+# valores de respaldo son los mismos que declara `parametrizacion/servicios.py`,
+# porque la tabla `parametro` está vacía mientras el ADMO no guarde nada.
+CLAVE_MAX_MB_CSV = 'registro_estudiantes.max_mb_csv'
 CLAVE_MAXIMO_FILAS_CSV = 'registro_estudiantes.maximo_filas_csv'
 
 
@@ -95,19 +94,25 @@ def nombre_usuario_libre(correo, excluir=None):
     return candidato
 
 
+def _limite(clave, por_defecto):
+    """Un límite de SISTRA-11, o su valor de respaldo si el guardado no sirve.
+
+    La pantalla que los guarda exige un entero >= 1, así que el respaldo solo
+    cubre una fila editada a mano en la base: un límite de 0 o negativo
+    rechazaría todos los archivos y dejaría el cargue inservible.
+    """
+    valor = obtener_entero(clave, por_defecto)
+    return valor if valor > 0 else por_defecto
+
+
+def maximo_mb_csv():
+    """El tamaño máximo del archivo, en MB."""
+    return _limite(CLAVE_MAX_MB_CSV, 2)
+
+
 def maximo_de_filas_csv():
-    """El máximo de filas por cargue, o `None` si SISTRA-11 no lo configuró."""
-    parametro = Parametro.objects.filter(clave=CLAVE_MAXIMO_FILAS_CSV).first()
-    if parametro is None:
-        return None
-    valor = str(parametro.valor or '').strip()
-    # No se usa `int()` a secas porque acepta guiones bajos (`int('1_0') == 10`)
-    # y signos; un parámetro mal escrito tiene que caer en "sin límite", no en
-    # un límite distinto del que el ADMO creyó configurar.
-    if not SOLO_DIGITOS.match(valor):
-        return None
-    maximo = int(valor)
-    return maximo if maximo > 0 else None
+    """El máximo de filas por cargue."""
+    return _limite(CLAVE_MAXIMO_FILAS_CSV, 100)
 
 
 def _auditar(autor, accion, tabla, id_registro=None, detalle='', resultado='Éxito'):
@@ -121,7 +126,57 @@ def _auditar(autor, accion, tabla, id_registro=None, detalle='', resultado='Éxi
     )
 
 
-def enviar_credenciales(usuario, contrasena):
+@contextmanager
+def conexion_del_lote():
+    """Una sola conexión de correo para todo un cargue masivo.
+
+    Hay que **abrirla aquí**: el backend SMTP solo cierra la conexión que abrió
+    él (`if new_conn_created: self.close()`), así que si se pasa sin abrir, el
+    primer `send_mail` la abre y la cierra, y se vuelve a una conexión por fila.
+
+    Crearla y abrirla van las dos dentro de la guarda, y lo que se entrega puede
+    ser `None`: con `MAILERS`, **construir** la conexión ya puede fallar (un
+    `.env` con `use_ssl` y `use_tls` a la vez levanta `InvalidMailer` en el
+    constructor del backend). Nada de eso puede tumbar el cargue: con `None`
+    cada fila abre la suya, y si la que falla es la apertura, cada envío falla y
+    se audita. El correo no condiciona el registro (EX-03 del BRD).
+
+    No se le pasa `fail_silently`: `get_connection` solo lo reenvía cuando es
+    verdadero, y el valor por defecto del backend ya es `False`, que es el que
+    hace falta. Una conexión silenciosa sería lo peligroso: un servidor caído no
+    lanzaría nada y el envío se auditaría como «Éxito» sin haber salido.
+    """
+    conexion = None
+    try:
+        with suppress(Exception):
+            conexion = mail.get_connection()
+            conexion.open()
+        yield conexion
+    finally:
+        if conexion is not None:
+            with suppress(Exception):
+                conexion.close()
+
+
+def reabrir_conexion(conexion):
+    """Renueva la conexión del lote después de un envío fallido.
+
+    El fallo pudo ser de la conexión y no del destinatario (el servidor corta,
+    el protocolo se desincroniza). Django **no la cierra**, porque solo cierra
+    la que abrió él, y `open()` devuelve `False` mientras el atributo siga
+    puesto: una conexión muerta haría fallar también a **todas** las filas
+    siguientes, y una fila mala arrastraría al resto. Renovarla cuesta una
+    reconexión y mantiene lo que pide la tarjeta: si uno falla, los demás salen.
+    """
+    if conexion is None:
+        return
+    with suppress(Exception):
+        conexion.close()
+    with suppress(Exception):
+        conexion.open()
+
+
+def enviar_credenciales(usuario, contrasena, conexion=None):
     """Manda el correo con el usuario y la contraseña temporal (RG-09).
 
     Devuelve `True` o `False`: si falla, **la cuenta queda creada igual** y el
@@ -129,9 +184,13 @@ def enviar_credenciales(usuario, contrasena):
     texto es mínimo a propósito: la plantilla del correo es SIS-37
     (daniel.luna21) y el servicio de envío SIS-38 (Fabiano Del Villar). Cuando
     exista el servicio, los correos empiezan a salir sin tocar esta función.
+
+    `conexion` es opcional y **la firma de dos argumentos sigue siendo válida**:
+    sin ella se abre una por envío, como siempre. El cargue masivo pasa una sola
+    para todo el lote (E12).
     """
     try:
-        send_mail(
+        return send_mail(
             subject='SISTRA · Tus datos de acceso',
             message=(
                 f'Hola {usuario.nombre}.\n\n'
@@ -144,8 +203,8 @@ def enviar_credenciales(usuario, contrasena):
             from_email=None,
             recipient_list=[usuario.correo_institucional],
             fail_silently=False,
-        )
-        return True
+            connection=conexion,
+        ) == 1
     except Exception:
         # Cualquier falla del correo (sin servicio configurado, servidor caído,
         # dirección rechazada) no puede tumbar el registro: EX-03 del BRD.
@@ -179,6 +238,11 @@ def _validar(nombre, cedula, correo):
         validate_email(correo)
     except forms.ValidationError:
         raise FilaInvalida('El correo no tiene un formato válido.')
+    if correo.rsplit('@', 1)[-1] != DOMINIO_INSTITUCIONAL:
+        raise FilaInvalida(
+            f'El correo tiene que ser institucional, con el dominio '
+            f'@{DOMINIO_INSTITUCIONAL}.'
+        )
     return nombre, cedula, correo
 
 
@@ -209,7 +273,7 @@ def _usuario_existente(cedula, correo):
     return por_cedula or por_correo
 
 
-def registrar_estudiante(*, carrera, nombre, cedula, correo, autor):
+def registrar_estudiante(*, carrera, nombre, cedula, correo, autor, conexion=None):
     """Registra a un estudiante en `carrera`.
 
     Devuelve `(resultado, usuario, enviado)`, donde `enviado` dice si el correo
@@ -222,6 +286,9 @@ def registrar_estudiante(*, carrera, nombre, cedula, correo, autor):
     se mandara dentro y algo fallara después, el estudiante recibiría las
     credenciales de una cuenta que se revirtió. Y con un servidor SMTP lento,
     cada fila mantendría abierta una transacción durante todo el ida y vuelta.
+
+    `conexion` es la del lote cuando quien llama es el cargue masivo (E12); sin
+    ella se abre una por envío.
     """
     resultado, usuario, contrasena = _registrar_en_la_base(
         carrera=carrera, nombre=nombre, cedula=cedula, correo=correo, autor=autor
@@ -229,7 +296,7 @@ def registrar_estudiante(*, carrera, nombre, cedula, correo, autor):
     if contrasena is None:
         return resultado, usuario, None
 
-    enviado = enviar_credenciales(usuario, contrasena)
+    enviado = enviar_credenciales(usuario, contrasena, conexion)
     _auditar(
         autor,
         'Enviar credenciales',
@@ -422,8 +489,8 @@ class CargueCsvForm(forms.Form):
             )
         # Se mira el tamaño antes de leerlo: si no, un archivo enorme se carga
         # entero en memoria y se parsea solo para rechazarlo después.
-        if archivo.size > TAMANO_MAXIMO_DEL_ARCHIVO:
-            megas = TAMANO_MAXIMO_DEL_ARCHIVO // (1024 * 1024)
+        megas = maximo_mb_csv()
+        if archivo.size > megas * 1024 * 1024:
             raise forms.ValidationError(
                 f'El archivo pesa más de {megas} MB: divídelo en varios cargues.'
             )
@@ -494,7 +561,7 @@ def leer_filas_csv(archivo):
             for columna in COLUMNAS_DEL_CSV:
                 fila[columna] = (cruda.get(encabezados[columna]) or '').strip()
             filas.append(fila)
-            if maximo is not None and len(filas) > maximo:
+            if len(filas) > maximo:
                 raise forms.ValidationError(
                     f'El archivo trae más filas de las permitidas: '
                     f'el máximo por cargue es {maximo}.'
