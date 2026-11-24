@@ -47,19 +47,19 @@ class Command(BaseCommand):
 
             archivadas = 0
             for propuesta in vencidas:
-                # Se vuelve a exigir Rechazado y no archivada en el mismo UPDATE: si el Director la
-                # reactivó entre la consulta y este punto, no se archiva.
-                if not Propuesta.objects.filter(
-                    pk=propuesta.pk, estado=EstadoTramite.RECHAZADO, archivada=False
-                ).update(archivada=True, fecha_archivado=ahora):
-                    continue
-                _auditar(
-                    None,
-                    'ARCHIVAR_PROPUESTA_RECHAZADA',
-                    propuesta,
-                    detalle_extra=f'Archivada automáticamente: rechazada hace más de {plazo} días (RG-13).',
-                    resultado=RESULTADO_EXITO,
-                )
+                # Conserva la corrección de B6a: archivado y auditoría son atómicos.
+                with transaction.atomic():
+                    if not Propuesta.objects.filter(
+                        pk=propuesta.pk, estado=EstadoTramite.RECHAZADO, archivada=False
+                    ).update(archivada=True, fecha_archivado=ahora):
+                        continue
+                    _auditar(
+                        None,
+                        'ARCHIVAR_PROPUESTA_RECHAZADA',
+                        propuesta,
+                        detalle_extra=f'Archivada automáticamente: rechazada hace más de {plazo} días (RG-13).',
+                        resultado=RESULTADO_EXITO,
+                    )
                 archivadas += 1
 
             self.stdout.write(f'Propuestas archivadas: {archivadas} (plazo: {plazo} días).')
