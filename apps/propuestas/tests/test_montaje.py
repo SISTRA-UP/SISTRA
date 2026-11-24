@@ -411,11 +411,12 @@ class TestMontajeVistasYFlujos(BaseMontajeTestCase):
         url_descarga = reverse('parametrizacion:plantilla_propuesta_estudiante')
         resp_descarga = self.client.get(url_descarga)
         self.assertEqual(resp_descarga.status_code, 200)
-        self.assertTrue(len(resp_descarga.content) > 0)
+        contenido_descargado = b''.join(resp_descarga.streaming_content)
+        self.assertTrue(len(contenido_descargado) > 0)
 
         archivo = SimpleUploadedFile(
             'plantilla_propuesta_trabajo_social.docx',
-            resp_descarga.content,
+            contenido_descargado,
             content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         )
         url_montaje = reverse('propuestas:montaje')
