@@ -51,7 +51,7 @@ El login ya está diseñado y se toma de [DeimonBot/Login](https://github.com/De
 
 ## Colores, letra y tamaños
 
-Todos usan los mismos valores, guardados una sola vez en `static/css/sistra.css`, que carga `templates/base.html`. Nadie escribe colores sueltos en su plantilla: se usan estas variables.
+Todos usan los mismos valores, guardados una sola vez en `static/css/sistra.css`, que carga `templates/base.html`. Nadie escribe colores sueltos en su plantilla: se usan estas variables, cada una con su color de respaldo, por ejemplo `var(--sistra-rojo, #AD3333)`. Así cada pantalla se ve bien desde el primer día, aunque `sistra.css` todavía no esté en develop, y nadie tiene que esperarlo.
 
 | Uso | Variable | Color |
 | --- | --- | --- |
@@ -214,11 +214,11 @@ Hay tres pantallas modelo, cada una con su imagen. Las demás se arman copiando 
 
 ## Lo que no es solo diseño
 
-Cinco cosas del diseño necesitan datos o una pieza común que hoy no existe. Esas no se resuelven en la plantilla de cada uno: van como tarea aparte, con su prueba, y las pantallas las usan cuando estén en develop.
+Cinco cosas del diseño necesitan datos o una pieza común que hoy no existe. Esas no se resuelven en la plantilla de cada uno: van como tarea aparte, con su prueba. Nadie las espera: cada pantalla se arma con lo que hay hoy y las muestra cuando lleguen a develop.
 
 | Qué | Por qué no es solo diseño | Quién |
 | --- | --- | --- |
-| Base común: franja, menú plegable y panel de Notificaciones en `templates/base.html`, y `static/css/sistra.css` | Es una sola pieza que usan todos. Se hace primero, una vez; mientras no esté, nadie arma su propia franja | Por definir (Jorge) |
+| Base común: franja, menú plegable y panel de Notificaciones en `templates/base.html`, y `static/css/sistra.css` | Es una sola pieza que usan todos, así que la hace una sola persona para no duplicarla. Nadie la espera: cada pantalla solo llena su bloque de contenido y queda con la franja apenas esta llegue a develop | Por definir (Jorge) |
 | Notificaciones y periodo vigente en todas las pantallas | Hoy solo el dashboard los entrega (`notificaciones`, `periodo_vigente`). Para verlos en la franja y el menú de cualquier pantalla hay que entregarlos en todas, por ejemplo con una etiqueta como la del menú (`menu_por_permisos`) | Por definir (Jorge) |
 | Tu camino: cuál etapa está hecha y cuál es la actual | `_calcular_avance_estudiante` en `apps/dashboard/services.py` entrega las etapas y el porcentaje, pero no el estado de cada una cuando no hay avance registrado por etapa; ahí el porcentaje sale de 6 hitos y las etapas son 8 | Johan y Jeyson (dashboard) |
 | Etapa y Último envío en la tabla del Director | Ya está en el plan de cambios como R6 | Johan y Jeyson |
@@ -226,13 +226,13 @@ Cinco cosas del diseño necesitan datos o una pieza común que hoy no existe. Es
 
 ## Cómo se entrega y cómo se revisa
 
-El orden es: primero la base común, después el login y después cada responsable sus pantallas encima de esa base. Se revisa antes del merge, comparando con las imágenes de referencia de esta guía.
+No hay orden de entrega: cada responsable trabaja sus pantallas por su cuenta y al mismo tiempo que los demás, en su propia rama, sin esperar a nadie. Como cada uno solo toca las plantillas de su requerimiento, no se pisan. Se revisa antes del merge, comparando con las imágenes de referencia de esta guía.
 
 Cada PR de diseño cumple esto antes de pedir revisión:
 
 - [ ] Una rama por requerimiento desde develop, como las demás.
 - [ ] Solo trae plantillas (`.html`) y CSS. Si trae un `.py`, se devuelve, salvo las tareas de «Lo que no es solo diseño».
-- [ ] Usa las variables de `sistra.css`; no hay colores sueltos en la plantilla.
+- [ ] Usa las variables con su color de respaldo, por ejemplo `var(--sistra-rojo, #AD3333)`; no hay colores sueltos en la plantilla.
 - [ ] Los formularios siguen enviando lo mismo: mismos `name`, `{% csrf_token %}`, `method` y `action`.
 - [ ] Pasan todas las pruebas del proyecto. Si una prueba buscaba un texto que cambió por diseño, se actualiza solo ese texto y se explica en la PR.
 - [ ] Lo que tenga script (menú, Notificaciones, mostrar contraseña, fotos del login) se probó con clic real en el navegador.
