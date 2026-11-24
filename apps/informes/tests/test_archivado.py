@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from apps.informes.models import Informe
 from apps.parametrizacion import servicios
+from apps.parametrizacion.models import Parametro
 from apps.propuestas.models import EstadoTramite
 from apps.propuestas.tests.test_aprobacion import BaseAprobacionTestCase
 from apps.seguimiento.models import Auditoria, HistorialEstado
@@ -89,6 +90,7 @@ class TestArchivarInformes(BaseAprobacionTestCase):
         self.assertEqual(Auditoria.objects.filter(accion=ACCION, tabla_afectada='informe').count(), 1)
 
     def test_sin_parametro_no_archiva_ni_audita(self):
+        Parametro.objects.filter(clave=PLAZO).delete()
         informe = self._rechazado_hace(self.estudiante_1, 'INF-B6B-SIN-PLAZO', 400)
 
         salida = self._ejecutar()
