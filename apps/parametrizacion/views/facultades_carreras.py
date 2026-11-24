@@ -61,25 +61,26 @@ class FacultadFormView(AccesoFacultadesCarrerasRequeridoMixin, View):
 
     def post(self, request, pk=None):
         facultad = get_object_or_404(Facultad, pk=pk) if pk else None
+        estado_anterior = facultad.estado if facultad else None
         form = FacultadForm(request.POST, instance=facultad)
         accion = 'Editar facultad' if facultad else 'Crear facultad'
         if not form.is_valid():
             _auditar(request, accion, 'facultad', facultad, 'Formulario inválido.', 'Fallo')
             return self._mostrar(request, form, facultad)
 
-        antes = facultad.estado if facultad else None
+        estado_nuevo = form.cleaned_data['estado']
+        inactivacion = estado_anterior == Estado.ACTIVO and estado_nuevo == Estado.INACTIVO
+        accion_auditoria = 'Inactivar facultad' if inactivacion else accion
         try:
             with transaction.atomic():
                 guardada = form.save()
-                inactivacion = antes == Estado.ACTIVO and guardada.estado == Estado.INACTIVO
-                accion = 'Inactivar facultad' if inactivacion else accion
                 _auditar(
-                    request, accion, 'facultad', guardada,
+                    request, accion_auditoria, 'facultad', guardada,
                     f'Nombre: {guardada.nombre}, Estado: {guardada.estado}', 'Éxito',
                 )
         except IntegrityError:
             form.add_error('nombre', 'Ya existe una facultad con ese nombre.')
-            _auditar(request, accion, 'facultad', facultad, 'Conflicto al guardar el nombre.', 'Fallo')
+            _auditar(request, accion_auditoria, 'facultad', facultad, 'Conflicto al guardar el nombre.', 'Fallo')
             return self._mostrar(request, form, facultad)
 
         messages.success(request, f'Facultad «{guardada.nombre}» guardada correctamente.')
@@ -103,27 +104,28 @@ class CarreraFormView(AccesoFacultadesCarrerasRequeridoMixin, View):
 
     def post(self, request, pk=None):
         carrera = get_object_or_404(Carrera, pk=pk) if pk else None
+        estado_anterior = carrera.estado if carrera else None
         form = CarreraForm(request.POST, instance=carrera)
         accion = 'Editar carrera' if carrera else 'Crear carrera'
         if not form.is_valid():
             _auditar(request, accion, 'carrera', carrera, 'Formulario inválido.', 'Fallo')
             return self._mostrar(request, form, carrera)
 
-        antes = carrera.estado if carrera else None
+        estado_nuevo = form.cleaned_data['estado']
+        inactivacion = estado_anterior == Estado.ACTIVO and estado_nuevo == Estado.INACTIVO
+        accion_auditoria = 'Inactivar carrera' if inactivacion else accion
         try:
             with transaction.atomic():
                 guardada = form.save()
-                inactivacion = antes == Estado.ACTIVO and guardada.estado == Estado.INACTIVO
-                accion = 'Inactivar carrera' if inactivacion else accion
                 _auditar(
-                    request, accion, 'carrera', guardada,
+                    request, accion_auditoria, 'carrera', guardada,
                     f'Nombre: {guardada.nombre}, Código: {guardada.codigo}, '
                     f'Facultad: {guardada.facultad.nombre}, Estado: {guardada.estado}',
                     'Éxito',
                 )
         except IntegrityError:
             form.add_error(None, 'No se pudo guardar la carrera. Revise el código y el nombre de la facultad.')
-            _auditar(request, accion, 'carrera', carrera, 'Conflicto al guardar la carrera.', 'Fallo')
+            _auditar(request, accion_auditoria, 'carrera', carrera, 'Conflicto al guardar la carrera.', 'Fallo')
             return self._mostrar(request, form, carrera)
 
         messages.success(request, f'Carrera «{guardada.nombre}» guardada correctamente.')
