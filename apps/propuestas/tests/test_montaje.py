@@ -36,7 +36,11 @@ from apps.propuestas.forms.montaje import (
     PropuestaMontajeForm,
 )
 from apps.propuestas.models import EstadoTramite, Propuesta, SectorEntidad
-from apps.propuestas.services.montaje import PlantillaInvalidaError, extraer_datos_plantilla
+from apps.propuestas.services.montaje import (
+    CAMPOS_PLANTILLA_REQUERIDOS,
+    PlantillaInvalidaError,
+    extraer_datos_plantilla,
+)
 from apps.seguimiento.models import Auditoria, HistorialEstado, Notificacion
 from apps.usuarios.models import Estado, Rol
 
@@ -390,6 +394,43 @@ class TestMontajeVistasYFlujos(BaseMontajeTestCase):
         propuesta = Propuesta.objects.filter(proceso=self.proceso).first()
         self.assertIsNotNone(propuesta)
         self.assertEqual(propuesta.version_plantilla, version)
+
+    def test_pantalla_montaje_incluye_enlace_descarga_plantilla(self):
+        """Verifica que la pantalla de montaje contiene el botón de descarga con la ruta oficial."""
+        self.client.force_login(self.user_estudiante)
+        url = reverse('propuestas:montaje')
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        url_descarga = reverse('parametrizacion:plantilla_propuesta_estudiante')
+        self.assertContains(resp, url_descarga)
+        self.assertContains(resp, 'Descargar plantilla')
+
+    def test_estudiante_descarga_plantilla_y_autocompleta_16_campos(self):
+        """Como estudiante, descarga la plantilla, la diligencia, la sube con Autocompletar desde Word y ve los 16 campos llenos."""
+        self.client.force_login(self.user_estudiante)
+        url_descarga = reverse('parametrizacion:plantilla_propuesta_estudiante')
+        resp_descarga = self.client.get(url_descarga)
+        self.assertEqual(resp_descarga.status_code, 200)
+        self.assertTrue(len(resp_descarga.content) > 0)
+
+        archivo = SimpleUploadedFile(
+            'plantilla_propuesta_trabajo_social.docx',
+            resp_descarga.content,
+            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        )
+        url_montaje = reverse('propuestas:montaje')
+        resp_post = self.client.post(
+            url_montaje,
+            {'accion': 'importar_word', 'archivo': archivo},
+            follow=True,
+        )
+        self.assertEqual(resp_post.status_code, 200)
+        self.assertContains(resp_post, 'Se autocompletaron')
+        form = resp_post.context['form']
+        for campo in CAMPOS_PLANTILLA_REQUERIDOS:
+            self.assertTrue(form.initial.get(campo), f'El campo {campo} debe estar lleno')
+        self.assertTrue(form.initial.get('fecha_inicio'))
+        self.assertTrue(form.initial.get('fecha_fin'))
 
     def test_carga_word_corrupto_rechaza_sin_error_500_y_audita_fallo(self):
         """Un Word con contenido corrupto se rechaza con MSG-01-03 sin error 500 y se audita Fallo."""

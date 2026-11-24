@@ -44,7 +44,16 @@ ETIQUETAS_CAMPOS: dict[str, str] = {
     'Unidad': 'unidad',
 }
 
-# Todos los campos que deben estar presentes para que la plantilla sea válida
+# Etiquetas opcionales de fecha acordadas en revisión R2
+ETIQUETAS_FECHAS: dict[str, str] = {
+    'Fecha estimada de inicio': 'fecha_inicio',
+    'Fecha estimada de finalización': 'fecha_fin',
+    'Fecha de inicio': 'fecha_inicio',
+    'Fecha de finalización': 'fecha_fin',
+    'Fecha de fin': 'fecha_fin',
+}
+
+# Todos los campos obligatorios que deben estar presentes para que la plantilla sea válida
 CAMPOS_PLANTILLA_REQUERIDOS: frozenset[str] = frozenset(ETIQUETAS_CAMPOS.values())
 
 
@@ -54,10 +63,22 @@ def normalizar_etiqueta(texto: str) -> str:
     return re.sub(r'[\s:._\-]+', ' ', t).strip()
 
 
+def _normalizar_fecha_str(texto: str) -> str:
+    """Normaliza cadenas de fecha (DD/MM/YYYY o YYYY-MM-DD) al estándar ISO YYYY-MM-DD."""
+    t = texto.strip()
+    m = re.match(r'^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$', t)
+    if m:
+        dia, mes, anio = m.groups()
+        return f'{anio}-{int(mes):02d}-{int(dia):02d}'
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', t):
+        return t
+    return t
+
+
 # Lookup normalizado: texto normalizado -> campo del modelo
 _LOOKUP: dict[str, str] = {
     normalizar_etiqueta(etiqueta): campo
-    for etiqueta, campo in ETIQUETAS_CAMPOS.items()
+    for etiqueta, campo in {**ETIQUETAS_CAMPOS, **ETIQUETAS_FECHAS}.items()
 }
 
 # Mapeo normalizado -> valor oficial de SectorEntidad ('Público' / 'Privado')
@@ -195,6 +216,11 @@ def _extraer_con_xml(archivo_bytes: BytesIO) -> tuple[dict[str, str], list[str]]
             f'{MSG_01_03} (Etiquetas no encontradas: {nombres_faltantes})',
             detalle_auditoria=f'Faltan etiquetas requeridas: {nombres_faltantes}',
         )
+
+    # --- Normalizar fechas opcionales (R2) ---
+    for c in ('fecha_inicio', 'fecha_fin'):
+        if c in datos and datos[c]:
+            datos[c] = _normalizar_fecha_str(datos[c])
 
     # --- Validar sector_entidad ---
     avisos: list[str] = []
