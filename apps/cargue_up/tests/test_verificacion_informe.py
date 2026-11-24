@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.cargue_up.forms.verificacion_informe import (
+    ACCION_AUDITORIA_REAPERTURA,
     MSG_09_01,
     MSG_09_02,
     MSG_09_04,
@@ -20,12 +21,13 @@ from apps.cargue_up.forms.verificacion_informe import (
     MSG_09_CORRECCION,
     MSG_09_CORRECCION_NO_DISPONIBLE,
     MSG_09_ERROR,
+    resultado_de_correccion,
 )
 from apps.cargue_up.models import CargueUp, EstadoVerificacion, HistorialCargueUp
 from apps.informes.models import Informe
 from apps.parametrizacion.models import Carrera, EstadoPeriodo, Facultad, PeriodoAcademico
 from apps.personas.models import Director, DirectorCarrera, Estudiante, EstudianteCarrera
-from apps.procesos.models import ProcesoTrabajoSocial
+from apps.procesos.models import EstadoAvance, ProcesoTrabajoSocial
 from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.seguimiento.models import Auditoria, HistorialEstado, Notificacion
 from apps.usuarios.models import Permiso, Rol, RolPermiso
@@ -154,14 +156,20 @@ class BaseVerificacionTests(TestCase):
             follow=True,
         )
 
-    def corregir(self, informe, motivo='', observacion='', id_cargue=None):
+    def corregir(self, informe, motivo='', observacion='', id_cargue=None, resultado=None):
+        cargue = self.ultimo_cargue(informe)
+        if resultado is None and cargue:
+            resultado = resultado_de_correccion(informe.estado, cargue.estado_verificacion)
+        datos = {
+            'id_cargue': id_cargue or (cargue.pk if cargue else None),
+            'motivo': motivo,
+            'observacion': observacion,
+        }
+        if resultado is not None:
+            datos['resultado'] = resultado
         return self.client.post(
             self.url_corregir(informe),
-            {
-                'id_cargue': id_cargue or self.ultimo_cargue(informe).pk,
-                'motivo': motivo,
-                'observacion': observacion,
-            },
+            datos,
             follow=True,
         )
 
@@ -632,6 +640,105 @@ class CorreccionTests(BaseVerificacionTests):
         self.assertEqual(cargue.estado_verificacion, APROBADO_UP)
         self.assertEqual(HistorialCargueUp.objects.count(), 0)
 
+    def test_envio_duplicado_de_correccion_es_rechazado_y_no_duplica(self):
+        informe = self.crear_informe('corr_dup')
+        cargue = self.verificar_directo(informe, APROBADO_UP)
+        self.entrar_como_director()
+
+        # Primer envío de la corrección
+        respuesta1 = self.corregir(
+            informe, motivo='Error de archivo', observacion='No coincide', resultado=RECHAZADO_UP
+        )
+        self.assertIn(MSG_09_CORRECCION, self.mensajes(respuesta1))
+
+        informe.refresh_from_db()
+        self.assertEqual(informe.estado, EstadoTramite.APROBADO)
+        self.assertEqual(HistorialCargueUp.objects.filter(cargue_up=cargue).count(), 1)
+        self.assertEqual(Notificacion.objects.filter(informe=informe).count(), 1)
+
+        # Segundo envío con los mismos datos originales (intento duplicado)
+        respuesta2 = self.client.post(
+            self.url_corregir(informe),
+            {
+                'id_cargue': cargue.pk,
+                'resultado': RECHAZADO_UP,
+                'motivo': 'Error de archivo',
+                'observacion': 'No coincide',
+            },
+            follow=True,
+        )
+        self.assertIn(MSG_09_CORRECCION_NO_DISPONIBLE, self.mensajes(respuesta2))
+
+        # El informe no debe revertirse a Aprobado en UP por el segundo envío
+        informe.refresh_from_db()
+        self.assertEqual(informe.estado, EstadoTramite.APROBADO)
+        self.assertEqual(HistorialCargueUp.objects.filter(cargue_up=cargue).count(), 1)
+        self.assertEqual(Notificacion.objects.filter(informe=informe).count(), 1)
+
+    def test_reapertura_proceso_cuando_estudiante_ya_finalizo(self):
+        informe = self.crear_informe('corr_reap')
+        proceso = informe.propuesta.proceso
+        proceso.estado = EstadoAvance.FINALIZADA
+        proceso.fecha_finalizacion = timezone.now()
+        proceso.save(update_fields=['estado', 'fecha_finalizacion'])
+
+        cargue = self.verificar_directo(informe, APROBADO_UP)
+        self.entrar_como_director()
+
+        respuesta = self.corregir(
+            informe,
+            motivo='Revisión posterior detectó inconsistencia',
+            observacion='El informe final no coincide con la versión física',
+            resultado=RECHAZADO_UP,
+        )
+        self.assertIn(MSG_09_CORRECCION, self.mensajes(respuesta))
+
+        # Verificar que el proceso cambió a En curso y fecha_finalizacion es None
+        proceso.refresh_from_db()
+        self.assertEqual(proceso.estado, EstadoAvance.EN_CURSO)
+        self.assertIsNone(proceso.fecha_finalizacion)
+
+        # Verificar registro de auditoría de reapertura
+        auditoria_reap = Auditoria.objects.get(accion=ACCION_AUDITORIA_REAPERTURA)
+        self.assertEqual(auditoria_reap.resultado, 'Éxito')
+        self.assertEqual(auditoria_reap.tabla_afectada, 'proceso_trabajo_social')
+        self.assertEqual(auditoria_reap.id_registro_afectado, proceso.pk)
+        self.assertIn('Finalizada -> En curso', auditoria_reap.detalle)
+        self.assertIn('reapertura', auditoria_reap.detalle)
+
+        # Verificar notificación con aviso de reapertura
+        aviso = Notificacion.objects.get(informe=informe)
+        self.assertIn('tu proceso fue reabierto', aviso.mensaje)
+        self.assertIn('vuelve a cargar el informe en UP', aviso.mensaje)
+
+    def test_correccion_rechazo_proceso_no_finalizado_no_reabre(self):
+        informe = self.crear_informe('corr_no_reap')
+        proceso = informe.propuesta.proceso
+        self.assertEqual(proceso.estado, EstadoAvance.EN_CURSO)
+        self.assertIsNone(proceso.fecha_finalizacion)
+
+        cargue = self.verificar_directo(informe, APROBADO_UP)
+        self.entrar_como_director()
+
+        respuesta = self.corregir(
+            informe,
+            motivo='Corrección habitual',
+            observacion='No coincide',
+            resultado=RECHAZADO_UP,
+        )
+        self.assertIn(MSG_09_CORRECCION, self.mensajes(respuesta))
+
+        proceso.refresh_from_db()
+        self.assertEqual(proceso.estado, EstadoAvance.EN_CURSO)
+        self.assertIsNone(proceso.fecha_finalizacion)
+
+        # No se debe registrar auditoría de reapertura
+        self.assertFalse(Auditoria.objects.filter(accion=ACCION_AUDITORIA_REAPERTURA).exists())
+
+        # Notificación no contiene texto de reapertura
+        aviso = Notificacion.objects.get(informe=informe)
+        self.assertNotIn('reabierto', aviso.mensaje)
+
 
 class PantallaTests(BaseVerificacionTests):
     def test_detalle_ofrece_las_dos_decisiones_cuando_esta_pendiente(self):
@@ -656,3 +763,24 @@ class PantallaTests(BaseVerificacionTests):
         respuesta = self.client.get(self.url_lista)
         self.assertContains(respuesta, 'Estudiante De Otro')
         self.assertNotContains(respuesta, 'Estudiante Mio')
+
+    def test_modales_ubicados_fuera_de_main_vi_body(self):
+        informe = self.crear_informe('modales_test', nombre='Estudiante Modal')
+        self.entrar_como_director()
+        respuesta = self.client.get(self.url_lista)
+        self.assertEqual(respuesta.status_code, 200)
+
+        contenido = respuesta.content.decode('utf-8')
+        pos_main_close = contenido.find('</main>')
+        pos_modal_apr = contenido.find(f'id="modal-apr-{informe.pk}"')
+        pos_modal_rec = contenido.find(f'id="modal-rec-{informe.pk}"')
+
+        self.assertNotEqual(pos_main_close, -1)
+        self.assertNotEqual(pos_modal_apr, -1)
+        self.assertNotEqual(pos_modal_rec, -1)
+        # Los modales deben ubicarse después del cierre de </main>
+        self.assertGreater(pos_modal_apr, pos_main_close)
+        self.assertGreater(pos_modal_rec, pos_main_close)
+        # Ambos botones de confirmación deben estar presentes y funcionales
+        self.assertContains(respuesta, 'Confirmar Aprobado en UP')
+        self.assertContains(respuesta, 'Confirmar Rechazado en UP')
