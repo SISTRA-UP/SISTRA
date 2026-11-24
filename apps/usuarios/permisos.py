@@ -11,6 +11,10 @@ from typing import NamedTuple
 from django.contrib.auth.decorators import login_required, permission_required
 from django.urls import NoReverseMatch, reverse
 
+# «Inicio» no es administración ni un paso del trámite, y en los mockups va
+# suelto arriba, sin rótulo: por eso su grupo no tiene título y el parcial no
+# le pinta encabezado.
+GRUPO_SIN_ROTULO = ''
 GRUPO_ADMINISTRACION = 'Administración'
 GRUPO_TRAMITES = 'Trámites'
 
@@ -25,6 +29,7 @@ class Opcion(NamedTuple):
 # Cada opción se guarda con el permiso que sembró su propio requisito: no se
 # inventan permisos de módulos ajenos ni se decide nada por el nombre del rol.
 OPCIONES_DEL_MENU = (
+    Opcion('dashboard.ver', 'dashboard:inicio', 'Inicio', GRUPO_SIN_ROTULO),
     Opcion('rol.ver', 'usuarios:roles', 'Roles y permisos', GRUPO_ADMINISTRACION),
     Opcion('usuario.ver', 'usuarios:usuarios', 'Usuarios', GRUPO_ADMINISTRACION),
     Opcion(
@@ -33,6 +38,7 @@ OPCIONES_DEL_MENU = (
         'Parametrización',
         GRUPO_ADMINISTRACION,
     ),
+    Opcion('reporte.descargar', 'reportes:reportes', 'Reportes', GRUPO_ADMINISTRACION),
     Opcion(
         'estudiante.registrar',
         'personas:estudiantes',
@@ -45,11 +51,29 @@ OPCIONES_DEL_MENU = (
         'Aprobación de propuestas',
         GRUPO_TRAMITES,
     ),
+    Opcion(
+        'propuesta.aprobar',
+        'cargue_up:verificacion_propuesta',
+        'Verificar cargues de propuestas',
+        GRUPO_TRAMITES,
+    ),
     Opcion('informe.montar', 'informes:montaje', 'Montar informe', GRUPO_TRAMITES),
     Opcion(
         'informe.aprobar',
         'informes:aprobacion',
         'Aprobación de informes',
+        GRUPO_TRAMITES,
+    ),
+    Opcion(
+        'informe.aprobar',
+        'cargue_up:verificacion_informe_lista',
+        'Verificar cargues de informes',
+        GRUPO_TRAMITES,
+    ),
+    Opcion(
+        'informe.aprobar',
+        'cargue_up:documentos_extra_recibidos',
+        'Documentos extra recibidos',
         GRUPO_TRAMITES,
     ),
     Opcion(

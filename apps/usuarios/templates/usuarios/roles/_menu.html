@@ -2,7 +2,9 @@
 {% if grupos_del_menu %}
   <nav aria-label="Opciones disponibles para tu rol">
     {% for grupo in grupos_del_menu %}
-      <p class="text-uppercase small fw-semibold text-body-secondary mb-1 mt-3">{{ grupo.titulo }}</p>
+      {% if grupo.titulo %}
+        <p class="text-uppercase small fw-semibold text-body-secondary mb-1 mt-3">{{ grupo.titulo }}</p>
+      {% endif %}
       <ul class="nav nav-pills flex-row flex-wrap gap-1 mb-0">
         {% for opcion in grupo.opciones %}
           <li class="nav-item">
