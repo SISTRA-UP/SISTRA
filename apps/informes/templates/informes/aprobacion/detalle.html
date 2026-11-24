@@ -171,6 +171,16 @@
             </div>
 
             <div class="modal-footer">
+                <a
+                    class="btn btn-outline-primary"
+                    href="{% url 'informes:documento' informe.pk %}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >Ver PDF</a>
+                <a
+                    class="btn btn-outline-primary"
+                    href="{% url 'informes:documento' informe.pk %}?descargar=1"
+                >Descargar PDF</a>
                 <button
                     type="button"
                     class="btn btn-secondary"
