@@ -105,11 +105,6 @@ class AccionMasivaForm(forms.Form):
         tipo_rechazo = self.cleaned_data.get('tipo_rechazo')
         observacion = self.cleaned_data.get('observacion', '')
 
-        propuestas = list(
-            Propuesta.objects.filter(pk__in=ids, proceso__estudiante_carrera__carrera=carrera)
-            .select_related('proceso__estudiante_carrera__estudiante__usuario')
-        )
-
         accion_auditoria, estado_destino = self.AUDITORIA_BLOQUEO[accion]
 
         def bloquear(motivo: str, afectadas: list[Propuesta], excepcion=ValidationError, ajenos=()):
@@ -137,49 +132,55 @@ class AccionMasivaForm(forms.Form):
                 )
             raise excepcion(motivo)
 
-        if len(propuestas) != len(ids):
-            propias = {p.pk for p in propuestas}
-            bloquear(
-                'Una o más propuestas seleccionadas no pertenecen a la carrera activa del Director.',
-                propuestas,
-                ajenos=[i for i in ids if i not in propias],
-            )
+        def revisar(propuestas: list[Propuesta]):
+            """Devuelve (motivo, afectadas, excepcion, ajenos) del primer bloqueo, o None si el lote cumple."""
+            if len(propuestas) != len(ids):
+                propias = {p.pk for p in propuestas}
+                return (
+                    'Una o más propuestas seleccionadas no pertenecen a la carrera activa del Director.',
+                    propuestas, ValidationError, [i for i in ids if i not in propias],
+                )
 
-        # Validar compatibilidad de estados según acción (RN-02-03)
-        if accion in [self.ACCION_APROBAR, self.ACCION_RECHAZAR]:
-            if any(p.estado != EstadoTramite.EN_REVISION for p in propuestas):
-                bloquear("Para aprobar o rechazar de forma masiva, todas las propuestas deben estar exclusivamente en estado 'En revisión'.", propuestas)
-        elif accion == self.ACCION_REACTIVAR:
-            if any(p.estado != EstadoTramite.RECHAZADO or p.archivada for p in propuestas):
-                bloquear("Para reactivar de forma masiva, todas las propuestas deben estar en estado 'Rechazado' y no estar archivadas.", propuestas)
+            # Validar compatibilidad de estados según acción (RN-02-03)
+            if accion in [self.ACCION_APROBAR, self.ACCION_RECHAZAR]:
+                if any(p.estado != EstadoTramite.EN_REVISION for p in propuestas):
+                    return ("Para aprobar o rechazar de forma masiva, todas las propuestas deben estar exclusivamente en estado 'En revisión'.", propuestas, ValidationError, ())
+            elif accion == self.ACCION_REACTIVAR:
+                if any(p.estado != EstadoTramite.RECHAZADO or p.archivada for p in propuestas):
+                    return ("Para reactivar de forma masiva, todas las propuestas deben estar en estado 'Rechazado' y no estar archivadas.", propuestas, ValidationError, ())
 
-            # Validar colisión RG-05 / EX-02 en lote (sin N+1)
-            procesos_ids = [p.proceso_id for p in propuestas]
-            if len(procesos_ids) != len(set(procesos_ids)):
-                nombre = propuestas[0].proceso.estudiante_carrera.estudiante.usuario.nombre
-                bloquear(MSG_02_06.format(nombre=nombre), propuestas, ReactivacionInvalidaError)
+                # Validar colisión RG-05 / EX-02 en lote (sin N+1)
+                procesos_ids = [p.proceso_id for p in propuestas]
+                if len(procesos_ids) != len(set(procesos_ids)):
+                    nombre = propuestas[0].proceso.estudiante_carrera.estudiante.usuario.nombre
+                    return (MSG_02_06.format(nombre=nombre), propuestas, ReactivacionInvalidaError, ())
 
-            otras = list(
-                Propuesta.objects.filter(proceso_id__in=procesos_ids, archivada=False)
-                .exclude(estado=EstadoTramite.RECHAZADO)
-                .exclude(pk__in=ids)
-                .select_related('proceso__estudiante_carrera__estudiante__usuario')
-            )
-            if otras:
-                colision = otras[0]
-                nombre = colision.proceso.estudiante_carrera.estudiante.usuario.nombre
-                prop_lote = next(p for p in propuestas if p.proceso_id == colision.proceso_id)
-                bloquear(MSG_02_06.format(nombre=nombre), [prop_lote], ReactivacionInvalidaError)
+                otras = list(
+                    Propuesta.objects.filter(proceso_id__in=procesos_ids, archivada=False)
+                    .exclude(estado=EstadoTramite.RECHAZADO)
+                    .exclude(pk__in=ids)
+                    .select_related('proceso__estudiante_carrera__estudiante__usuario')
+                )
+                if otras:
+                    colision = otras[0]
+                    nombre = colision.proceso.estudiante_carrera.estudiante.usuario.nombre
+                    prop_lote = next(p for p in propuestas if p.proceso_id == colision.proceso_id)
+                    return (MSG_02_06.format(nombre=nombre), [prop_lote], ReactivacionInvalidaError, ())
+            return None
 
+        # SIS-53 · E1: se revisa con las filas ya bloqueadas, así un doble envío u otro Director no
+        # pueden cambiarlas entre la revisión y el cambio. Todo o nada.
         with transaction.atomic():
-            propuestas_mutar = list(
-                Propuesta.objects.select_for_update()
-                .filter(pk__in=ids)
+            propuestas = list(
+                Propuesta.objects.select_for_update(of=('self',))
+                .filter(pk__in=ids, proceso__estudiante_carrera__carrera=carrera)
                 .select_related('proceso__estudiante_carrera__estudiante__usuario')
             )
+            bloqueo = revisar(propuestas)
 
             procesadas = 0
-            for prop in propuestas_mutar:
+            # Con un bloqueo no se cambia ninguna (todo o nada).
+            for prop in [] if bloqueo else propuestas:
                 if accion == self.ACCION_APROBAR:
                     estado_nuevo, tipo_accion, accion_aud = EstadoTramite.APROBADO, 'Aprobación masiva', 'APROBACION_MASIVA'
                     motivo_rea, obs_hist = '', observacion
@@ -206,4 +207,8 @@ class AccionMasivaForm(forms.Form):
                 )
                 procesadas += 1
 
-            return procesadas
+        # Fuera del bloqueo: si se auditara dentro, el rollback borraría la fila del intento.
+        if bloqueo:
+            motivo, afectadas, excepcion, ajenos = bloqueo
+            bloquear(motivo, afectadas, excepcion, ajenos)
+        return procesadas
