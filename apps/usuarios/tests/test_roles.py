@@ -12,9 +12,16 @@ from django.contrib.auth import get_user_model
 from django.core import mail
 from django.db import connection
 from django.db.models import ProtectedError
-from django.test import Client, TestCase, TransactionTestCase
+from django.template.loader import render_to_string
+from django.test import (
+    Client,
+    RequestFactory,
+    TestCase,
+    TransactionTestCase,
+    override_settings,
+)
 from django.test.utils import CaptureQueriesContext
-from django.urls import reverse
+from django.urls import path, reverse
 from django.utils import timezone
 
 from apps.parametrizacion.models import Carrera, Facultad
@@ -281,6 +288,153 @@ class ReenvioDeCredencialesDelAdmo(BaseRoles):
             self.client.post(self.url_reenviar(self.sin_entrar)).status_code, 403
         )
         self.assertEqual(len(mail.outbox), 0)
+
+
+def _vista_que_revienta(request):
+    """Solo existe para probar el camino real del 500 (SIS-73 · R8).
+
+    No hay ninguna vista del sistema que levante una excepción, y crear una
+    estaría fuera de alcance. Parchear una existente no sirve: el `urls.py` ya
+    guarda la referencia a la función. Así que la vista y su `urlconf` viven
+    aquí, en las pruebas, y se aplican con `override_settings`.
+    """
+    raise RuntimeError('error de prueba para el 500')
+
+
+# Tupla y no lista a propósito: `get_resolver` cachea por `urlconf` y exige que
+# sea hashable.
+URLCONF_QUE_REVIENTA = (path('revienta/', _vista_que_revienta),)
+
+
+class PaginasDeError(BaseRoles):
+    """SIS-73 · R8 · las cuatro páginas de error, en español.
+
+    Antes no existía ninguna: con `DEBUG=False` salían las de Django, en inglés
+    y sin el mensaje del BRD. El 403 es el que más importa porque lo produce
+    `requiere_permiso`, el decorador de SISTRA-10, en todo el sistema.
+    """
+
+    # MSG-11-04 del BRD (p. 69, Tabla 38), con el objeto de la frase
+    # generalizado: el mensaje está redactado para Parametrización y esta
+    # página sale en cualquier pantalla.
+    TITULO_403 = 'Sin permiso'
+    TEXTO_403 = 'No tienes permiso para acceder a esta página.'
+
+    def setUp(self):
+        super().setUp()
+        rol_pelado = self.crear_rol_con('Sin permisos de roles')
+        self.colado = self.crear_usuario(
+            'tito.cano@unipamplona.edu.co',
+            nombre='Tito Cano',
+            cedula='1020304060',
+            rol=rol_pelado,
+        )
+
+    # --- C1 y C2 · el 403 con MSG-11-04 y el botón «Volver» ---
+
+    @override_settings(DEBUG=False)
+    def test_sin_permiso_sale_el_403_con_el_mensaje_del_brd(self):
+        self.client.force_login(self.colado)
+        respuesta = self.client.get(reverse('usuarios:roles'))
+
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertContains(respuesta, self.TITULO_403, status_code=403)
+        self.assertContains(respuesta, self.TEXTO_403, status_code=403)
+        # Y ya no la de Django, que está en inglés.
+        self.assertNotContains(respuesta, 'Forbidden', status_code=403)
+
+    @override_settings(DEBUG=False)
+    def test_el_403_trae_el_boton_volver(self):
+        # «Volver» es la acción que el BRD asocia a MSG-11-04.
+        self.client.force_login(self.colado)
+        respuesta = self.client.get(reverse('usuarios:roles'))
+        self.assertContains(respuesta, 'Volver', status_code=403)
+
+    # --- C3 · la 404 en español ---
+
+    @override_settings(DEBUG=False)
+    def test_una_ruta_que_no_existe_sale_en_espanol(self):
+        respuesta = self.client.get('/esta-ruta-no-existe-en-sistra/')
+
+        self.assertEqual(respuesta.status_code, 404)
+        self.assertContains(respuesta, 'no encontrada', status_code=404)
+        self.assertNotContains(respuesta, 'Not Found', status_code=404)
+        self.assertNotContains(respuesta, 'Page not found', status_code=404)
+
+    # --- C4 · la de CSRF en español ---
+
+    @override_settings(DEBUG=False)
+    def test_un_post_sin_token_csrf_sale_en_espanol(self):
+        # El fallo de CSRF lo decide el middleware, antes de la vista, así que
+        # sirve cualquier ruta que acepte POST sin pedir sesión.
+        estricto = Client(enforce_csrf_checks=True)
+        respuesta = estricto.post(reverse('usuarios:login'), {})
+
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertContains(respuesta, 'formulario', status_code=403)
+        self.assertNotContains(respuesta, 'CSRF verification failed', status_code=403)
+        self.assertNotContains(respuesta, 'Forbidden', status_code=403)
+
+    # --- C5 · el camino real del 500 ---
+
+    @override_settings(DEBUG=False, ROOT_URLCONF=URLCONF_QUE_REVIENTA)
+    def test_el_500_sale_en_espanol(self):
+        # Sin esto el cliente de pruebas vuelve a lanzar la excepción en vez de
+        # dejar que Django renderice su página de error.
+        self.client.raise_request_exception = False
+        respuesta = self.client.get('/revienta/')
+
+        self.assertEqual(respuesta.status_code, 500)
+        self.assertContains(respuesta, 'Error del sistema', status_code=500)
+        self.assertNotContains(respuesta, 'Server Error', status_code=500)
+
+    # --- C6 · ninguna de las cuatro consulta la base ---
+
+    def test_las_cuatro_paginas_no_consultan_la_base(self):
+        # Es lo que la tarjeta exige del 500: si la página de error consultara
+        # la base, fallaría justo cuando el error ES de la base. Vale para las
+        # cuatro, así que se comprueba en las cuatro.
+        for plantilla in ('403.html', '404.html', '500.html', '403_csrf.html'):
+            with self.subTest(plantilla=plantilla):
+                with self.assertNumQueries(0):
+                    render_to_string(plantilla)
+
+    def test_no_consultan_la_base_ni_con_usuario_en_el_contexto(self):
+        # La de arriba renderiza **sin petición**, así que el menú por permisos
+        # recibiría `None` y devolvería `[]` sin consultar: no cazaría un
+        # `{% include %}` colado. Lo encontró la revisión y tenía razón. Esta sí
+        # lo caza: con petición y usuario autenticado, incluir el menú consulta.
+        # El 500 no entra porque su camino real renderiza sin petición
+        # (`django/views/defaults.py`: `template.render()` a secas).
+        peticion = RequestFactory().get('/')
+        peticion.user = self.colado
+        for plantilla in ('403.html', '404.html', '403_csrf.html'):
+            with self.subTest(plantilla=plantilla):
+                with self.assertNumQueries(0):
+                    render_to_string(plantilla, request=peticion)
+
+    # --- C7 y C8 · heredan de base.html y no traen estilos propios ---
+
+    def test_las_cuatro_heredan_de_base_html(self):
+        # Es la condición con la que se desbloqueó la tarjeta: solo llenan
+        # `{% block contenido %}`, así que tomarán el diseño nuevo sin tocarlas.
+        for plantilla in ('403.html', '404.html', '500.html', '403_csrf.html'):
+            with self.subTest(plantilla=plantilla):
+                html = render_to_string(plantilla)
+                # El CSS de Bootstrap solo lo pone base.html.
+                self.assertIn('bootstrap@5.3.3', html)
+                self.assertIn('<html lang="es">', html)
+
+    def test_las_cuatro_no_traen_estilos_propios(self):
+        for plantilla in ('403.html', '404.html', '500.html', '403_csrf.html'):
+            with self.subTest(plantilla=plantilla):
+                html = render_to_string(plantilla)
+                self.assertNotIn('<style', html)
+                self.assertNotIn('style=', html)
+                # Bootstrap se enlaza una sola vez, en base.html, y no se
+                # añade ninguna otra hoja de estilos.
+                self.assertEqual(html.count('bootstrap@5.3.3/dist/css'), 1)
+                self.assertEqual(html.count('<link'), 1)
 
 
 class SiembraDeRolesYPermisos(BaseRoles):
