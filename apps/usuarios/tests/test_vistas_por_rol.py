@@ -11,11 +11,14 @@ from django.contrib.auth.models import AnonymousUser
 from django.template import Context, Template
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
-from apps.personas.models import Estudiante
+from apps.parametrizacion.models import Carrera, Facultad
+from apps.personas.models import Director, DirectorCarrera, Estudiante
 from apps.usuarios.models import Estado, Permiso, Rol, RolPermiso
 from apps.usuarios.permisos import (
     GRUPO_ADMINISTRACION,
+    GRUPO_SIN_ROTULO,
     GRUPO_TRAMITES,
     OPCIONES_DEL_MENU,
     Opcion,
@@ -97,12 +100,27 @@ class BaseVistasPorRol(TestCase):
 class MenuPorPermisos(BaseVistasPorRol):
     """C1 y C2: el menú se arma por permiso, no por el nombre del rol."""
 
-    def test_cada_opcion_aparece_solo_con_su_permiso(self):
-        for opcion in OPCIONES_DEL_MENU:
-            with self.subTest(permiso=opcion.permiso):
-                rol = self.crear_rol_con(f'Solo {opcion.permiso}', opcion.permiso)
-                usuario = self.crear_usuario(rol)
-                self.assertEqual(self.etiquetas_de(usuario), [opcion.etiqueta])
+    def test_cada_permiso_abre_exactamente_sus_opciones(self):
+        """Un permiso ya no es una opción: `informe.aprobar` abre tres.
+
+        Aprobación de informes (SISTRA-07), Verificar cargues de informes
+        (SISTRA-09) y Documentos extra recibidos (PRO-16) son tres pantallas
+        distintas que exigen el mismo permiso, así que la prueba compara
+        contra todas las opciones de ese permiso, no contra una.
+        """
+        for permiso in dict.fromkeys(opcion.permiso for opcion in OPCIONES_DEL_MENU):
+            with self.subTest(permiso=permiso):
+                usuario = self.crear_usuario(
+                    self.crear_rol_con(f'Solo {permiso}', permiso)
+                )
+                self.assertEqual(
+                    self.etiquetas_de(usuario),
+                    [
+                        opcion.etiqueta
+                        for opcion in OPCIONES_DEL_MENU
+                        if opcion.permiso == permiso
+                    ],
+                )
 
     def test_un_rol_sin_permisos_no_ve_ninguna_opcion(self):
         usuario = self.crear_usuario(self.crear_rol_con('Sin permisos'))
@@ -115,7 +133,12 @@ class MenuPorPermisos(BaseVistasPorRol):
 
         self.assertEqual(
             self.etiquetas_de(usuario),
-            ['Roles y permisos', 'Aprobación de informes'],
+            [
+                'Roles y permisos',
+                'Aprobación de informes',
+                'Verificar cargues de informes',
+                'Documentos extra recibidos',
+            ],
         )
         self.assertNotIn('Usuarios', self.etiquetas_de(usuario))
 
@@ -123,7 +146,7 @@ class MenuPorPermisos(BaseVistasPorRol):
         usuario = self.crear_usuario(self.rol_administrador)
         self.assertEqual(
             self.etiquetas_de(usuario),
-            ['Roles y permisos', 'Usuarios', 'Parametrización'],
+            ['Inicio', 'Roles y permisos', 'Usuarios', 'Parametrización', 'Reportes'],
         )
 
     def test_el_director_ve_lo_suyo(self):
@@ -131,19 +154,102 @@ class MenuPorPermisos(BaseVistasPorRol):
         self.assertEqual(
             self.etiquetas_de(usuario),
             [
+                'Inicio',
+                'Reportes',
                 'Registrar estudiantes',
                 'Aprobación de propuestas',
+                'Verificar cargues de propuestas',
                 'Aprobación de informes',
+                'Verificar cargues de informes',
+                'Documentos extra recibidos',
             ],
         )
+        # Lo pide la tarjeta: el Director no administra el sistema.
+        self.assertNotIn('Parametrización', self.etiquetas_de(usuario))
 
     def test_el_estudiante_ve_lo_suyo(self):
         usuario = self.crear_usuario(self.rol_estudiante)
+        etiquetas = self.etiquetas_de(usuario)
         self.assertEqual(
-            self.etiquetas_de(usuario),
-            ['Montar informe', 'Cargue en la Plataforma UP'],
+            etiquetas,
+            ['Inicio', 'Montar informe', 'Cargue en la Plataforma UP'],
         )
-        self.assertNotIn('Roles y permisos', self.etiquetas_de(usuario))
+        self.assertNotIn('Roles y permisos', etiquetas)
+        # Lo pide la tarjeta: ninguna aprobación, ni de propuestas ni de
+        # informes, ni la verificación de cargues del Director.
+        self.assertEqual(
+            [etiqueta for etiqueta in etiquetas if 'probación' in etiqueta], []
+        )
+        self.assertEqual(
+            [etiqueta for etiqueta in etiquetas if etiqueta.startswith('Verificar')], []
+        )
+
+    def test_inicio_apunta_al_dashboard_y_va_sin_rotulo(self):
+        """«Inicio» no es administración ni un paso del trámite.
+
+        En los mockups va suelto arriba, sin rótulo de grupo, así que su grupo
+        no tiene título y el parcial no le pinta encabezado.
+        """
+        usuario = self.crear_usuario(self.crear_rol_con('Solo inicio', 'dashboard.ver'))
+        grupos = opciones_visibles(usuario)
+
+        self.assertEqual([grupo['titulo'] for grupo in grupos], [GRUPO_SIN_ROTULO])
+        self.assertEqual(
+            grupos[0]['opciones'],
+            [{'etiqueta': 'Inicio', 'url': reverse('dashboard:inicio')}],
+        )
+
+    def test_cada_opcion_nueva_apunta_a_la_pantalla_que_le_toca(self):
+        """Que la ruta resuelva no basta: tiene que ser la de su requisito.
+
+        Con la ruta cambiada, el menú llevaría a otra pantalla y las pruebas de
+        etiquetas pasarían igual, porque solo miran el texto.
+        """
+        esperado = {
+            'Inicio': ('dashboard:inicio', GRUPO_SIN_ROTULO),
+            'Reportes': ('reportes:reportes', GRUPO_ADMINISTRACION),
+            'Verificar cargues de propuestas': (
+                'cargue_up:verificacion_propuesta',
+                GRUPO_TRAMITES,
+            ),
+            'Verificar cargues de informes': (
+                'cargue_up:verificacion_informe_lista',
+                GRUPO_TRAMITES,
+            ),
+            'Documentos extra recibidos': (
+                'cargue_up:documentos_extra_recibidos',
+                GRUPO_TRAMITES,
+            ),
+        }
+        catalogo = {opcion.etiqueta: opcion for opcion in OPCIONES_DEL_MENU}
+
+        for etiqueta, (ruta, grupo) in esperado.items():
+            with self.subTest(opcion=etiqueta):
+                self.assertIn(etiqueta, catalogo)
+                self.assertEqual(catalogo[etiqueta].ruta, ruta)
+                self.assertEqual(catalogo[etiqueta].grupo, grupo)
+
+    def test_el_permiso_de_cada_opcion_nueva_es_el_que_exige_su_pantalla(self):
+        """El permiso no se elige: se copia del de la pantalla.
+
+        Los dos de «Verificar cargues» no están en un decorador sino dentro de
+        `director_y_carreras`, que lanza 403 si falta; se leen de la constante
+        del propio módulo para que un cambio allá rompa aquí.
+        """
+        from apps.cargue_up.forms.verificacion_informe import (
+            PERMISO_VERIFICAR as PERMISO_INFORME,
+        )
+        from apps.cargue_up.forms.verificacion_propuesta import (
+            PERMISO_VERIFICAR as PERMISO_PROPUESTA,
+        )
+
+        catalogo = {opcion.etiqueta: opcion.permiso for opcion in OPCIONES_DEL_MENU}
+
+        self.assertEqual(catalogo['Verificar cargues de propuestas'], PERMISO_PROPUESTA)
+        self.assertEqual(catalogo['Verificar cargues de informes'], PERMISO_INFORME)
+        self.assertEqual(catalogo['Inicio'], 'dashboard.ver')
+        self.assertEqual(catalogo['Reportes'], 'reporte.descargar')
+        self.assertEqual(catalogo['Documentos extra recibidos'], 'informe.aprobar')
 
     def test_montar_informe_sale_solo_con_su_permiso(self):
         """Los dos casos del criterio, en una sola prueba."""
@@ -203,12 +309,14 @@ class MenuPorPermisos(BaseVistasPorRol):
             self.assertEqual(opciones_visibles(usuario), [])
 
     def test_cada_permiso_del_catalogo_esta_sembrado(self):
-        """Diagnóstico claro: cinco de los ocho permisos los siembran otros.
+        """Diagnóstico claro: siete de los diez permisos los siembran otros.
 
-        `sistema.parametrizar` (SISTRA-11), `propuesta.aprobar` (SISTRA-02),
-        `informe.montar` (SISTRA-06), `informe.aprobar` (SISTRA-07) y
-        `cargue_up.avisar` (SISTRA-04) vienen de migraciones de datos ajenas.
-        Si una se cae, esta prueba dice cuál.
+        Las 13 opciones usan 10 permisos distintos, y solo tres son de
+        SISTRA-10. Vienen de migraciones de datos ajenas `sistema.parametrizar`
+        (SISTRA-11), `propuesta.aprobar` (SISTRA-02), `informe.montar`
+        (SISTRA-06), `informe.aprobar` (SISTRA-07), `cargue_up.avisar`
+        (SISTRA-04), `dashboard.ver` (SISTRA-14) y `reporte.descargar`
+        (SISTRA-12). Si una se cae, esta prueba dice cuál.
         """
         sembrados = set(Permiso.objects.values_list('nombre', flat=True))
         for opcion in OPCIONES_DEL_MENU:
@@ -248,6 +356,19 @@ class ParcialDelMenu(BaseVistasPorRol):
         self.assertNotIn('<nav', dibujado)
         self.assertEqual(dibujado.strip(), '')
 
+    def test_el_grupo_sin_titulo_no_deja_un_rotulo_vacio(self):
+        """«Inicio» va suelto arriba: sin su `{% if %}`, el parcial pintaría
+        un rótulo en blanco encima."""
+        usuario = self.crear_usuario(self.crear_rol_con('Solo inicio', 'dashboard.ver'))
+        peticion = self.peticion_de(usuario)
+
+        dibujado = Template(PARCIAL).render(Context({'request': peticion}))
+
+        self.assertIn('Inicio', dibujado)
+        # No se mira la clase del rótulo sino el `<p>`: si R10 le cambia el
+        # estilo, la prueba tiene que seguir cazando el rótulo en blanco.
+        self.assertNotIn('<p', dibujado)
+
     def test_marca_la_opcion_de_la_pagina_actual(self):
         usuario = self.crear_usuario(self.rol_administrador)
         peticion = self.peticion_de(usuario, reverse('usuarios:roles'))
@@ -275,6 +396,30 @@ class ParcialDelMenu(BaseVistasPorRol):
 
 class AccesoALasUrlProtegidas(BaseVistasPorRol):
     """C3: sin sesión va al login; con sesión y sin el permiso, 403."""
+
+    def abrir_sin_tropiezos(self, destinos):
+        """Cada destino abre: ni 403 ni rebote al login.
+
+        Se sigue la redirección porque «Inicio» manda al panel del rol, que es
+        otra URL; lo que no puede pasar es terminar en el login. Se compara con
+        `startswith` y no por igualdad: `login_required` redirige a
+        `/usuarios/login/?next=...`, que no es igual a la ruta del login, y el
+        login responde 200, así que por igualdad el rebote pasaría inadvertido.
+        """
+        login = reverse('usuarios:login')
+        self.assertTrue(destinos)
+        for destino in destinos:
+            with self.subTest(url=destino):
+                respuesta = self.client.get(destino, follow=True)
+
+                self.assertEqual(respuesta.status_code, 200)
+                self.assertEqual(
+                    [
+                        paso for paso, _ in respuesta.redirect_chain
+                        if paso.startswith(login)
+                    ],
+                    [],
+                )
 
     def test_sin_sesion_va_al_login(self):
         for nombre, argumentos, _ in RUTAS_PROTEGIDAS:
@@ -342,11 +487,38 @@ class AccesoALasUrlProtegidas(BaseVistasPorRol):
         ]
         self.assertEqual(
             destinos,
-            [reverse('informes:montaje'), reverse('cargue_up:cargue_propuesta')],
+            [
+                reverse('dashboard:inicio'),
+                reverse('informes:montaje'),
+                reverse('cargue_up:cargue_propuesta'),
+            ],
         )
-        for destino in destinos:
-            with self.subTest(url=destino):
-                self.assertEqual(self.client.get(destino).status_code, 200)
+        self.abrir_sin_tropiezos(destinos)
+
+    def test_el_director_puede_abrir_las_opciones_que_ve(self):
+        """Lo mismo para el Director, que es quien más opciones ve.
+
+        Sus pantallas de «Verificar cargues» no se contentan con el permiso:
+        `director_y_carreras` exige además un perfil de Director con una
+        carrera asignada y activa. Un Director de verdad lo tiene.
+        """
+        usuario = self.crear_usuario(self.rol_director)
+        facultad = Facultad.objects.create(nombre='Facultad de prueba SIS-74')
+        carrera = Carrera.objects.create(
+            facultad=facultad, nombre='Carrera de prueba SIS-74', codigo='S74-A'
+        )
+        DirectorCarrera.objects.create(
+            director=Director.objects.create(usuario=usuario),
+            carrera=carrera,
+            fecha_inicio=timezone.localdate(),
+            activo=True,
+        )
+        self.client.force_login(usuario)
+
+        self.abrir_sin_tropiezos([
+            opcion['url'] for grupo in opciones_visibles(usuario)
+            for opcion in grupo['opciones']
+        ])
 
     def test_el_cargue_csv_exige_los_dos_permisos(self):
         solo_uno = self.crear_rol_con('Registrador', 'estudiante.registrar')
