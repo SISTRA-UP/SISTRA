@@ -11,12 +11,17 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.mail import send_mail as send_mail_real
+from django.core.mail.backends.locmem import EmailBackend
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.parametrizacion.models import Carrera, Facultad, Parametro
-from apps.personas.forms.registro_estudiantes import maximo_de_filas_csv
+from apps.personas.forms.registro_estudiantes import (
+    enviar_credenciales,
+    maximo_de_filas_csv,
+)
 from apps.personas.models import (
     Director,
     DirectorCarrera,
@@ -428,6 +433,235 @@ class CorreoDeCredenciales(BaseRegistro):
         ):
             self.registrar()
         self.assertEqual(self.inscripciones_de('laura.pena@unipamplona.edu.co').count(), 1)
+
+
+class UnaSolaConexionPorLote(BaseRegistro):
+    """SIS-71 · E12 · el cargue abre una conexión de correo, no una por fila.
+
+    `enviar_credenciales` llamaba a `send_mail` sin conexión, así que Django le
+    creaba una por llamada: `connection or get_connection(...)`. Y el backend
+    SMTP solo cierra la conexión **si la abrió él** (`if new_conn_created:
+    self.close()`), de modo que sin un `open()` previo cada fila abría y cerraba
+    la suya. Con un servidor real eso es un ida y vuelta por estudiante.
+    """
+
+    def filas_de(self, cuantas):
+        return [
+            [
+                f'Alumno {numero}',
+                f'20000{numero:05d}',
+                f'alumno.{numero}@unipamplona.edu.co',
+                '',
+            ]
+            for numero in range(1, cuantas + 1)
+        ]
+
+    def espiar_conexiones(self):
+        """Cuenta cada conexión que se crea, por cualquier camino.
+
+        Se espía `django.core.mail.get_connection` y no el nombre importado en
+        mi módulo porque `send_mail` resuelve ese mismo global en cada llamada:
+        así se ven tanto las conexiones que abre Django por su cuenta como la
+        del lote.
+        """
+        from django.core import mail as modulo_de_correo
+
+        original = modulo_de_correo.get_connection
+        creadas = []
+
+        def espia(*args, **kwargs):
+            conexion = original(*args, **kwargs)
+            creadas.append(conexion)
+            return conexion
+
+        return patch.object(
+            modulo_de_correo, 'get_connection', side_effect=espia
+        ), creadas
+
+    def auditorias_de_envio(self):
+        return Auditoria.objects.filter(accion='Enviar credenciales')
+
+    # --- C1, C2 y C3 · cien filas, cien correos, una conexión ---
+
+    def test_cien_filas_mandan_cien_correos_con_una_sola_conexion(self):
+        espia, creadas = self.espiar_conexiones()
+        with espia:
+            respuesta = self.subir(self.csv_de(self.filas_de(100)))
+
+        self.assertEqual(respuesta.context['resumen']['registrados'], 100)
+        self.assertEqual(len(mail.outbox), 100)
+        # Antes de E12 esto daba 100: una conexión por fila.
+        self.assertEqual(len(creadas), 1)
+
+    def test_todos_los_envios_reciben_la_misma_conexion(self):
+        recibidas = []
+
+        def espia_send_mail(*args, **kwargs):
+            recibidas.append(kwargs.get('connection'))
+            return send_mail_real(*args, **kwargs)
+
+        with patch(
+            'apps.personas.forms.registro_estudiantes.send_mail',
+            side_effect=espia_send_mail,
+        ):
+            self.subir(self.csv_de(self.filas_de(4)))
+
+        self.assertEqual(len(recibidas), 4)
+        self.assertNotIn(None, recibidas)
+        self.assertEqual(len({id(c) for c in recibidas}), 1)
+
+    # --- C4 · la conexión se abre una vez y se cierra ---
+
+    def test_la_conexion_se_abre_una_vez_y_se_cierra(self):
+        # Sin el `open()` previo, Django cerraría y reabriría en cada `send_mail`,
+        # porque solo cierra la conexión que abrió él.
+        with patch.object(EmailBackend, 'open', autospec=True) as abrir, \
+                patch.object(EmailBackend, 'close', autospec=True) as cerrar:
+            self.subir(self.csv_de(self.filas_de(4)))
+
+        self.assertEqual(abrir.call_count, 1)
+        self.assertEqual(cerrar.call_count, 1)
+
+    def test_la_conexion_se_cierra_aunque_el_cargue_reviente(self):
+        with patch.object(EmailBackend, 'close', autospec=True) as cerrar, \
+                patch(
+                    'apps.personas.views.registro_estudiantes.registrar_estudiante',
+                    side_effect=RuntimeError('algo se rompió'),
+                ):
+            with self.assertRaises(RuntimeError):
+                self.subir(self.csv_de(self.filas_de(2)))
+
+        self.assertEqual(cerrar.call_count, 1)
+
+    # --- C5 · un fallo no arrastra a los demás ---
+
+    def test_si_un_envio_falla_los_demas_salen_y_el_fallo_queda_auditado(self):
+        def falla_solo_el_segundo(*args, **kwargs):
+            if 'alumno.2@unipamplona.edu.co' in kwargs['recipient_list']:
+                raise OSError('ese buzón rechaza el correo')
+            return send_mail_real(*args, **kwargs)
+
+        with patch(
+            'apps.personas.forms.registro_estudiantes.send_mail',
+            side_effect=falla_solo_el_segundo,
+        ):
+            respuesta = self.subir(self.csv_de(self.filas_de(4)))
+
+        resumen = respuesta.context['resumen']
+        self.assertEqual(resumen['registrados'], 4)
+        self.assertEqual(resumen['sin_correo'], 1)
+        self.assertEqual(len(mail.outbox), 3)
+        self.assertEqual(self.auditorias_de_envio().filter(resultado='Éxito').count(), 3)
+        self.assertEqual(self.auditorias_de_envio().filter(resultado='Fallo').count(), 1)
+        fallida = self.auditorias_de_envio().get(resultado='Fallo')
+        self.assertIn('alumno.2@unipamplona.edu.co', fallida.detalle)
+        # Los cuatro quedaron registrados: el correo no condiciona el registro.
+        self.assertEqual(Usuario.objects.filter(rol=self.rol_estudiante).count(), 4)
+
+    # --- C6 · servidor caído: ni un 500, ni un registro perdido ---
+
+    def test_si_el_servidor_de_correo_esta_caido_el_cargue_no_revienta(self):
+        with patch.object(
+            EmailBackend, 'open', autospec=True, side_effect=OSError('servidor caído')
+        ), patch.object(
+            EmailBackend,
+            'send_messages',
+            autospec=True,
+            side_effect=OSError('servidor caído'),
+        ):
+            respuesta = self.subir(self.csv_de(self.filas_de(3)))
+
+        self.assertEqual(respuesta.status_code, 200)
+        resumen = respuesta.context['resumen']
+        self.assertEqual(resumen['registrados'], 3)
+        self.assertEqual(resumen['sin_correo'], 3)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(self.auditorias_de_envio().count(), 3)
+        self.assertEqual(self.auditorias_de_envio().filter(resultado='Fallo').count(), 3)
+        self.assertContains(respuesta, 'no se les pudo enviar el correo')
+
+    # --- C6b · ni siquiera construir la conexión puede tumbar el cargue ---
+
+    def test_si_la_conexion_no_se_puede_ni_construir_el_cargue_sigue(self):
+        # Lo encontró la revisión: con MAILERS, `get_connection()` lanza
+        # `InvalidMailer` si el .env trae `use_ssl` y `use_tls` a la vez. Antes
+        # de E12 eso caía dentro del try de cada fila; si la construcción
+        # quedara fuera de la guarda, serían 500 y cero estudiantes.
+        from django.core import mail as modulo_de_correo
+
+        with patch.object(
+            modulo_de_correo,
+            'get_connection',
+            side_effect=OSError('configuración de correo inválida'),
+        ):
+            respuesta = self.subir(self.csv_de(self.filas_de(3)))
+
+        self.assertEqual(respuesta.status_code, 200)
+        resumen = respuesta.context['resumen']
+        self.assertEqual(resumen['registrados'], 3)
+        self.assertEqual(resumen['sin_correo'], 3)
+        self.assertEqual(self.auditorias_de_envio().filter(resultado='Fallo').count(), 3)
+        self.assertEqual(Usuario.objects.filter(rol=self.rol_estudiante).count(), 3)
+
+    # --- C5b · una conexión caída no arrastra a las filas siguientes ---
+
+    def test_tras_un_envio_fallido_la_conexion_se_renueva(self):
+        # Django no cierra la conexión que no abrió él, y `open()` devuelve
+        # False mientras el atributo siga puesto: una conexión muerta haría
+        # fallar a todas las filas siguientes. Por eso se renueva.
+        def falla_solo_el_segundo(*args, **kwargs):
+            if 'alumno.2@unipamplona.edu.co' in kwargs['recipient_list']:
+                raise OSError('el servidor cortó la conexión')
+            return send_mail_real(*args, **kwargs)
+
+        with patch.object(EmailBackend, 'open', autospec=True) as abrir, \
+                patch.object(EmailBackend, 'close', autospec=True) as cerrar, \
+                patch(
+                    'apps.personas.forms.registro_estudiantes.send_mail',
+                    side_effect=falla_solo_el_segundo,
+                ):
+            respuesta = self.subir(self.csv_de(self.filas_de(4)))
+
+        # La del lote, más la renovación tras el fallo de la segunda fila.
+        self.assertEqual(abrir.call_count, 2)
+        self.assertEqual(cerrar.call_count, 2)
+        # Y las otras tres salieron igual.
+        self.assertEqual(respuesta.context['resumen']['registrados'], 4)
+        self.assertEqual(len(mail.outbox), 3)
+
+    # --- C7 y C8 · el contrato de `enviar_credenciales` no se mueve ---
+
+    def test_enviar_credenciales_sigue_aceptando_dos_argumentos(self):
+        # Es como la llama `crear_usuario` de apps/usuarios desde SIS-69, y el
+        # contrato dice que esa firma no se puede romper.
+        usuario = self.crear_usuario(
+            'tulio.mora@unipamplona.edu.co', 'Tulio Mora', '1000000055', self.rol_estudiante
+        )
+        self.assertIs(enviar_credenciales(usuario, 'ClaveDePrueba123'), True)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('ClaveDePrueba123', mail.outbox[0].body)
+
+    def test_enviar_credenciales_no_lanza_con_una_conexion_rota(self):
+        usuario = self.crear_usuario(
+            'nidia.soto@unipamplona.edu.co', 'Nidia Soto', '1000000056', self.rol_estudiante
+        )
+        rota = EmailBackend()
+        with patch.object(
+            EmailBackend,
+            'send_messages',
+            autospec=True,
+            side_effect=OSError('servidor caído'),
+        ):
+            self.assertIs(enviar_credenciales(usuario, 'ClaveDePrueba123', rota), False)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_el_registro_uno_a_uno_sigue_mandando_su_correo(self):
+        # Sin lote no hay conexión compartida: una por envío, como siempre.
+        espia, creadas = self.espiar_conexiones()
+        with espia:
+            self.registrar()
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(len(creadas), 1)
 
 
 class CargueCsv(BaseRegistro):

@@ -13,9 +13,11 @@ import csv
 import io
 import re
 import unicodedata
+from contextlib import contextmanager, suppress
 
 from django import forms
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
@@ -124,7 +126,57 @@ def _auditar(autor, accion, tabla, id_registro=None, detalle='', resultado='Éxi
     )
 
 
-def enviar_credenciales(usuario, contrasena):
+@contextmanager
+def conexion_del_lote():
+    """Una sola conexión de correo para todo un cargue masivo.
+
+    Hay que **abrirla aquí**: el backend SMTP solo cierra la conexión que abrió
+    él (`if new_conn_created: self.close()`), así que si se pasa sin abrir, el
+    primer `send_mail` la abre y la cierra, y se vuelve a una conexión por fila.
+
+    Crearla y abrirla van las dos dentro de la guarda, y lo que se entrega puede
+    ser `None`: con `MAILERS`, **construir** la conexión ya puede fallar (un
+    `.env` con `use_ssl` y `use_tls` a la vez levanta `InvalidMailer` en el
+    constructor del backend). Nada de eso puede tumbar el cargue: con `None`
+    cada fila abre la suya, y si la que falla es la apertura, cada envío falla y
+    se audita. El correo no condiciona el registro (EX-03 del BRD).
+
+    No se le pasa `fail_silently`: `get_connection` solo lo reenvía cuando es
+    verdadero, y el valor por defecto del backend ya es `False`, que es el que
+    hace falta. Una conexión silenciosa sería lo peligroso: un servidor caído no
+    lanzaría nada y el envío se auditaría como «Éxito» sin haber salido.
+    """
+    conexion = None
+    try:
+        with suppress(Exception):
+            conexion = mail.get_connection()
+            conexion.open()
+        yield conexion
+    finally:
+        if conexion is not None:
+            with suppress(Exception):
+                conexion.close()
+
+
+def reabrir_conexion(conexion):
+    """Renueva la conexión del lote después de un envío fallido.
+
+    El fallo pudo ser de la conexión y no del destinatario (el servidor corta,
+    el protocolo se desincroniza). Django **no la cierra**, porque solo cierra
+    la que abrió él, y `open()` devuelve `False` mientras el atributo siga
+    puesto: una conexión muerta haría fallar también a **todas** las filas
+    siguientes, y una fila mala arrastraría al resto. Renovarla cuesta una
+    reconexión y mantiene lo que pide la tarjeta: si uno falla, los demás salen.
+    """
+    if conexion is None:
+        return
+    with suppress(Exception):
+        conexion.close()
+    with suppress(Exception):
+        conexion.open()
+
+
+def enviar_credenciales(usuario, contrasena, conexion=None):
     """Manda el correo con el usuario y la contraseña temporal (RG-09).
 
     Devuelve `True` o `False`: si falla, **la cuenta queda creada igual** y el
@@ -132,9 +184,13 @@ def enviar_credenciales(usuario, contrasena):
     texto es mínimo a propósito: la plantilla del correo es SIS-37
     (daniel.luna21) y el servicio de envío SIS-38 (Fabiano Del Villar). Cuando
     exista el servicio, los correos empiezan a salir sin tocar esta función.
+
+    `conexion` es opcional y **la firma de dos argumentos sigue siendo válida**:
+    sin ella se abre una por envío, como siempre. El cargue masivo pasa una sola
+    para todo el lote (E12).
     """
     try:
-        send_mail(
+        return send_mail(
             subject='SISTRA · Tus datos de acceso',
             message=(
                 f'Hola {usuario.nombre}.\n\n'
@@ -147,8 +203,8 @@ def enviar_credenciales(usuario, contrasena):
             from_email=None,
             recipient_list=[usuario.correo_institucional],
             fail_silently=False,
-        )
-        return True
+            connection=conexion,
+        ) == 1
     except Exception:
         # Cualquier falla del correo (sin servicio configurado, servidor caído,
         # dirección rechazada) no puede tumbar el registro: EX-03 del BRD.
@@ -217,7 +273,7 @@ def _usuario_existente(cedula, correo):
     return por_cedula or por_correo
 
 
-def registrar_estudiante(*, carrera, nombre, cedula, correo, autor):
+def registrar_estudiante(*, carrera, nombre, cedula, correo, autor, conexion=None):
     """Registra a un estudiante en `carrera`.
 
     Devuelve `(resultado, usuario, enviado)`, donde `enviado` dice si el correo
@@ -230,6 +286,9 @@ def registrar_estudiante(*, carrera, nombre, cedula, correo, autor):
     se mandara dentro y algo fallara después, el estudiante recibiría las
     credenciales de una cuenta que se revirtió. Y con un servidor SMTP lento,
     cada fila mantendría abierta una transacción durante todo el ida y vuelta.
+
+    `conexion` es la del lote cuando quien llama es el cargue masivo (E12); sin
+    ella se abre una por envío.
     """
     resultado, usuario, contrasena = _registrar_en_la_base(
         carrera=carrera, nombre=nombre, cedula=cedula, correo=correo, autor=autor
@@ -237,7 +296,7 @@ def registrar_estudiante(*, carrera, nombre, cedula, correo, autor):
     if contrasena is None:
         return resultado, usuario, None
 
-    enviado = enviar_credenciales(usuario, contrasena)
+    enviado = enviar_credenciales(usuario, contrasena, conexion)
     _auditar(
         autor,
         'Enviar credenciales',
