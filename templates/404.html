@@ -16,7 +16,7 @@
           <h1 class="h3 mb-3">Página no encontrada</h1>
           <p class="mb-3">La dirección que abriste no existe o la cambiaron de lugar.</p>
           <p class="text-body-secondary small mb-4">Revisa el enlace, o vuelve al inicio y entra por el menú de tu rol.</p>
-          <a class="btn btn-primary" href="/">Volver</a>
+          <a class="btn btn-primary" href="/" onclick="if (history.length > 1) { history.back(); return false; }">Volver</a>
         </div>
       </div>
     </div>

@@ -16,7 +16,7 @@
           <h1 class="h3 mb-3">Error del sistema</h1>
           <p class="mb-3">Algo falló de nuestro lado y no se pudo completar lo que pediste.</p>
           <p class="text-body-secondary small mb-4">No se perdió nada de lo que ya estaba guardado. Vuelve a intentarlo en un momento; si sigue igual, avísale al administrador del sistema.</p>
-          <a class="btn btn-primary" href="/">Volver</a>
+          <a class="btn btn-primary" href="/" onclick="if (history.length > 1) { history.back(); return false; }">Volver</a>
         </div>
       </div>
     </div>

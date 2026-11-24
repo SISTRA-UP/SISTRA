@@ -437,6 +437,28 @@ class PaginasDeError(BaseRoles):
         self.assertNotContains(respuesta, 'RuntimeError', status_code=500)
         self.assertNotContains(respuesta, 'Traceback', status_code=500)
 
+    # --- C13 · «Volver» no puede caer en otro 403 ---
+
+    def test_el_boton_volver_regresa_a_la_pagina_anterior(self):
+        # `/` es `dashboard:inicio`, protegida con `dashboard.ver`, que solo
+        # se siembra para los tres roles base: un rol creado a mano sin ese
+        # permiso llegaba al 403, pulsaba «Volver» y recibía otro 403. La
+        # revisión de la PR #50 pidió este comportamiento exacto: volver atrás
+        # si hay historial y usar `/` solo si no lo hay.
+        for plantilla in ('403.html', '404.html', '500.html', '403_csrf.html'):
+            with self.subTest(plantilla=plantilla):
+                html = render_to_string(plantilla)
+                # Una sola cadena, y no tres fragmentos sueltos: así la
+                # prueba amarra el atributo, el elemento que lo lleva y el
+                # respaldo `/` juntos. Con fragmentos por separado, un
+                # `data-algo` con ese texto en cualquier parte de la página
+                # la dejaba verde con el botón muerto.
+                self.assertIn(
+                    'href="/" onclick="if (history.length > 1) '
+                    '{ history.back(); return false; }"',
+                    html,
+                )
+
     # --- C6 · ninguna de las cuatro consulta la base ---
 
     def test_las_cuatro_paginas_no_consultan_la_base(self):
