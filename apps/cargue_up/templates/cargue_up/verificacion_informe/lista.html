@@ -80,35 +80,6 @@
             </div>
         </div>
 
-        {% if vista == 'pendientes' %}
-        {% for fila in filas %}
-        <div class="modal fade vi-modal" id="modal-apr-{{ fila.informe.pk }}" tabindex="-1" aria-labelledby="titulo-apr-{{ fila.informe.pk }}" aria-hidden="true">
-            <div class="modal-dialog"><div class="modal-content">
-                <div class="modal-header">
-                    <h2 class="modal-title h5" id="titulo-apr-{{ fila.informe.pk }}">Aprobado en UP</h2>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="vi-muted">Confirma que el informe de <strong>{{ fila.estudiante.nombre }}</strong> cargado en la Plataforma UP coincide con el aprobado.</p>
-                    {% include 'cargue_up/verificacion_informe/_formulario_decision.html' with informe=fila.informe resultado=aprobacion id_cargue=fila.informe.id_ultimo_cargue prefijo='lista' cancelar_modal=True %}
-                </div>
-            </div></div>
-        </div>
-        <div class="modal fade vi-modal" id="modal-rec-{{ fila.informe.pk }}" tabindex="-1" aria-labelledby="titulo-rec-{{ fila.informe.pk }}" aria-hidden="true">
-            <div class="modal-dialog"><div class="modal-content">
-                <div class="modal-header">
-                    <h2 class="modal-title h5" id="titulo-rec-{{ fila.informe.pk }}">Rechazado en UP</h2>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="vi-muted">El informe de <strong>{{ fila.estudiante.nombre }}</strong> volverá a Aprobado y deberá cargarlo de nuevo.</p>
-                    {% include 'cargue_up/verificacion_informe/_formulario_decision.html' with informe=fila.informe resultado=rechazo id_cargue=fila.informe.id_ultimo_cargue prefijo='lista' cancelar_modal=True %}
-                </div>
-            </div></div>
-        </div>
-        {% endfor %}
-        {% endif %}
-
         {% if pagina.has_other_pages %}
         <nav class="mt-3" aria-label="Paginación">
             <ul class="pagination">
@@ -128,5 +99,34 @@
         </div>
         {% endif %}
     </main>
+
+    {% if vista == 'pendientes' %}
+    {% for fila in filas %}
+    <div class="modal fade vi-modal" id="modal-apr-{{ fila.informe.pk }}" tabindex="-1" aria-labelledby="titulo-apr-{{ fila.informe.pk }}" aria-hidden="true">
+        <div class="modal-dialog"><div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title h5" id="titulo-apr-{{ fila.informe.pk }}">Aprobado en UP</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="vi-muted">Confirma que el informe de <strong>{{ fila.estudiante.nombre }}</strong> cargado en la Plataforma UP coincide con el aprobado.</p>
+                {% include 'cargue_up/verificacion_informe/_formulario_decision.html' with informe=fila.informe resultado=aprobacion id_cargue=fila.informe.id_ultimo_cargue prefijo='lista' cancelar_modal=True %}
+            </div>
+        </div></div>
+    </div>
+    <div class="modal fade vi-modal" id="modal-rec-{{ fila.informe.pk }}" tabindex="-1" aria-labelledby="titulo-rec-{{ fila.informe.pk }}" aria-hidden="true">
+        <div class="modal-dialog"><div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title h5" id="titulo-rec-{{ fila.informe.pk }}">Rechazado en UP</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="vi-muted">El informe de <strong>{{ fila.estudiante.nombre }}</strong> volverá a Aprobado y deberá cargarlo de nuevo.</p>
+                {% include 'cargue_up/verificacion_informe/_formulario_decision.html' with informe=fila.informe resultado=rechazo id_cargue=fila.informe.id_ultimo_cargue prefijo='lista' cancelar_modal=True %}
+            </div>
+        </div></div>
+    </div>
+    {% endfor %}
+    {% endif %}
 </div>
 {% endblock %}
