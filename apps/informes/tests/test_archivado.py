@@ -132,7 +132,7 @@ class TestArchivarInformes(BaseAprobacionTestCase):
             'fecha_actualizacion': informe.fecha_actualizacion.isoformat(),
         })
 
-        self.assertIn(respuesta.status_code, (400, 403, 404, 409))
+        self.assertEqual(respuesta.status_code, 404)
         informe.refresh_from_db()
         self.assertTrue(informe.archivado)
         self.assertEqual(informe.estado, EstadoTramite.RECHAZADO)
@@ -156,7 +156,7 @@ class TestArchivarInformes(BaseAprobacionTestCase):
             }),
         })
 
-        self.assertIn(respuesta.status_code, (400, 403, 404, 409))
+        self.assertEqual(respuesta.status_code, 400)
         vigente.refresh_from_db()
         self.assertEqual(vigente.estado, EstadoTramite.RECHAZADO)
         self.assertFalse(vigente.archivado)
@@ -178,3 +178,32 @@ class TestArchivarInformes(BaseAprobacionTestCase):
         informe.refresh_from_db()
         self.assertFalse(informe.archivado)
         self.assertIsNone(informe.fecha_archivado)
+
+    def test_rechazo_reciente_entre_consulta_y_bloqueo_no_se_archiva(self):
+        """Se revalida el último rechazo después de seleccionar el informe."""
+        servicios.guardar(PLAZO, '30', self.user_director)
+        informe = self._rechazado_hace(self.estudiante_1, 'INF-B6B-CARRERA', 60)
+        consulta_real = Informe.objects.select_for_update()
+
+        def agregar_rechazo_reciente(*, pk):
+            HistorialEstado.objects.create(
+                informe_id=pk,
+                usuario=self.user_director,
+                estado_anterior=EstadoTramite.EN_REVISION,
+                estado_nuevo=EstadoTramite.RECHAZADO,
+                tipo_accion='decision_informe',
+                fecha_hora=timezone.now() - timedelta(days=2),
+            )
+            return consulta_real.get(pk=pk)
+
+        with patch(
+            'apps.propuestas.management.commands.archivar_rechazados.Informe.objects.select_for_update'
+        ) as seleccionar:
+            seleccionar.return_value.get.side_effect = agregar_rechazo_reciente
+            salida = self._ejecutar()
+
+        informe.refresh_from_db()
+        self.assertFalse(informe.archivado)
+        self.assertIsNone(informe.fecha_archivado)
+        self.assertIn('Informes archivados: 0', salida)
+        self.assertFalse(Auditoria.objects.filter(accion=ACCION).exists())

@@ -1,8 +1,9 @@
-"""SIS-52 / SISTRA-07 · B6a/B6b: archiva propuestas e informes rechazados (RG-13).
+"""SIS-52 · B6a: archiva las propuestas rechazadas que nadie reactivó (RG-13).
 
-Cada trámite Rechazado y no archivado se archiva cuando su último rechazo
-(historial) supera su plazo propio de Parametrización. Archivar no borra
-ni cambia el estado: el trámite deja de contar como activo y ya no se reactiva.
+Una propuesta Rechazada y no archivada se archiva cuando su último rechazo (historial)
+tiene más días que el plazo `dias_archivado_propuesta_rechazada` de Parametrización.
+Archivar no borra: la propuesta deja de contar como activa y ya no se puede reactivar.
+Si se reactivó antes del plazo ya no está en Rechazado y no se toca.
 
 Uso (programarlo una vez al día): uv run python manage.py archivar_rechazados
 """
@@ -47,8 +48,10 @@ class Command(BaseCommand):
 
             archivadas = 0
             for propuesta in vencidas:
-                # Conserva la corrección de B6a: archivado y auditoría son atómicos.
+                # Archivado y auditoría en la misma transacción: si la auditoría falla, no se archiva.
                 with transaction.atomic():
+                    # Se vuelve a exigir Rechazado y no archivada en el mismo UPDATE: si el Director la
+                    # reactivó entre la consulta y este punto, no se archiva.
                     if not Propuesta.objects.filter(
                         pk=propuesta.pk, estado=EstadoTramite.RECHAZADO, archivada=False
                     ).update(archivada=True, fecha_archivado=ahora):
