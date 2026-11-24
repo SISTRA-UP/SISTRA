@@ -16,7 +16,7 @@
           <h1 class="h3 mb-3">Sin permiso</h1>
           <p class="mb-3">No tienes permiso para acceder a esta página.</p>
           <p class="text-body-secondary small mb-4">Tu rol no incluye esta opción. Si necesitas entrar, pídeselo al administrador del sistema.</p>
-          <a class="btn btn-primary" href="/">Volver</a>
+          <a class="btn btn-primary" href="/" onclick="if (history.length > 1) { history.back(); return false; }">Volver</a>
         </div>
       </div>
     </div>

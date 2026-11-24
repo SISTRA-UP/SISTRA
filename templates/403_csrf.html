@@ -16,7 +16,7 @@
           <h1 class="h3 mb-3">El formulario ya no era válido</h1>
           <p class="mb-3">No se pudo enviar el formulario porque su comprobación de seguridad había vencido.</p>
           <p class="text-body-secondary small mb-4">Suele pasar cuando la pantalla estuvo abierta mucho tiempo o quedó en otra pestaña. Vuelve a abrirla, llénala de nuevo y envíala.</p>
-          <a class="btn btn-primary" href="/">Volver</a>
+          <a class="btn btn-primary" href="/" onclick="if (history.length > 1) { history.back(); return false; }">Volver</a>
         </div>
       </div>
     </div>
