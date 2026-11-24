@@ -383,6 +383,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnConfirmarEnvio = document.getElementById('btn-confirmar-envio');
     if (btnConfirmarEnvio) {
         btnConfirmarEnvio.addEventListener('click', function() {
+            // MODIFICACIÓN E4: Deshabilitar botón inmediatamente y mostrar spinner para evitar doble envío
+            this.disabled = true;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Enviando...';
+            
             inputAccion.value = 'enviar';
             form.submit();
         });

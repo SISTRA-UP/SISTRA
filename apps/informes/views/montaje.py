@@ -6,6 +6,8 @@ guardarlo como borrador y enviarlo a revisión.
 Preparado para integrarse con SISTRA-07 (Aprobación de informe).
 """
 
+import logging
+
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
@@ -27,6 +29,8 @@ from apps.seguimiento.models import Auditoria, HistorialEstado, Notificacion
 from apps.usuarios.permisos import requiere_permiso
 # Importar las constantes desde el módulo de aprobacion (SISTRA-02)
 from apps.propuestas.forms.aprobacion import RESULTADO_EXITO, RESULTADO_BLOQUEADO
+
+logger = logging.getLogger(__name__)
 
 
 ESTADOS_EDITABLES = [
@@ -62,7 +66,7 @@ def _registrar_auditoria(usuario, informe, accion, resultado, detalle):
         usuario=usuario,
         accion=accion,
         tabla_afectada='informe',
-        id_registro_afectado=informe.pk,  # CORREGIDO: usar pk en lugar de id
+        id_registro_afectado=informe.pk,
         detalle=detalle,
         resultado=resultado,
         fecha_hora=timezone.now(),
@@ -87,7 +91,7 @@ def _obtener_o_crear_informe(usuario, propuesta):
     try:
         with transaction.atomic():
             # Bloquear la propuesta para evitar que dos POST simultáneos creen dos informes
-            Propuesta.objects.select_for_update().get(pk=propuesta.pk)  # CORREGIDO
+            Propuesta.objects.select_for_update().get(pk=propuesta.pk)
             
             # Verificar DE NUEVO que no exista (por si otro POST lo creó mientras esperábamos)
             informe = Informe.objects.filter(
@@ -174,7 +178,18 @@ def inicio(request):
                 
                 return redirect('informes:montaje')
             except Exception:
-                messages.error(request, 'Ocurrió un error al crear el informe. Intenta de nuevo.')
+                # MODIFICACIÓN E3 (Bloqueo 2): Registrar el fallo en log y auditoría
+                logger.exception('SISTRA-06: Falló la creación del informe')
+                Auditoria.objects.create(
+                    usuario=usuario,
+                    accion='Crear informe',
+                    tabla_afectada='propuesta',
+                    id_registro_afectado=propuesta.pk,
+                    detalle=f'Fallo al crear informe para propuesta {propuesta.codigo}',
+                    resultado='Fallo',
+                    fecha_hora=timezone.now(),
+                )
+                messages.error(request, 'Ocurrió un problema al crear el informe. Intenta de nuevo.')
                 return redirect('informes:montaje')
         
         # Para otras acciones (guardar_borrador, enviar), debe existir el informe
@@ -222,14 +237,13 @@ def inicio(request):
                 avance_post = _calcular_avance(form.cleaned_data)
 
                 # CORREGIDO: Si no cumple el avance, NO redirigimos. 
-                # Dejamos que el código continúe hasta el render final para devolver 200 y mostrar el error en el formulario.
                 if avance_post < 100:
                     messages.error(request, MSG_06_03)
                 else:
                     try:
                         with transaction.atomic():
-                            # Bloquear el informe para evitar doble envío
-                            informe_bloqueado = Informe.objects.select_for_update().get(pk=informe.pk)  # CORREGIDO
+                            # Bloquear el informe para evitar doble envío (E4)
+                            informe_bloqueado = Informe.objects.select_for_update().get(pk=informe.pk)
                             
                             # Verificar que siga en estado editable
                             if informe_bloqueado.estado not in ESTADOS_EDITABLES:
@@ -294,7 +308,16 @@ def inicio(request):
                                 messages.success(request, MSG_06_02)
                                 return redirect('informes:montaje')
                     except IntegrityError:
-                        messages.error(request, 'El informe ya fue enviado. No se puede enviar dos veces.')
+                        # MODIFICACIÓN E4 (Sugerencia 2): Mensaje genérico de falla (EX-02)
+                        logger.exception('SISTRA-06: IntegrityError al enviar informe')
+                        _registrar_auditoria(
+                            usuario,
+                            informe,
+                            'Enviar informe',
+                            'Fallo',
+                            f'IntegrityError al enviar informe {informe.codigo}',
+                        )
+                        messages.error(request, 'Ocurrió un problema al guardar el informe. Intenta de nuevo.')
                         return redirect('informes:montaje')
     else:
         # GET: Solo obtener el informe, NO crearlo
