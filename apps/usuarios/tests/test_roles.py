@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.exceptions import PermissionDenied
 from django.db import connection
 from django.db.models import ProtectedError
 from django.template.loader import render_to_string
@@ -306,6 +307,20 @@ def _vista_que_revienta(request):
 URLCONF_QUE_REVIENTA = (path('revienta/', _vista_que_revienta),)
 
 
+def _vista_sin_permiso(request):
+    """Solo existe para probar que el 403 no filtra el texto de la excepción.
+
+    Django mete la excepción en el contexto del 403, así que si alguien
+    escribiera `{{ exception }}` en la plantilla, un detalle interno llegaría
+    al navegador. `requiere_permiso` no sirve para comprobarlo: lanza el
+    `PermissionDenied` sin mensaje. Lo pidió la revisión de la PR #50.
+    """
+    raise PermissionDenied('texto interno')
+
+
+URLCONF_SIN_PERMISO = (path('sin-permiso/', _vista_sin_permiso),)
+
+
 class PaginasDeError(BaseRoles):
     """SIS-73 · R8 · las cuatro páginas de error, en español.
 
@@ -354,12 +369,17 @@ class PaginasDeError(BaseRoles):
 
     @override_settings(DEBUG=False)
     def test_una_ruta_que_no_existe_sale_en_espanol(self):
-        respuesta = self.client.get('/esta-ruta-no-existe-en-sistra/')
+        respuesta = self.client.get('/esta-ruta-no-existe-marcador-interno/')
 
         self.assertEqual(respuesta.status_code, 404)
         self.assertContains(respuesta, 'no encontrada', status_code=404)
         self.assertNotContains(respuesta, 'Not Found', status_code=404)
         self.assertNotContains(respuesta, 'Page not found', status_code=404)
+        # `page_not_found` pasa `request_path` y `exception` al contexto, así
+        # que el 404 es la única de las cuatro que recibe algo que elige
+        # quien hace la petición. Si alguien imprimiera `{{ request_path }}`,
+        # la página reflejaría la ruta pedida: esto lo fija.
+        self.assertNotContains(respuesta, 'marcador-interno', status_code=404)
 
     # --- C4 · la de CSRF en español ---
 
@@ -387,6 +407,35 @@ class PaginasDeError(BaseRoles):
         self.assertEqual(respuesta.status_code, 500)
         self.assertContains(respuesta, 'Error del sistema', status_code=500)
         self.assertNotContains(respuesta, 'Server Error', status_code=500)
+
+    # --- C12 · el texto de la excepción no llega a la página ---
+
+    @override_settings(DEBUG=False, ROOT_URLCONF=URLCONF_SIN_PERMISO)
+    def test_el_403_no_muestra_el_texto_de_la_excepcion(self):
+        # `django/views/defaults.py` renderiza el 403 con
+        # `context={'exception': str(exception)}`: el detalle interno está
+        # disponible en la plantilla y basta un `{{ exception }}` para
+        # publicarlo. Esta prueba fija que no se imprime.
+        respuesta = self.client.get('/sin-permiso/')
+
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertContains(respuesta, self.TITULO_403, status_code=403)
+        self.assertNotContains(respuesta, 'texto interno', status_code=403)
+
+    @override_settings(DEBUG=False, ROOT_URLCONF=URLCONF_QUE_REVIENTA)
+    def test_el_500_no_muestra_el_texto_de_la_excepcion(self):
+        # El 500 es el más delicado: el mensaje de la excepción puede traer
+        # una consulta, una ruta del servidor o datos de la persona.
+        self.client.raise_request_exception = False
+        respuesta = self.client.get('/revienta/')
+
+        self.assertEqual(respuesta.status_code, 500)
+        self.assertContains(respuesta, 'Error del sistema', status_code=500)
+        self.assertNotContains(
+            respuesta, 'error de prueba para el 500', status_code=500
+        )
+        self.assertNotContains(respuesta, 'RuntimeError', status_code=500)
+        self.assertNotContains(respuesta, 'Traceback', status_code=500)
 
     # --- C6 · ninguna de las cuatro consulta la base ---
 
