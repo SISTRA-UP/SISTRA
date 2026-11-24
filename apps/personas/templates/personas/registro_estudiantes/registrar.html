@@ -103,11 +103,7 @@
                 {{ cargue.archivo }}
                 <div class="form-text">
                   Columnas: {% for columna in columnas %}<code>{{ columna }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}.
-                  {% if maximo_filas %}
-                    Máximo {{ maximo_filas }} filas por archivo.
-                  {% else %}
-                    Todavía no hay un máximo de filas configurado.
-                  {% endif %}
+                  Máximo {{ maximo_filas }} filas y {{ maximo_mb }} MB por archivo.
                 </div>
                 {% for error in cargue.archivo.errors %}
                   <div class="invalid-feedback d-block">{{ error }}</div>

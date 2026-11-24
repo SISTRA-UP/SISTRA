@@ -23,7 +23,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 
-from apps.parametrizacion.models import Parametro
+from apps.parametrizacion.servicios import obtener_entero
 from apps.personas.models import EstadoInscripcion, Estudiante, EstudianteCarrera
 from apps.procesos.models import EstadoAvance, ProcesoTrabajoSocial
 from apps.seguimiento.models import Auditoria
@@ -48,17 +48,12 @@ COLUMNAS_DEL_CSV = ('nombre', 'cedula', 'correo', 'carrera')
 # volverían a coincidir con la cédula real. La cédula es la clave de identidad
 # de todo el contrato, así que se exige dígitos ASCII y nada más.
 CEDULA = re.compile(r'[0-9]{1,15}\Z')
-SOLO_DIGITOS = re.compile(r'[0-9]+\Z')
 
-# Límite técnico propio, mientras SISTRA-11 no defina uno: el BRD acota el
-# cargue por **filas** (NUM-FILAS-CSV), no por tamaño, y sin un tope el archivo
-# se lee entero en memoria antes de poder contar sus filas. 5 MB son del orden
-# de 60.000 filas de este formato, muy por encima de cualquier cohorte real.
-TAMANO_MAXIMO_DEL_ARCHIVO = 5 * 1024 * 1024
-
-# Clave del parámetro con el máximo de filas por cargue (BRD §5.12,
-# NUM-FILAS-CSV). La configura el ADMO en SISTRA-11; **el nombre exacto está por
-# confirmar con Ivan Ospino**. Si no está configurada, no se limita.
+# Los dos límites del cargue los configura el ADMO en SISTRA-11 y aquí solo se
+# leen: el tamaño en MB y el máximo de filas (BRD §5.12, NUM-FILAS-CSV). Los
+# valores de respaldo son los mismos que declara `parametrizacion/servicios.py`,
+# porque la tabla `parametro` está vacía mientras el ADMO no guarde nada.
+CLAVE_MAX_MB_CSV = 'registro_estudiantes.max_mb_csv'
 CLAVE_MAXIMO_FILAS_CSV = 'registro_estudiantes.maximo_filas_csv'
 
 
@@ -97,19 +92,25 @@ def nombre_usuario_libre(correo, excluir=None):
     return candidato
 
 
+def _limite(clave, por_defecto):
+    """Un límite de SISTRA-11, o su valor de respaldo si el guardado no sirve.
+
+    La pantalla que los guarda exige un entero >= 1, así que el respaldo solo
+    cubre una fila editada a mano en la base: un límite de 0 o negativo
+    rechazaría todos los archivos y dejaría el cargue inservible.
+    """
+    valor = obtener_entero(clave, por_defecto)
+    return valor if valor > 0 else por_defecto
+
+
+def maximo_mb_csv():
+    """El tamaño máximo del archivo, en MB."""
+    return _limite(CLAVE_MAX_MB_CSV, 2)
+
+
 def maximo_de_filas_csv():
-    """El máximo de filas por cargue, o `None` si SISTRA-11 no lo configuró."""
-    parametro = Parametro.objects.filter(clave=CLAVE_MAXIMO_FILAS_CSV).first()
-    if parametro is None:
-        return None
-    valor = str(parametro.valor or '').strip()
-    # No se usa `int()` a secas porque acepta guiones bajos (`int('1_0') == 10`)
-    # y signos; un parámetro mal escrito tiene que caer en "sin límite", no en
-    # un límite distinto del que el ADMO creyó configurar.
-    if not SOLO_DIGITOS.match(valor):
-        return None
-    maximo = int(valor)
-    return maximo if maximo > 0 else None
+    """El máximo de filas por cargue."""
+    return _limite(CLAVE_MAXIMO_FILAS_CSV, 100)
 
 
 def _auditar(autor, accion, tabla, id_registro=None, detalle='', resultado='Éxito'):
@@ -429,8 +430,8 @@ class CargueCsvForm(forms.Form):
             )
         # Se mira el tamaño antes de leerlo: si no, un archivo enorme se carga
         # entero en memoria y se parsea solo para rechazarlo después.
-        if archivo.size > TAMANO_MAXIMO_DEL_ARCHIVO:
-            megas = TAMANO_MAXIMO_DEL_ARCHIVO // (1024 * 1024)
+        megas = maximo_mb_csv()
+        if archivo.size > megas * 1024 * 1024:
             raise forms.ValidationError(
                 f'El archivo pesa más de {megas} MB: divídelo en varios cargues.'
             )
@@ -501,7 +502,7 @@ def leer_filas_csv(archivo):
             for columna in COLUMNAS_DEL_CSV:
                 fila[columna] = (cruda.get(encabezados[columna]) or '').strip()
             filas.append(fila)
-            if maximo is not None and len(filas) > maximo:
+            if len(filas) > maximo:
                 raise forms.ValidationError(
                     f'El archivo trae más filas de las permitidas: '
                     f'el máximo por cargue es {maximo}.'

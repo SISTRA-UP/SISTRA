@@ -15,6 +15,7 @@ from apps.personas.forms.registro_estudiantes import (
     FilaInvalida,
     RegistroEstudianteForm,
     maximo_de_filas_csv,
+    maximo_mb_csv,
     registrar_estudiante,
     sin_tildes,
 )
@@ -70,6 +71,7 @@ def _pantalla(request, carrera, formulario=None, cargue=None, resumen=None):
             'resumen': resumen,
             'columnas': COLUMNAS_DEL_CSV,
             'maximo_filas': maximo_de_filas_csv(),
+            'maximo_mb': maximo_mb_csv(),
         },
     )
 

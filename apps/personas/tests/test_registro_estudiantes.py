@@ -16,6 +16,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.parametrizacion.models import Carrera, Facultad, Parametro
+from apps.personas.forms.registro_estudiantes import maximo_de_filas_csv
 from apps.personas.models import (
     Director,
     DirectorCarrera,
@@ -669,7 +670,10 @@ class MaximoDeFilasDelCsv(BaseRegistro):
             ]
         )
 
-    def test_si_no_esta_configurado_no_se_limita(self):
+    def test_si_no_esta_configurado_se_aplica_el_maximo_por_defecto(self):
+        # Antes de E11 no había ningún límite mientras el ADMO no guardara uno;
+        # ahora rige el valor por defecto de Parametrización.
+        self.assertEqual(maximo_de_filas_csv(), 100)
         respuesta = self.subir(self.tres_filas())
         self.assertEqual(respuesta.context['resumen']['registrados'], 3)
 
@@ -971,8 +975,145 @@ class NumeroDeFilaDelLogDeErrores(BaseRegistro):
         self.assertEqual(errores[0]['fila'], 4)
 
 
+class LimitesDelCsvDesdeParametrizacion(BaseRegistro):
+    """SIS-70 · E11 · los dos límites del cargue salen de Parametrización.
+
+    Antes el tamaño estaba fijo en 5 MB —mientras el parámetro decía 2— y el
+    máximo de filas se leía consultando la tabla `parametro` a mano, así que el
+    valor por defecto de 100 no se aplicaba nunca: la tabla está vacía hasta que
+    el ADMO guarda algo, y los valores iniciales viven en `servicios.py`.
+    """
+
+    def configurar(self, clave, valor):
+        return Parametro.objects.create(
+            clave=clave,
+            valor=valor,
+            usuario_actualizacion=self.director,
+        )
+
+    def filas_de(self, cuantas):
+        return [
+            [
+                f'Alumno {numero}',
+                f'20000{numero:05d}',
+                f'alumno.{numero}@unipamplona.edu.co',
+                '',
+            ]
+            for numero in range(1, cuantas + 1)
+        ]
+
+    def archivo_de_megas(self, megas):
+        """Un CSV de una sola fila que pesa algo más de `megas` MB."""
+        relleno = 'x' * (megas * 1024 * 1024)
+        return self.csv_de(
+            [[relleno, '2000000001', 'ana.gil@unipamplona.edu.co', '']]
+        )
+
+    def administrador_de_parametros(self):
+        permiso, _ = Permiso.objects.get_or_create(
+            nombre='sistema.parametrizar',
+            defaults={'descripcion': 'Acceso a parametrización', 'estado': 'Activo'},
+        )
+        RolPermiso.objects.get_or_create(rol=self.rol_administrador, permiso=permiso)
+        return self.crear_usuario(
+            'admin.limites@unipamplona.edu.co',
+            'Admin Límites',
+            '1000000077',
+            self.rol_administrador,
+        )
+
+    # --- C1 · el tamaño sale del parámetro, no de un 5 fijo ---
+
+    def test_un_archivo_de_tres_megas_se_rechaza_con_los_dos_por_defecto(self):
+        # Antes pasaba el control de tamaño: el límite fijo eran 5 MB.
+        respuesta = self.subir(self.archivo_de_megas(3))
+        self.assertIsNone(respuesta.context['resumen'])
+        self.assertContains(respuesta, 'pesa más de 2 MB')
+
+    def test_el_mensaje_del_tamano_muestra_el_valor_vigente(self):
+        self.configurar('registro_estudiantes.max_mb_csv', '1')
+        respuesta = self.subir(self.archivo_de_megas(2))
+        self.assertIsNone(respuesta.context['resumen'])
+        self.assertContains(respuesta, 'pesa más de 1 MB')
+
+    def test_un_tamano_mas_amplio_tambien_se_respeta(self):
+        self.configurar('registro_estudiantes.max_mb_csv', '10')
+        # 3 MB ya no se rechazan por tamaño (la fila de relleno falla por sus
+        # datos, que es otra cosa).
+        respuesta = self.subir(self.archivo_de_megas(3))
+        self.assertNotContains(respuesta, 'pesa más de')
+
+    # --- C2 · el máximo de filas aplica el 100 por defecto ---
+
+    def test_sin_parametro_guardado_el_maximo_de_filas_es_cien(self):
+        self.assertEqual(maximo_de_filas_csv(), 100)
+
+    def test_ciento_una_filas_se_rechazan_con_los_cien_por_defecto(self):
+        # Antes pasaban: sin fila en `parametro` no había ningún límite.
+        respuesta = self.subir(self.csv_de(self.filas_de(101)))
+        self.assertIsNone(respuesta.context['resumen'])
+        self.assertContains(respuesta, 'el máximo por cargue es 100')
+        self.assertFalse(Usuario.objects.filter(cedula='2000000001').exists())
+
+    # --- C4 y C5 · «con los parámetros en 1 MB y 3 filas» (la tarjeta) ---
+
+    def test_lo_que_guarda_el_admo_en_parametrizacion_manda(self):
+        self.client.force_login(self.administrador_de_parametros())
+        guardado = self.client.post(
+            reverse('parametrizacion:documentos'),
+            {'max_mb_docx': '10', 'max_mb_csv': '1', 'maximo_filas_csv': '3'},
+        )
+        self.assertEqual(guardado.status_code, 302)
+        self.client.force_login(self.director)
+
+        por_tamano = self.subir(self.archivo_de_megas(2))
+        self.assertIsNone(por_tamano.context['resumen'])
+        self.assertContains(por_tamano, 'pesa más de 1 MB')
+
+        por_filas = self.subir(self.csv_de(self.filas_de(4)))
+        self.assertIsNone(por_filas.context['resumen'])
+        self.assertContains(por_filas, 'el máximo por cargue es 3')
+        self.assertFalse(Usuario.objects.filter(cedula='2000000001').exists())
+
+    # --- C6 · la pantalla del Director muestra los dos límites ---
+
+    def test_la_pantalla_muestra_los_dos_limites_vigentes(self):
+        pantalla = self.client.get(self.url)
+        self.assertContains(pantalla, 'Máximo 100 filas')
+        self.assertContains(pantalla, '2 MB')
+
+    def test_la_pantalla_sigue_los_parametros_guardados(self):
+        self.configurar('registro_estudiantes.max_mb_csv', '7')
+        self.configurar('registro_estudiantes.maximo_filas_csv', '30')
+        pantalla = self.client.get(self.url)
+        self.assertContains(pantalla, 'Máximo 30 filas')
+        self.assertContains(pantalla, '7 MB')
+
+    # --- C7 · una fila editada a mano en la base no deja el cargue inservible ---
+
+    def test_un_tamano_de_cero_en_la_base_no_rechaza_todos_los_archivos(self):
+        # Con 0 MB no entraría ni un archivo vacío: cae en el valor por defecto.
+        self.configurar('registro_estudiantes.max_mb_csv', '0')
+        respuesta = self.subir(self.csv_de(self.filas_de(2)))
+        self.assertEqual(respuesta.context['resumen']['registrados'], 2)
+        self.assertContains(self.client.get(self.url), '2 MB')
+
+    def test_un_tamano_no_numerico_en_la_base_cae_en_el_valor_por_defecto(self):
+        self.configurar('registro_estudiantes.max_mb_csv', 'grande')
+        respuesta = self.subir(self.csv_de(self.filas_de(2)))
+        self.assertEqual(respuesta.context['resumen']['registrados'], 2)
+        self.assertContains(self.client.get(self.url), '2 MB')
+
+
 class ElMaximoMalConfigurado(BaseRegistro):
-    """Un parámetro mal escrito no puede convertirse en un límite distinto."""
+    """Un parámetro mal escrito no puede dejar el cargue inservible.
+
+    Desde E11 el parseo es de SISTRA-11 (`obtener_entero`) y la pantalla que los
+    guarda exige un entero >= 1, así que estos valores solo llegan editando la
+    fila a mano en la base. Lo que se exige aquí es que ninguno reviente. Los que
+    `obtener_entero` no sabe leer caen en el valor por defecto; `'1_0'` sí lo
+    sabe leer, y queda en 10: esa prueba fija el comportamiento real.
+    """
 
     def configurar(self, valor):
         return Parametro.objects.create(
@@ -989,14 +1130,27 @@ class ElMaximoMalConfigurado(BaseRegistro):
             ]
         )
 
-    def test_un_guion_bajo_no_se_lee_como_numero(self):
-        # `int('1_0')` da 10: el ADMO escribe «1_0» y creería tener un límite.
+    def test_un_guion_bajo_queda_en_diez(self):
+        # `int('1_0')` da 10, así que el límite queda en 10 y no en 1. No se
+        # defiende aquí: la pantalla del ADMO no deja guardar «1_0», y si
+        # `obtener_entero` tiene que ser más estricto se arregla en SISTRA-11,
+        # para todos los módulos que lo usan. Se fija el valor, no solo que no
+        # reviente: si allá lo endurecen, esta prueba se pone roja y se sabe.
         self.configurar('1_0')
+        self.assertEqual(maximo_de_filas_csv(), 10)
         respuesta = self.subir(self.dos_filas())
         self.assertEqual(respuesta.context['resumen']['registrados'], 2)
 
-    def test_un_valor_negativo_no_limita(self):
+    def test_un_valor_negativo_cae_en_el_valor_por_defecto(self):
         self.configurar('-5')
+        self.assertEqual(maximo_de_filas_csv(), 100)
+        respuesta = self.subir(self.dos_filas())
+        self.assertEqual(respuesta.context['resumen']['registrados'], 2)
+
+    def test_un_valor_cero_no_rechaza_todos_los_archivos(self):
+        # Un límite de 0 filas dejaría el cargue inservible.
+        self.configurar('0')
+        self.assertEqual(maximo_de_filas_csv(), 100)
         respuesta = self.subir(self.dos_filas())
         self.assertEqual(respuesta.context['resumen']['registrados'], 2)
 
@@ -1006,10 +1160,11 @@ class ElMaximoMalConfigurado(BaseRegistro):
         self.assertIsNone(respuesta.context['resumen'])
         self.assertContains(respuesta, 'el máximo por cargue es 1')
 
-    def test_la_pantalla_dice_cuando_no_hay_maximo_configurado(self):
-        self.assertContains(
-            self.client.get(self.url), 'no hay un máximo de filas configurado'
-        )
+    def test_la_pantalla_muestra_el_maximo_por_defecto(self):
+        # Ya no existe el «todavía no hay un máximo configurado»: siempre hay.
+        pantalla = self.client.get(self.url)
+        self.assertContains(pantalla, 'Máximo 100 filas')
+        self.assertNotContains(pantalla, 'no hay un máximo de filas configurado')
 
 
 class DominioInstitucionalDelCorreo(BaseRegistro):
