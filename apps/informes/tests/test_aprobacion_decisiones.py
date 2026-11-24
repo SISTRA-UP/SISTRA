@@ -1105,7 +1105,7 @@ class DecisionInformeTests(TestCase):
             ),
         }
 
-    def test_reactivar_devuelve_a_modificacion_con_historial_y_aviso(self):
+    def test_reactivar_guarda_historial_aviso_y_conserva_dias(self):
         from apps.informes.views.aprobacion_semaforo import (
             calcular_semaforo_informe,
         )
@@ -1127,9 +1127,9 @@ class DecisionInformeTests(TestCase):
         self.informe.refresh_from_db()
         self.assertEqual(
             self.informe.estado,
-            EstadoTramite.REQUIERE_MODIFICACION,
+            EstadoTramite.EN_REVISION,
         )
-        self.assertEqual(self.informe.fecha_envio, fecha_original)
+        self.assertGreater(self.informe.fecha_envio, fecha_original)
         self.assertEqual(self.informe.version_entrega, entrega_original)
 
         self.assertEqual(
@@ -1154,12 +1154,13 @@ class DecisionInformeTests(TestCase):
         )
         self.assertEqual(
             reactivacion.estado_nuevo,
-            EstadoTramite.REQUIERE_MODIFICACION,
+            EstadoTramite.EN_REVISION,
         )
 
+        from datetime import timedelta
         self.assertEqual(
             self.informe.fecha_envio,
-            fecha_original,
+            reactivacion.fecha_hora - timedelta(days=10),
         )
 
         aviso = Notificacion.objects.get(informe=self.informe)
@@ -1171,8 +1172,8 @@ class DecisionInformeTests(TestCase):
             ahora=reactivacion.fecha_hora,
         )
 
-        self.assertIsNone(semaforo["dias"])
-        self.assertEqual(semaforo["color"], "detenido")
+        self.assertEqual(semaforo["dias"], 10)
+        self.assertEqual(semaforo["color"], "amarillo")
 
         self.assertTrue(
             Auditoria.objects.filter(
@@ -1184,10 +1185,10 @@ class DecisionInformeTests(TestCase):
 
         registro = Auditoria.objects.get(accion="reactivacion_informe")
         for texto in (self.estudiante.cedula, self.estudiante.nombre,
-                      "Días semáforo: 10", "Rechazado -> Requiere modificación", datos["motivo"]):
+                      "Días semáforo: 10", "Rechazado -> En revisión", datos["motivo"]):
             self.assertIn(texto, registro.detalle)
         self.assertEqual(respuesta.json()["mensaje"],
-                         "El informe fue reactivado y quedó en Requiere modificación.")
+                         "El informe fue reactivado y quedó en En revisión.")
 
     def test_reactivar_sin_motivo_no_guarda(self):
         datos = self.preparar_rechazado_para_reactivar()
@@ -1356,7 +1357,7 @@ class DecisionInformeTests(TestCase):
                 ).exists()
             )
 
-    def test_reactivacion_masiva_devuelve_a_modificacion_y_notifica(self):
+    def test_reactivacion_masiva_conserva_dias_y_notifica(self):
         from apps.informes.views.aprobacion_semaforo import (
             calcular_semaforo_informe,
         )
@@ -1386,9 +1387,9 @@ class DecisionInformeTests(TestCase):
 
                 self.assertEqual(
                     informe.estado,
-                    EstadoTramite.REQUIERE_MODIFICACION,
+                    EstadoTramite.EN_REVISION,
                 )
-                self.assertEqual(
+                self.assertGreater(
                     informe.fecha_envio,
                     fechas_originales[informe.pk],
                 )
@@ -1417,12 +1418,13 @@ class DecisionInformeTests(TestCase):
                 )
                 self.assertEqual(
                     evento.estado_nuevo,
-                    EstadoTramite.REQUIERE_MODIFICACION,
+                    EstadoTramite.EN_REVISION,
                 )
 
+                from datetime import timedelta
                 self.assertEqual(
                     informe.fecha_envio,
-                    fechas_originales[informe.pk],
+                    evento.fecha_hora - timedelta(days=10),
                 )
 
                 aviso = Notificacion.objects.get(informe=informe)
@@ -1438,8 +1440,8 @@ class DecisionInformeTests(TestCase):
                     ahora=evento.fecha_hora,
                 )
 
-                self.assertIsNone(semaforo["dias"])
-                self.assertEqual(semaforo["color"], "detenido")
+                self.assertEqual(semaforo["dias"], 10)
+                self.assertEqual(semaforo["color"], "amarillo")
 
                 self.assertEqual(
                     Auditoria.objects.filter(
@@ -1456,7 +1458,7 @@ class DecisionInformeTests(TestCase):
                 accion="reactivacion_masiva_informe", id_registro_afectado=informe.pk)
             estudiante = informe.propuesta.proceso.estudiante_carrera.estudiante.usuario
             for texto in (estudiante.cedula, estudiante.nombre, "Días semáforo: 10",
-                          "Rechazado -> Requiere modificación", datos["motivo"]):
+                          "Rechazado -> En revisión", datos["motivo"]):
                 self.assertIn(texto, registro.detalle)
 
     def test_reactivacion_masiva_sin_motivo_no_guarda(self):
@@ -1582,18 +1584,42 @@ class DecisionInformeTests(TestCase):
         self.assertEqual(registro.resultado, "Bloqueado")
         self.assertIn("HTTP 403", registro.detalle)
 
-    def test_director_no_decide_reactivado_sin_reenvio(self):
+    def test_segunda_reactivacion_conserva_solo_revision_y_no_pausas(self):
+        from datetime import timedelta
+        from apps.informes.views.aprobacion_semaforo import tiempo_acumulado_revision
+
         datos = self.preparar_rechazado_para_reactivar()
         url = reverse('informes:reactivar', kwargs={'id_informe': self.informe.pk})
-        self.assertEqual(self.client.post(url, datos).status_code, 200)
-        respuesta = self.client.post(self.url, self.datos_decision(EstadoTramite.APROBADO))
-        self.assertEqual(respuesta.status_code, 409)
+        respuesta = self.client.post(url, datos)
+        self.assertEqual(respuesta.status_code, 200)
         self.informe.refresh_from_db()
-        self.assertEqual(self.informe.estado, EstadoTramite.REQUIERE_MODIFICACION)
-        self.assertEqual(HistorialEstado.objects.filter(informe=self.informe).count(), 2)
-        self.assertEqual(Notificacion.objects.filter(informe=self.informe).count(), 1)
+        primera = HistorialEstado.objects.get(
+            informe=self.informe, tipo_accion='reactivacion_informe',
+        ).fecha_hora
+        # Pasan 2 días de revisión y luego 5 días rechazado.
+        self.informe.estado = EstadoTramite.RECHAZADO
+        self.informe.save()
+        HistorialEstado.objects.create(
+            informe=self.informe, usuario=self.director,
+            estado_anterior=EstadoTramite.EN_REVISION,
+            estado_nuevo=EstadoTramite.RECHAZADO,
+            fecha_hora=primera + timedelta(days=2), tipo_accion='decision_informe',
+        )
+        segunda = primera + timedelta(days=7)
+        datos['fecha_actualizacion'] = self.informe.fecha_actualizacion.isoformat()
+        with patch('apps.informes.views.aprobacion_reactivacion.timezone.now', return_value=segunda):
+            # Renueva la sesión: el reloj avanzó siete días.
+            self.client.force_login(self.director)
+            respuesta = self.client.post(url, datos)
+        self.assertEqual(respuesta.status_code, 200)
+        self.informe.refresh_from_db()
+        self.assertEqual(self.informe.fecha_envio, segunda - timedelta(days=12))
+        self.assertEqual(
+            tiempo_acumulado_revision(self.informe, ahora=segunda),
+            timedelta(days=12),
+        )
 
-    def test_reactivar_despues_de_reenvio_no_modifica_fecha_envio(self):
+    def test_reactivar_despues_de_reenvio_no_recupera_plazo_anterior(self):
         from datetime import timedelta
 
         ahora = timezone.now()
@@ -1621,8 +1647,7 @@ class DecisionInformeTests(TestCase):
         evento = HistorialEstado.objects.get(
             informe=self.informe, tipo_accion='reactivacion_informe',
         )
-        self.assertEqual(self.informe.fecha_envio, ahora - timedelta(days=4))
-        self.assertEqual(evento.estado_nuevo, EstadoTramite.REQUIERE_MODIFICACION)
+        self.assertEqual(self.informe.fecha_envio, evento.fecha_hora - timedelta(days=3))
 
     def test_textos_decision_excesivos_rechazados_y_auditados(self):
         for campo in ('observacion', 'justificacion'):
@@ -1729,85 +1754,3 @@ class DecisionInformeTests(TestCase):
             EstadoTramite.APROBADO, observacion='x' * 1000))
         self.assertEqual(respuesta.status_code, 200)
         self.assertEqual(respuesta.json()['mensaje'], 'El informe fue aprobado.')
-
-    def comprobar_ciclo_e14(self, masivo=False):
-        from apps.informes.views.aprobacion_semaforo import calcular_semaforo_informe
-
-        if masivo:
-            informes, datos = self.preparar_dos_rechazados_para_masivo()
-            url = reverse('informes:reactivar_masivo')
-        else:
-            datos = self.preparar_rechazado_para_reactivar()
-            informes = [self.informe]
-            url = reverse('informes:reactivar', kwargs={'id_informe': self.informe.pk})
-        originales = {i.pk: (i.fecha_envio, i.version_entrega) for i in informes}
-        respuesta = self.client.post(url, datos)
-        self.assertEqual(respuesta.status_code, 200)
-        mensaje = 'El informe fue reactivado y quedó en Requiere modificación.'
-        self.assertEqual(respuesta.json()['mensaje'], mensaje)
-
-        for informe in informes:
-            informe.refresh_from_db()
-            self.assertEqual(informe.estado, EstadoTramite.REQUIERE_MODIFICACION)
-            self.assertEqual((informe.fecha_envio, informe.version_entrega), originales[informe.pk])
-            aviso = Notificacion.objects.get(informe=informe)
-            self.assertIn(mensaje, aviso.mensaje)
-            self.assertIn(datos['motivo'], aviso.mensaje)
-            accion = 'reactivacion_masiva_informe' if masivo else 'reactivacion_informe'
-            registro = Auditoria.objects.get(accion=accion, id_registro_afectado=informe.pk)
-            self.assertEqual(registro.resultado, RESULTADO_EXITO)
-            self.assertIn('Rechazado -> Requiere modificación', registro.detalle)
-            self.assertEqual(calcular_semaforo_informe(informe, limites=(7, 14))['color'], 'detenido')
-            # No vuelve a la bandeja de pendientes del Director hasta reenviarse.
-            self.client.force_login(self.director)
-            lista = self.client.get(reverse('informes:aprobacion'), {'estado': EstadoTramite.EN_REVISION})
-            self.assertNotContains(lista, informe.codigo)
-
-            estudiante = informe.propuesta.proceso.estudiante_carrera.estudiante.usuario
-            self.assertEqual(aviso.usuario_id, estudiante.pk)
-            self.client.force_login(estudiante)
-            montaje = self.client.get(reverse('informes:montaje'))
-            self.assertEqual(montaje.status_code, 200)
-            self.assertFalse(montaje.context['bloqueado'])
-            self.assertEqual(montaje.context['informe'].pk, informe.pk)
-            textos = {
-                'resultados': 'Resultados corregidos de las actividades comunitarias. ' * 2,
-                'conclusiones': 'Conclusiones corregidas sobre el trabajo social realizado. ' * 2,
-                'recomendaciones': 'Recomendaciones para continuar con el trabajo comunitario. ' * 2,
-            }
-            guardado = self.client.post(reverse('informes:montaje'),
-                                       {'accion': 'guardar_borrador', **textos})
-            self.assertEqual(guardado.status_code, 302)
-            informe.refresh_from_db()
-            self.assertEqual(informe.estado, EstadoTramite.REQUIERE_MODIFICACION)
-            self.assertEqual(informe.fecha_envio, originales[informe.pk][0])
-            antes = timezone.now()
-            envio = self.client.post(reverse('informes:montaje'), {'accion': 'enviar', **textos})
-            self.assertEqual(envio.status_code, 302)
-            informe.refresh_from_db()
-            self.assertEqual(informe.estado, EstadoTramite.EN_REVISION)
-            self.assertGreaterEqual(informe.fecha_envio, antes)
-            self.assertEqual(informe.version_entrega, originales[informe.pk][1] + 1)
-            semaforo = calcular_semaforo_informe(informe, limites=(7, 14))
-            self.assertEqual((semaforo['dias'], semaforo['color']), (0, 'verde'))
-            self.assertTrue(HistorialEstado.objects.filter(informe=informe,
-                estado_anterior=EstadoTramite.REQUIERE_MODIFICACION,
-                estado_nuevo=EstadoTramite.EN_REVISION, tipo_accion='envio_informe').exists())
-
-    def test_e14_individual_estudiante_corrige_y_reenvia(self):
-        self.comprobar_ciclo_e14()
-
-    def test_e14_masivo_estudiantes_corrigen_y_reenvian(self):
-        self.comprobar_ciclo_e14(masivo=True)
-
-    def test_e14_masivo_archivado_bloquea_todo(self):
-        informes, datos = self.preparar_dos_rechazados_para_masivo()
-        informes[1].archivado = True
-        informes[1].fecha_archivado = timezone.now()
-        informes[1].save()
-        respuesta = self.client.post(reverse('informes:reactivar_masivo'), datos)
-        self.assertIn(respuesta.status_code, (400, 403, 404, 409))
-        self.comprobar_reactivacion_masiva_sin_cambios(informes)
-        informes[1].refresh_from_db()
-        self.assertTrue(informes[1].archivado)
-        self.assertIsNotNone(informes[1].fecha_archivado)

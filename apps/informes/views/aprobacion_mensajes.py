@@ -5,7 +5,7 @@ from apps.propuestas.models import EstadoTramite
 MSG_07_01 = "El informe fue aprobado."
 MSG_07_02 = "Se pidió la modificación y se avisó al estudiante."
 MSG_07_03 = "El informe fue rechazado y se avisó al estudiante."
-MSG_REACTIVACION = "El informe fue reactivado y quedó en Requiere modificación."
+MSG_REACTIVACION = "El informe fue reactivado y quedó en En revisión."
 MSG_07_05 = "Completa los campos obligatorios para continuar."
 MSG_07_06 = "No puedes cambiar la decisión: el estudiante ya indicó que subió el informe a la Plataforma UP."
 

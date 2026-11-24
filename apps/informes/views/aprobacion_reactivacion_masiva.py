@@ -4,7 +4,7 @@ import logging
 
 from apps.propuestas.forms.aprobacion import RESULTADO_EXITO
 from apps.informes.views.aprobacion_mensajes import (
-    MSG_REACTIVACION, MSG_07_05,
+    MSG_REACTIVACION, MSG_07_05, aviso_decision,
 )
 
 from apps.usuarios.permisos import requiere_permiso
@@ -22,6 +22,7 @@ from apps.informes.forms.aprobacion_reactivacion_masiva import (
     ReactivacionMasivaInformeForm,
 )
 from apps.informes.views.aprobacion import _informes_del_director
+from apps.informes.views.aprobacion_semaforo import tiempo_acumulado_revision
 from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.seguimiento.models import (
     Auditoria,
@@ -129,19 +130,24 @@ def reactivar_masivo(request):
             for informe in informes:
                 ahora = timezone.now()
                 detalle_auditoria = detalle_transicion(
-                    informe, EstadoTramite.REQUIERE_MODIFICACION, motivo=motivo, ahora=ahora,
+                    informe, EstadoTramite.EN_REVISION, motivo=motivo, ahora=ahora,
                 )
-                # E14 / D11: vuelve al estudiante; el reenvío reiniciará el plazo.
-                informe.estado = EstadoTramite.REQUIERE_MODIFICACION
+                # Igual que en propuestas: conserva el plazo, no la pausa.
+                # No es una nueva entrega; version_entrega no cambia.
+                if informe.fecha_envio is not None:
+                    informe.fecha_envio = ahora - tiempo_acumulado_revision(
+                        informe, ahora=ahora,
+                    )
+                informe.estado = EstadoTramite.EN_REVISION
                 informe.save(
-                    update_fields=["estado", "fecha_actualizacion"]
+                    update_fields=["estado", "fecha_envio", "fecha_actualizacion"]
                 )
 
                 HistorialEstado.objects.create(
                     informe=informe,
                     usuario=request.user,
                     estado_anterior=EstadoTramite.RECHAZADO,
-                    estado_nuevo=EstadoTramite.REQUIERE_MODIFICACION,
+                    estado_nuevo=EstadoTramite.EN_REVISION,
                     motivo_reactivacion=motivo,
                     tipo_accion="reactivacion_masiva_informe",
                     fecha_hora=ahora,
@@ -156,7 +162,7 @@ def reactivar_masivo(request):
                     usuario=estudiante,
                     informe=informe,
                     tipo="reactivacion_informe",
-                    mensaje=f"{MSG_REACTIVACION} Motivo: {motivo}",
+                    mensaje=aviso_decision(EstadoTramite.EN_REVISION, motivo),
                 )
 
                 Auditoria.objects.create(

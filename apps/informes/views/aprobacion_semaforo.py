@@ -11,8 +11,8 @@ from apps.propuestas.models import EstadoTramite
 def tiempo_acumulado_revision(informe, ahora=None, historial=None):
     """Tiempo del envío vigente, con el mismo criterio que la propuesta.
 
-    SISTRA-06 actualiza fecha_envio en cada envío o reenvío. Reactivar
-    deja el informe en Requiere modificación y no altera esa fecha.
+    SISTRA-06 actualiza fecha_envio en cada envío o reenvío. Al reactivar
+    desde Rechazado, SISTRA-07 desplaza esa fecha para excluir la pausa.
     Los ciclos anteriores a una corrección no se vuelven a sumar.
     No modifica el informe ni su historial.
     """
@@ -56,7 +56,7 @@ def calcular_semaforo_informe(
     ahora=None,
     historial=None,
 ):
-    """Calcula el color del envío vigente; se detiene fuera de revisión."""
+    """Calcula el color del envío vigente; excluye las pausas por rechazo."""
 
     if ahora is None:
         ahora = timezone.now()
