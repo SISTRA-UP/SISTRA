@@ -14,7 +14,10 @@ from django.views.decorators.http import require_POST
 from apps.parametrizacion.models import Carrera
 # El envío de credenciales es de SISTRA-10 igual que esta vista: vive en
 # `personas` porque allá nació, con el registro de estudiantes (SIS-19).
-from apps.personas.forms.registro_estudiantes import enviar_credenciales
+from apps.personas.forms.registro_estudiantes import (
+    enviar_credenciales,
+    reenviar_credenciales,
+)
 from apps.seguimiento.models import Auditoria
 from apps.usuarios.forms.roles import (
     ROLES_BASE,
@@ -360,6 +363,38 @@ def crear_usuario(request):
         'usuarios/roles/usuario_formulario.html',
         {'formulario': formulario, 'titulo': 'Nuevo usuario', 'usuario_editado': None},
     )
+
+
+@requiere_permiso('usuario.editar')
+@require_POST
+def reenviar_credenciales_usuario(request, id_usuario):
+    """Le manda una contraseña temporal nueva a quien todavía no ha cambiado la
+    suya (R5). Es la acción «Reenviar» que promete el MSG-10-08.
+
+    El filtro `requiere_cambio_contrasena=True` va en la consulta y no solo en
+    la plantilla: esconder el botón no es una regla, es una sugerencia. Quien ya
+    cambió su contraseña recibe un 404 aunque mande el POST a mano.
+    """
+    usuario = get_object_or_404(
+        Usuario, pk=id_usuario, requiere_cambio_contrasena=True
+    )
+    # `reenviar_credenciales` audita por dentro, como `registrar_estudiante`.
+    if reenviar_credenciales(usuario, autor=request.user):
+        messages.success(
+            request,
+            f'A {usuario.nombre} le acaba de llegar una contraseña temporal '
+            f'nueva a {usuario.correo_institucional}, que deberá cambiar en su '
+            f'primer ingreso.',
+        )
+    else:
+        # MSG-10-08 otra vez: la contraseña se cambió, pero nadie la recibió.
+        messages.warning(
+            request,
+            f'No se pudo enviar el correo a {usuario.correo_institucional}. La '
+            f'contraseña temporal de {usuario.nombre} se cambió, así que hay '
+            f'que volver a intentarlo.',
+        )
+    return redirect('usuarios:usuarios')
 
 
 @requiere_permiso('usuario.editar')

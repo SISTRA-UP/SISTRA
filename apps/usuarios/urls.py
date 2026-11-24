@@ -26,6 +26,7 @@ urlpatterns = [
     path('gestion/<int:id_usuario>/editar/', roles.editar_usuario, name='usuario_editar'),
     path('gestion/<int:id_usuario>/estado/', roles.cambiar_estado_usuario, name='usuario_estado'),
     path('gestion/<int:id_usuario>/eliminar/', roles.eliminar_usuario, name='usuario_eliminar'),
+    path('gestion/<int:id_usuario>/reenviar/', roles.reenviar_credenciales_usuario, name='usuario_reenviar'),
 
     # SISTRA-13 · Logueo
     path('login/', logueo.login, name='login'),

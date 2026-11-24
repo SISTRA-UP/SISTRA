@@ -88,6 +88,201 @@ class BaseRoles(TestCase):
         )
 
 
+class ReenvioDeCredencialesDelAdmo(BaseRoles):
+    """SIS-72 · R5 · la acción «Reenviar» que el MSG-10-08 prometía y no existía.
+
+    Cuando el correo de credenciales no sale, la cuenta queda creada y nadie
+    conoce la contraseña temporal: solo existía en ese correo. Por eso reenviar
+    no es volver a mandar lo mismo, es **generar otra**.
+    """
+
+    CLAVE = 'ClaveReenviadaDePrueba'
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.administrador)
+        self.url_lista = reverse('usuarios:usuarios')
+        self.sin_entrar = self.crear_usuario(
+            'nelly.rios@unipamplona.edu.co', nombre='Nelly Ríos', cedula='1020304051'
+        )
+        self.sin_entrar.requiere_cambio_contrasena = True
+        self.sin_entrar.save(update_fields=['requiere_cambio_contrasena'])
+        mail.outbox.clear()
+
+    def url_reenviar(self, usuario):
+        return reverse('usuarios:usuario_reenviar', args=[usuario.pk])
+
+    def reenviar(self, usuario):
+        return self.client.post(self.url_reenviar(usuario), follow=True)
+
+    def auditorias(self):
+        return Auditoria.objects.filter(accion='Reenviar credenciales')
+
+    # --- C1 · a quién se le ofrece el botón ---
+
+    def test_la_lista_ofrece_el_boton_a_quien_tiene_contrasena_temporal(self):
+        respuesta = self.client.get(self.url_lista)
+        self.assertContains(respuesta, 'Reenviar credenciales')
+        self.assertContains(respuesta, self.url_reenviar(self.sin_entrar))
+
+    def test_la_lista_no_ofrece_el_boton_a_quien_ya_cambio_su_contrasena(self):
+        # `self.administrador` se crea con la bandera en falso.
+        self.sin_entrar.delete()
+        respuesta = self.client.get(self.url_lista)
+        self.assertNotContains(respuesta, 'Reenviar credenciales')
+
+    def test_no_se_puede_reenviar_ni_a_mano_ni_sobre_la_propia_cuenta(self):
+        # Dos cosas a la vez: la regla no puede vivir solo en la plantilla, y
+        # `self.administrador` **es** la cuenta con la que se navega. No hace
+        # falta una guarda de «no sobre mí mismo» como en Inactivar o Eliminar:
+        # el middleware obliga a cambiar la contraseña temporal antes de poder
+        # llegar aquí, así que quien navega siempre tiene la bandera en falso y
+        # el filtro de la consulta ya lo deja fuera.
+        respuesta = self.client.post(self.url_reenviar(self.administrador))
+        self.assertEqual(respuesta.status_code, 404)
+        self.assertEqual(len(mail.outbox), 0)
+
+    # --- C2 y C9 · la contraseña nueva llega y sirve ---
+
+    def test_el_reenvio_manda_una_contrasena_nueva_que_funciona(self):
+        anterior = self.sin_entrar.password
+        with patch(
+            'apps.personas.forms.registro_estudiantes.get_random_string',
+            return_value=self.CLAVE,
+        ):
+            respuesta = self.reenviar(self.sin_entrar)
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(self.CLAVE, mail.outbox[0].body)
+        self.assertEqual(mail.outbox[0].to, [self.sin_entrar.correo_institucional])
+
+        self.sin_entrar.refresh_from_db()
+        # Sirve para entrar, y la de antes ya no.
+        self.assertTrue(self.sin_entrar.check_password(self.CLAVE))
+        self.assertNotEqual(self.sin_entrar.password, anterior)
+        self.assertFalse(self.sin_entrar.check_password('ClaveDePrueba123'))
+        # Y sigue teniendo que cambiarla en el primer ingreso.
+        self.assertTrue(self.sin_entrar.requiere_cambio_contrasena)
+
+    def test_la_contrasena_nueva_no_se_guarda_en_claro_ni_se_audita(self):
+        with patch(
+            'apps.personas.forms.registro_estudiantes.get_random_string',
+            return_value=self.CLAVE,
+        ):
+            self.reenviar(self.sin_entrar)
+
+        self.sin_entrar.refresh_from_db()
+        self.assertNotIn(self.CLAVE, self.sin_entrar.password)
+        for registro in self.auditorias():
+            self.assertNotIn(self.CLAVE, registro.detalle)
+
+    # --- C3 · auditoría ---
+
+    def test_el_reenvio_queda_auditado_con_exito(self):
+        self.reenviar(self.sin_entrar)
+        registro = self.auditorias().latest('id_auditoria')
+        self.assertEqual(registro.resultado, 'Éxito')
+        self.assertEqual(registro.tabla_afectada, 'usuario')
+        self.assertEqual(registro.id_registro_afectado, self.sin_entrar.pk)
+        self.assertEqual(registro.usuario, self.administrador)
+        self.assertIn(self.sin_entrar.correo_institucional, registro.detalle)
+
+    # --- C4 · si el correo falla ---
+
+    def test_si_el_correo_falla_se_audita_fallo_y_se_avisa(self):
+        anterior = self.sin_entrar.password
+        with patch(
+            'apps.personas.forms.registro_estudiantes.send_mail',
+            side_effect=OSError('servidor caído'),
+        ):
+            respuesta = self.reenviar(self.sin_entrar)
+
+        self.assertEqual(len(mail.outbox), 0)
+        registro = self.auditorias().latest('id_auditoria')
+        self.assertEqual(registro.resultado, 'Fallo')
+        self.assertContains(respuesta, 'alert-warning')
+
+        # La cuenta no se rompe: la contraseña nueva quedó puesta y el botón sigue.
+        self.sin_entrar.refresh_from_db()
+        self.assertNotEqual(self.sin_entrar.password, anterior)
+        self.assertTrue(self.sin_entrar.requiere_cambio_contrasena)
+        self.assertContains(respuesta, self.url_reenviar(self.sin_entrar))
+
+    # --- C1 de la revisión · la contraseña nueva tiene que servir de verdad ---
+
+    def test_la_contrasena_nueva_sirve_para_entrar(self):
+        # `check_password` no alcanza: el login exige además que la cuenta no
+        # esté bloqueada. Esta prueba es la que caza ese caso.
+        with patch(
+            'apps.personas.forms.registro_estudiantes.get_random_string',
+            return_value=self.CLAVE,
+        ):
+            self.reenviar(self.sin_entrar)
+
+        self.client.logout()
+        entro = self.client.login(
+            correo_institucional=self.sin_entrar.correo_institucional,
+            password=self.CLAVE,
+        )
+        self.assertTrue(entro)
+
+    def test_reenviar_desbloquea_la_cuenta(self):
+        # El caso típico de R5: no le llegó el correo, intentó a ciegas hasta
+        # bloquearse y pidió ayuda. Si el reenvío no desbloquea, el ADMO le dice
+        # que ya puede entrar y la cuenta lo sigue rechazando.
+        self.sin_entrar.intentos_fallidos = 4
+        self.sin_entrar.bloqueado_hasta = timezone.now() + timezone.timedelta(minutes=15)
+        self.sin_entrar.save(
+            update_fields=['intentos_fallidos', 'bloqueado_hasta']
+        )
+
+        with patch(
+            'apps.personas.forms.registro_estudiantes.get_random_string',
+            return_value=self.CLAVE,
+        ):
+            self.reenviar(self.sin_entrar)
+
+        self.sin_entrar.refresh_from_db()
+        self.assertIsNone(self.sin_entrar.bloqueado_hasta)
+        self.assertEqual(self.sin_entrar.intentos_fallidos, 0)
+        self.client.logout()
+        self.assertTrue(
+            self.client.login(
+                correo_institucional=self.sin_entrar.correo_institucional,
+                password=self.CLAVE,
+            )
+        )
+
+    def test_la_llamada_pide_el_autor_por_nombre(self):
+        # `enviar_credenciales(usuario, contrasena)` y
+        # `reenviar_credenciales(usuario, autor=...)` son hermanas y contiguas:
+        # si el autor fuera posicional, pasarle una contraseña por error se
+        # auditaría sin autor y nadie se enteraría.
+        from apps.personas.forms.registro_estudiantes import reenviar_credenciales
+
+        with self.assertRaises(TypeError):
+            reenviar_credenciales(self.sin_entrar, self.administrador)
+
+    # --- C8 · la ruta es solo POST y exige permiso ---
+
+    def test_la_ruta_no_responde_a_get(self):
+        self.assertEqual(
+            self.client.get(self.url_reenviar(self.sin_entrar)).status_code, 405
+        )
+
+    def test_sin_el_permiso_de_editar_usuarios_responde_403(self):
+        rol = self.crear_rol_con('Solo ver usuarios', 'usuario.ver')
+        mirona = self.crear_usuario(
+            'olga.mira@unipamplona.edu.co', nombre='Olga Mira', cedula='1020304052', rol=rol
+        )
+        self.client.force_login(mirona)
+        self.assertEqual(
+            self.client.post(self.url_reenviar(self.sin_entrar)).status_code, 403
+        )
+        self.assertEqual(len(mail.outbox), 0)
+
+
 class SiembraDeRolesYPermisos(BaseRoles):
     """C0 · base para el resto: sin permisos sembrados no hay nada que asignar."""
 
