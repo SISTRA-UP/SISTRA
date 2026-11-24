@@ -11,7 +11,6 @@ from django.core.management import call_command
 from django.utils import timezone
 
 from apps.parametrizacion import servicios
-from apps.parametrizacion.models import Parametro
 from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.propuestas.tests.test_aprobacion import BaseAprobacionTestCase
 from apps.seguimiento.models import Auditoria, HistorialEstado
@@ -73,7 +72,7 @@ class TestArchivarRechazados(BaseAprobacionTestCase):
         )
 
     def test_sin_parametro_no_archiva_y_lo_dice(self):
-        Parametro.objects.filter(clave=PLAZO).delete()
+        servicios.guardar(PLAZO, '', self.user_director)
         prop = self._rechazada_hace(self.estudiante_1, 'PROP-ARCH-SIN-PLAZO', dias=400)
 
         salida = self._archivar()
