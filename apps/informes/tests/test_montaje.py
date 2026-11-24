@@ -4,9 +4,8 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
 from datetime import date
-from apps.usuarios.models import Permiso, RolPermiso
 
-from apps.usuarios.models import Usuario, Rol
+from apps.usuarios.models import Usuario, Rol, Permiso, RolPermiso
 from apps.personas.models import Estudiante, EstudianteCarrera
 from apps.parametrizacion.models import Facultad, Carrera, PeriodoAcademico, EstadoPeriodo
 from apps.propuestas.models import Propuesta, EstadoTramite
@@ -41,12 +40,14 @@ class MontajeInformeTests(TestCase):
             rol=self.rol,
             requiere_cambio_contrasena=False,
         )
+        
         # Asignar el permiso informe.montar al rol Estudiante para las pruebas
         permiso_montar, _ = Permiso.objects.get_or_create(
             nombre='informe.montar',
             defaults={'descripcion': 'Permite al estudiante montar su informe'}
         )
         RolPermiso.objects.get_or_create(rol=self.rol, permiso=permiso_montar)
+        
         self.estudiante = Estudiante.objects.create(usuario=self.usuario)
 
         self.facultad, _ = Facultad.objects.get_or_create(nombre='Facultad Test')
@@ -147,15 +148,66 @@ class MontajeInformeTests(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_acceso_exitoso_con_propuesta_aprobada(self):
+        """GET inicial muestra botón crear, POST crea, siguiente GET muestra formulario."""
         self._login()
+        
+        # 1. GET inicial debe mostrar el botón de crear, no el formulario
+        response = self.client.get(reverse('informes:montaje'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Crear Informe')
+        self.assertEqual(Informe.objects.filter(propuesta=self.propuesta).count(), 0)
+
+        # 2. POST para crear el informe
+        self.client.post(reverse('informes:montaje'), {'accion': 'crear_informe'})
+
+        # 3. GET siguiente debe mostrar el formulario
         response = self.client.get(reverse('informes:montaje'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Formulario de Informe')
+
+    # ─── Pruebas E3: Creación de informe (GET no crea, POST sí) ───
+
+    def test_get_no_crea_informe(self):
+        """Un GET no debe crear ningún informe."""
+        self._login()
+        self.assertEqual(Informe.objects.filter(propuesta=self.propuesta).count(), 0)
+        
+        response = self.client.get(reverse('informes:montaje'))
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Informe.objects.filter(propuesta=self.propuesta).count(), 0)
+        self.assertContains(response, 'Crear Informe')
+
+    def test_post_crear_informe_crea_uno_solo(self):
+        """Un POST con acción crear_informe debe crear exactamente un informe."""
+        self._login()
+        
+        response = self.client.post(reverse('informes:montaje'), {'accion': 'crear_informe'})
+        
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Informe.objects.filter(propuesta=self.propuesta).count(), 1)
+        
+        informe = Informe.objects.get(propuesta=self.propuesta)
+        self.assertEqual(informe.estado, EstadoTramite.BORRADOR)
+
+    def test_dos_post_crear_informe_no_causan_error(self):
+        """Dos POST seguidos deben dejar un solo informe sin error 500."""
+        self._login()
+        
+        response1 = self.client.post(reverse('informes:montaje'), {'accion': 'crear_informe'})
+        response2 = self.client.post(reverse('informes:montaje'), {'accion': 'crear_informe'})
+        
+        self.assertEqual(Informe.objects.filter(propuesta=self.propuesta).count(), 1)
+        self.assertNotEqual(response1.status_code, 500)
+        self.assertNotEqual(response2.status_code, 500)
 
     # ─── Pruebas de envío y bloqueo ───
 
     def test_enviar_informe_cambia_estado(self):
         self._login()
+        # Primero crear el informe
+        self.client.post(reverse('informes:montaje'), {'accion': 'crear_informe'})
+        
         data = {
             'accion': 'enviar',
             'resultados': TEXTO_VALIDO,
@@ -188,7 +240,6 @@ class MontajeInformeTests(TestCase):
         self.assertEqual(informe.estado, EstadoTramite.EN_REVISION)
         self.assertEqual(informe.resultados, texto_original)
 
-        # Usar la constante importada
         auditoria = Auditoria.objects.filter(
             id_registro_afectado=informe.id_informe,
             resultado=RESULTADO_BLOQUEADO,
@@ -211,7 +262,6 @@ class MontajeInformeTests(TestCase):
         informe.refresh_from_db()
         self.assertEqual(informe.estado, EstadoTramite.APROBADO)
 
-        # Verificar que la auditoría quede con RESULTADO_BLOQUEADO
         auditoria = Auditoria.objects.filter(
             id_registro_afectado=informe.id_informe,
             resultado=RESULTADO_BLOQUEADO,
@@ -231,6 +281,9 @@ class MontajeInformeTests(TestCase):
     def test_guardar_borrador_parcial(self):
         """Se puede guardar un borrador con solo 1 campo."""
         self._login()
+        # Primero crear el informe
+        self.client.post(reverse('informes:montaje'), {'accion': 'crear_informe'})
+        
         data = {
             'accion': 'guardar_borrador',
             'resultados': TEXTO_VALIDO,
@@ -283,20 +336,33 @@ class MontajeInformeTests(TestCase):
     # ─── Pruebas de informe rechazado ───
 
     def test_informe_rechazado_crea_nuevo(self):
-        """Si el informe está Rechazado, se crea uno nuevo con código distinto."""
+        """Si el informe está Rechazado, se requiere un POST para crear uno nuevo con código distinto."""
         self._login()
         rechazado = self._crear_informe(EstadoTramite.RECHAZADO)
 
-        response = self.client.get(reverse('informes:montaje'))
-        self.assertEqual(response.status_code, 200)
-
+        # 1. El GET no debe crear nada, solo mostrar el botón de crear
+        response_get = self.client.get(reverse('informes:montaje'))
+        self.assertEqual(response_get.status_code, 200)
+        self.assertContains(response_get, 'Crear Informe')
+        
+        # Verificar que el rechazado sigue igual y no hay borrador aún
         rechazado.refresh_from_db()
         self.assertEqual(rechazado.estado, EstadoTramite.RECHAZADO)
+        self.assertEqual(
+            Informe.objects.filter(propuesta=self.propuesta, estado=EstadoTramite.BORRADOR).count(), 
+            0
+        )
 
+        # 2. El estudiante debe hacer POST para crear el nuevo informe
+        response_post = self.client.post(reverse('informes:montaje'), {'accion': 'crear_informe'})
+        self.assertEqual(response_post.status_code, 302) # Redirige después de crear
+
+        # 3. Ahora sí debe existir un nuevo informe en Borrador
         nuevo = Informe.objects.filter(
             propuesta=self.propuesta,
             estado=EstadoTramite.BORRADOR,
         ).first()
+        
         self.assertIsNotNone(nuevo)
         self.assertNotEqual(nuevo.codigo, rechazado.codigo)
 
@@ -304,6 +370,9 @@ class MontajeInformeTests(TestCase):
 
     def test_mas_de_1000_caracteres_se_rechaza(self):
         self._login()
+        # Primero crear el informe
+        self.client.post(reverse('informes:montaje'), {'accion': 'crear_informe'})
+        
         data = {
             'accion': 'guardar_borrador',
             'resultados': TEXTO_LARGO,
@@ -316,6 +385,9 @@ class MontajeInformeTests(TestCase):
 
     def test_menos_de_50_no_se_puede_enviar(self):
         self._login()
+        # Primero crear el informe
+        self.client.post(reverse('informes:montaje'), {'accion': 'crear_informe'})
+        
         data = {
             'accion': 'enviar',
             'resultados': TEXTO_CORTO,
@@ -330,7 +402,8 @@ class MontajeInformeTests(TestCase):
 
     def test_auditoria_al_crear_informe(self):
         self._login()
-        self.client.get(reverse('informes:montaje'))
+        # Ahora se crea con POST, no con GET
+        self.client.post(reverse('informes:montaje'), {'accion': 'crear_informe'})
 
         informe = Informe.objects.filter(propuesta=self.propuesta).first()
         auditoria = Auditoria.objects.filter(
@@ -341,6 +414,9 @@ class MontajeInformeTests(TestCase):
 
     def test_auditoria_al_guardar_borrador(self):
         self._login()
+        # Primero crear el informe
+        self.client.post(reverse('informes:montaje'), {'accion': 'crear_informe'})
+        
         data = {
             'accion': 'guardar_borrador',
             'resultados': TEXTO_VALIDO,
@@ -358,6 +434,9 @@ class MontajeInformeTests(TestCase):
 
     def test_auditoria_al_enviar_informe(self):
         self._login()
+        # Primero crear el informe
+        self.client.post(reverse('informes:montaje'), {'accion': 'crear_informe'})
+        
         data = {
             'accion': 'enviar',
             'resultados': TEXTO_VALIDO,
