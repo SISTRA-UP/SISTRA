@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{# SISTRA-10 · R8 · Página de error. Solo llena `contenido`, así que toma el
+   diseño de `base.html` cuando R10 lo cambie, sin tocar este archivo.
+   No consulta la base ni usa `request`: la del 500 tiene que poder mostrarse
+   justo cuando lo que falló es la base. #}
+
+{% block titulo %}Sin permiso · SISTRA{% endblock %}
+
+{% block contenido %}
+<main class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+      <div class="card shadow-sm">
+        <div class="card-body text-center p-4 p-md-5">
+          <p class="text-uppercase small fw-semibold text-body-secondary mb-2">Error 403</p>
+          <h1 class="h3 mb-3">Sin permiso</h1>
+          <p class="mb-3">No tienes permiso para acceder a esta página.</p>
+          <p class="text-body-secondary small mb-4">Tu rol no incluye esta opción. Si necesitas entrar, pídeselo al administrador del sistema.</p>
+          <a class="btn btn-primary" href="/">Volver</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+{% endblock %}
