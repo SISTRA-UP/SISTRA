@@ -407,12 +407,40 @@ class TestMontajeVistasYFlujos(BaseMontajeTestCase):
 
     def test_estudiante_descarga_plantilla_y_autocompleta_16_campos(self):
         """Como estudiante, descarga la plantilla, la diligencia, la sube con Autocompletar desde Word y ve los 16 campos llenos."""
-        self.client.force_login(self.user_estudiante)
-        url_descarga = reverse('parametrizacion:plantilla_propuesta_estudiante')
-        resp_descarga = self.client.get(url_descarga)
-        self.assertEqual(resp_descarga.status_code, 200)
-        contenido_descargado = b''.join(resp_descarga.streaming_content)
-        self.assertTrue(len(contenido_descargado) > 0)
+        import os
+        import tempfile
+        from django.test import override_settings
+        from apps.parametrizacion.models import Plantilla, VersionPlantilla
+        from apps.propuestas.services.plantilla_word import generar_docx_plantilla_oficial
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            doc_dir = os.path.join(tmp_dir, 'documentos')
+            os.makedirs(doc_dir, exist_ok=True)
+            ruta_rel = os.path.join('documentos', 'plantilla_propuesta_trabajo_social.docx')
+            with open(os.path.join(tmp_dir, ruta_rel), 'wb') as f:
+                f.write(generar_docx_plantilla_oficial())
+
+            plantilla = Plantilla.objects.create(
+                nombre='Plantilla Propuesta',
+                tipo='propuesta',
+                estado='Activo',
+            )
+            VersionPlantilla.objects.create(
+                plantilla=plantilla,
+                usuario=self.user_director,
+                numero_version=1,
+                nombre_archivo='plantilla_propuesta_trabajo_social.docx',
+                ruta_archivo=ruta_rel,
+                es_vigente=True,
+            )
+
+            with override_settings(MEDIA_ROOT=tmp_dir):
+                self.client.force_login(self.user_estudiante)
+                url_descarga = reverse('parametrizacion:plantilla_propuesta_estudiante')
+                resp_descarga = self.client.get(url_descarga)
+                self.assertEqual(resp_descarga.status_code, 200)
+                contenido_descargado = b''.join(resp_descarga.streaming_content)
+                self.assertTrue(len(contenido_descargado) > 0)
 
         archivo = SimpleUploadedFile(
             'plantilla_propuesta_trabajo_social.docx',
@@ -627,3 +655,44 @@ class TestServicioPlantillaWord(TestCase):
 
         with self.assertRaises(PlantillaInvalidaError):
             extraer_datos_plantilla(buf)
+
+    def test_fecha_mal_escrita_deja_campos_vacios_y_avisa(self):
+        """Un Word con fechas mal escritas deja ambos campos vacíos y genera avisos."""
+        etiquetas = {
+            **ETIQUETAS_COMPLETAS,
+            'Fecha estimada de inicio': '31/02/20x6',
+            'Fecha estimada de finalización': 'el lunes',
+        }
+        contenido = _docx_con_etiquetas(etiquetas)
+        datos, avisos = extraer_datos_plantilla(io.BytesIO(contenido))
+        self.assertNotIn('fecha_inicio', datos)
+        self.assertNotIn('fecha_fin', datos)
+        self.assertTrue(any('Fecha estimada de inicio' in av for av in avisos))
+        self.assertTrue(any('Fecha estimada de finalización' in av for av in avisos))
+
+        # También rechaza fechas imposibles en calendario como 31/02/2026
+        etiquetas_calendario = {
+            **ETIQUETAS_COMPLETAS,
+            'Fecha estimada de inicio': '31/02/2026',
+            'Fecha estimada de finalización': '2026-02-31',
+        }
+        datos_cal, avisos_cal = extraer_datos_plantilla(io.BytesIO(_docx_con_etiquetas(etiquetas_calendario)))
+        self.assertNotIn('fecha_inicio', datos_cal)
+        self.assertNotIn('fecha_fin', datos_cal)
+        self.assertEqual(len(avisos_cal), 2)
+
+    def test_plantilla_oficial_usa_ejemplo_dd_mm_aaaa_y_se_normaliza(self):
+        """La plantilla oficial muestra fechas ejemplo en dd/mm/aaaa y se normalizan a ISO."""
+        from apps.propuestas.services.plantilla_word import generar_docx_plantilla_oficial
+
+        docx_bytes = generar_docx_plantilla_oficial()
+        with zipfile.ZipFile(io.BytesIO(docx_bytes)) as z:
+            xml_text = z.read('word/document.xml').decode('utf-8')
+        self.assertIn('01/02/2026', xml_text)
+        self.assertIn('30/06/2026', xml_text)
+        self.assertNotIn('2026-02-01', xml_text)
+
+        datos, avisos = extraer_datos_plantilla(io.BytesIO(docx_bytes))
+        self.assertEqual(datos.get('fecha_inicio'), '2026-02-01')
+        self.assertEqual(datos.get('fecha_fin'), '2026-06-30')
+        self.assertEqual(avisos, [])

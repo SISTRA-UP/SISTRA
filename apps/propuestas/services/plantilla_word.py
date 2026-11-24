@@ -61,8 +61,8 @@ def generar_docx_plantilla_oficial(valores: dict[str, str] | None = None) -> byt
         "area": "[Área temática de intervención]",
         "sector": "[Sector temático de aplicación]",
         "unidad": "[Barrio, vereda o dependencia ejecutora]",
-        "fecha_inicio": "2026-02-01",
-        "fecha_fin": "2026-06-30",
+        "fecha_inicio": "01/02/2026",
+        "fecha_fin": "30/06/2026",
     }
 
     # Estructura del documento OpenXML

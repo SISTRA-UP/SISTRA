@@ -6,6 +6,7 @@ import re
 import unicodedata
 import xml.etree.ElementTree as ET
 import zipfile
+from datetime import date
 from io import BytesIO
 
 from apps.propuestas.forms.montaje import MSG_01_03
@@ -63,16 +64,27 @@ def normalizar_etiqueta(texto: str) -> str:
     return re.sub(r'[\s:._\-]+', ' ', t).strip()
 
 
-def _normalizar_fecha_str(texto: str) -> str:
-    """Normaliza cadenas de fecha (DD/MM/YYYY o YYYY-MM-DD) al estándar ISO YYYY-MM-DD."""
+def _normalizar_fecha_str(texto: str) -> str | None:
+    """Normaliza cadenas de fecha (dd/mm/aaaa o aaaa-mm-dd) a ISO aaaa-mm-dd.
+
+    Retorna None si la fecha no tiene formato válido o no existe en el calendario.
+    """
     t = texto.strip()
     m = re.match(r'^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$', t)
     if m:
         dia, mes, anio = m.groups()
-        return f'{anio}-{int(mes):02d}-{int(dia):02d}'
-    if re.match(r'^\d{4}-\d{2}-\d{2}$', t):
-        return t
-    return t
+        try:
+            return date(int(anio), int(mes), int(dia)).isoformat()
+        except ValueError:
+            return None
+    m_iso = re.match(r'^(\d{4})-(\d{2})-(\d{2})$', t)
+    if m_iso:
+        anio, mes, dia = m_iso.groups()
+        try:
+            return date(int(anio), int(mes), int(dia)).isoformat()
+        except ValueError:
+            return None
+    return None
 
 
 # Lookup normalizado: texto normalizado -> campo del modelo
@@ -217,13 +229,26 @@ def _extraer_con_xml(archivo_bytes: BytesIO) -> tuple[dict[str, str], list[str]]
             detalle_auditoria=f'Faltan etiquetas requeridas: {nombres_faltantes}',
         )
 
-    # --- Normalizar fechas opcionales (R2) ---
+    avisos: list[str] = []
+
+    # --- Normalizar y validar fechas opcionales (R2) ---
+    etiquetas_fecha = {
+        'fecha_inicio': 'Fecha estimada de inicio',
+        'fecha_fin': 'Fecha estimada de finalización',
+    }
     for c in ('fecha_inicio', 'fecha_fin'):
         if c in datos and datos[c]:
-            datos[c] = _normalizar_fecha_str(datos[c])
+            normalizada = _normalizar_fecha_str(datos[c])
+            if normalizada:
+                datos[c] = normalizada
+            else:
+                avisos.append(
+                    f'El valor «{datos[c]}» en «{etiquetas_fecha[c]}» no es una fecha válida '
+                    f'(usa el formato dd/mm/aaaa). El campo quedó vacío para que lo ingreses.'
+                )
+                del datos[c]
 
     # --- Validar sector_entidad ---
-    avisos: list[str] = []
     if 'sector_entidad' in datos:
         norm_sector = normalizar_etiqueta(datos['sector_entidad'])
         if norm_sector in _MAPA_SECTORES:
