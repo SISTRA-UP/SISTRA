@@ -50,6 +50,9 @@ MSG_05_05 = 'Escribe la observación o el motivo para continuar.'
 MSG_05_06 = 'Se corrigió la verificación y se avisó al estudiante.'
 # Mensajes de apoyo que el BRD no define (texto de interfaz, sin valor institucional).
 MSG_05_CORRECCION_NO_DISPONIBLE = 'Esta verificación ya no se puede corregir.'
+MSG_05_CORRECCION_BLOQUEADA_INFORME = (
+    'No puedes corregir a Rechazado en UP: el estudiante ya envió su informe.'
+)
 MSG_05_ERROR = 'No fue posible guardar la verificación. No se guardaron cambios; inténtalo de nuevo.'
 MSG_05_SIN_HTML = 'No uses HTML ni scripts en el texto.'
 MSG_05_DENEGADO = 'Tu sesión expiró o no tienes permiso para consultar esta información.'
@@ -244,13 +247,37 @@ def pendientes(propuestas):
     )
 
 
+def _informes_enviados():
+    """Informes activos (no archivados) que ya salieron de Borrador."""
+    from apps.informes.models import Informe
+
+    return Informe.objects.filter(archivado=False).exclude(estado=EstadoTramite.BORRADOR)
+
+
+def correccion_bloqueada_por_informe(propuesta, resultado_nuevo) -> bool:
+    """E13: no se corrige a Rechazado en UP si el estudiante ya envió su informe.
+
+    Un informe archivado o en Borrador no cuenta. De Rechazado a Aprobado en UP
+    se corrige siempre.
+    """
+    if resultado_nuevo != EstadoVerificacion.RECHAZADO_EN_UP:
+        return False
+    return _informes_enviados().filter(propuesta=propuesta).exists()
+
+
 def verificados_corregibles(propuestas):
-    """Propuestas cuya última verificación aún se puede corregir (FA-03)."""
+    """Propuestas cuya última verificación aún se puede corregir (FA-03).
+
+    E13: se excluyen las que ya no se pueden corregir a Rechazado en UP por informe enviado.
+    """
+    con_informe_enviado = _informes_enviados().values('propuesta')
     return propuestas.filter(
         Q(estado=EstadoTramite.APROBADO_EN_UP,
           resultado_ultimo_cargue=EstadoVerificacion.APROBADO_EN_UP)
         | Q(estado=EstadoTramite.APROBADO,
             resultado_ultimo_cargue=EstadoVerificacion.RECHAZADO_EN_UP)
+    ).exclude(
+        estado=EstadoTramite.APROBADO_EN_UP, pk__in=con_informe_enviado
     )
 
 
