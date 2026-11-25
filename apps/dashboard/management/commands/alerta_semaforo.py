@@ -16,7 +16,7 @@ from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.seguimiento.models import Auditoria, HistorialEstado, Notificacion
 from apps.usuarios.models import Estado
 
-MSG_14_03 = 'Tienes {cantidad} registros en {nivel} esperando tu revisión'
+MSG_14_03 = 'Tienes {cantidad} registros en {nivel} esperando tu revisión.'
 
 TIPOS_ALERTA_SEMAFORO = {
     'amarillo': 'SEMAFORO_AMARILLO',
