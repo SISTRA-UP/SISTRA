@@ -13,6 +13,7 @@ from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.mail import send_mail as send_mail_real
 from django.core.mail.backends.locmem import EmailBackend
+from django.db import DatabaseError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -21,6 +22,7 @@ from apps.parametrizacion.models import Carrera, Facultad, Parametro
 from apps.personas.forms.registro_estudiantes import (
     enviar_credenciales,
     maximo_de_filas_csv,
+    reenviar_credenciales,
 )
 from apps.personas.models import (
     Director,
@@ -948,6 +950,52 @@ class ReenvioDeCredencialesDelDirector(BaseRegistro):
         self.assertEqual(
             self.client.get(self.url_reenviar(estudiante)).status_code, 405
         )
+
+    # --- Segunda ronda de la PR #48 · el correo sale después de confirmar ---
+
+    def test_si_la_auditoria_falla_la_contrasena_del_correo_sigue_sirviendo(self):
+        """Lo pidió la revisión de la PR #48, y es el bloqueante de verdad.
+
+        Con el envío dentro de la transacción, un fallo posterior —la
+        auditoría— revertía la contraseña nueva, pero el correo ya había
+        salido: a la persona le llegaba una contraseña que no servía. Un
+        correo no se puede deshacer, así que el orden tiene que ser al revés:
+        confirmar primero, mandar después, como hace `registrar_estudiante`.
+        """
+        estudiante = self.estudiante_de(
+            self.carrera, 'gala.soto@unipamplona.edu.co', '2000000007'
+        )
+        mail.outbox.clear()
+        with (
+            patch(
+                'apps.personas.forms.registro_estudiantes.get_random_string',
+                return_value=self.CLAVE,
+            ),
+            patch(
+                'apps.personas.forms.registro_estudiantes.Auditoria.objects.create',
+                side_effect=DatabaseError('la auditoría se cayó'),
+            ),
+        ):
+            with self.assertRaises(DatabaseError):
+                reenviar_credenciales(estudiante, autor=self.director)
+
+        # El correo salió, y eso no se puede deshacer.
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(self.CLAVE, mail.outbox[0].body)
+        # Lo que importa, y se comprueba entrando de verdad y no comparando el
+        # hash: `check_password` sola ya dejó pasar un defecto en la primera
+        # ronda (la cuenta quedaba bloqueada y la contraseña «coincidía»).
+        estudiante.refresh_from_db()
+        self.assertTrue(estudiante.check_password(self.CLAVE))
+        self.client.logout()
+        self.assertTrue(
+            self.client.login(
+                correo_institucional=estudiante.correo_institucional,
+                password=self.CLAVE,
+            )
+        )
+        # Y no quedó auditoría, porque es justo lo que falló.
+        self.assertFalse(self.auditorias().exists())
 
 
 class CargueCsv(BaseRegistro):
