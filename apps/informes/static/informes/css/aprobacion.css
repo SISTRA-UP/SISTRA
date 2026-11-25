@@ -1,0 +1,340 @@
+/* SISTRA-07: presentación de la bandeja y sus diálogos. La cabecera y el menú son comunes. */
+body:has(.sistra07-page) {
+    background: var(--sistra-fondo, #F5F6F9);
+}
+
+.sistra07-page {
+    color: var(--sistra-texto, #1F2430);
+    font-family: var(--sistra-letra, 'IBM Plex Sans', system-ui, sans-serif);
+    margin: 0 auto;
+    max-width: 1600px;
+    min-width: 0;
+    padding: 32px;
+}
+
+.sistra07-page .sistra07-encabezado {
+    margin-bottom: 24px;
+}
+
+.sistra07-page .sistra07-contexto {
+    color: var(--sistra-texto-suave, #4B5263);
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+
+.sistra07-page h1 {
+    color: var(--sistra-texto, #1F2430);
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: 8px;
+}
+
+.sistra07-page .sistra07-encabezado > p:last-child {
+    color: var(--sistra-texto-suave, #4B5263);
+    font-size: 15px;
+    margin-bottom: 0;
+}
+
+.sistra07-page .sistra07-card,
+.sistra07-page .modal-content {
+    background: var(--sistra-superficie, #FFFFFF);
+    border: 1px solid var(--sistra-borde, #E3E6EC);
+    border-radius: 12px;
+    box-shadow: 0 3px 15px rgba(31, 36, 48, .04);
+    min-width: 0;
+    overflow: hidden;
+}
+
+.sistra07-page .sistra07-filtros .card-body {
+    padding: 24px;
+}
+
+.sistra07-page .form-label,
+.sistra07-page label:not(.form-check-label) {
+    color: var(--sistra-texto, #1F2430);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.sistra07-page .form-control,
+.sistra07-page .form-select {
+    background-color: var(--sistra-superficie, #FFFFFF);
+    border-color: var(--sistra-borde-campo, #B9BFCC);
+    border-radius: 6px;
+    color: var(--sistra-texto, #1F2430);
+    font-size: 15px;
+    min-height: 44px;
+}
+
+.sistra07-page .btn {
+    align-items: center;
+    border-radius: 8px;
+    display: inline-flex;
+    font-size: 15px;
+    font-weight: 600;
+    justify-content: center;
+    min-height: 44px;
+    white-space: normal;
+}
+
+.sistra07-page :is(.btn, .form-control, .form-select, .form-check-input, .page-link):focus-visible {
+    outline: 3px solid var(--sistra-azul, #003366);
+    outline-offset: 2px;
+}
+
+.sistra07-page :is(.sistra07-btn-principal, .sistra07-btn-evaluar, .modal-footer .btn-primary) {
+    background: var(--sistra-rojo, #AD3333);
+    border-color: var(--sistra-rojo, #AD3333);
+    color: var(--sistra-superficie, #FFFFFF);
+}
+
+.sistra07-page :is(.sistra07-btn-principal, .sistra07-btn-evaluar, .modal-footer .btn-primary):hover:not(:disabled) {
+    background: var(--sistra-rojo-hover, #8F2828);
+    border-color: var(--sistra-rojo-hover, #8F2828);
+    color: var(--sistra-superficie, #FFFFFF);
+}
+
+.sistra07-page :is(.sistra07-btn-secundario, .modal-footer .btn-secondary) {
+    background: var(--sistra-gris, #E8EAF0);
+    border-color: var(--sistra-gris, #E8EAF0);
+    color: var(--sistra-gris-texto, #2A3040);
+}
+
+.sistra07-page :is(.sistra07-btn-secundario, .modal-footer .btn-secondary):hover:not(:disabled) {
+    border-color: var(--sistra-borde-campo, #B9BFCC);
+    color: var(--sistra-gris-texto, #2A3040);
+}
+
+.sistra07-page .sistra07-btn-enlace {
+    background: transparent;
+    border-color: transparent;
+    color: var(--sistra-azul, #003366);
+    padding-inline: 8px;
+}
+
+.sistra07-page .sistra07-btn-enlace:hover {
+    color: var(--sistra-rojo-hover, #8F2828);
+    text-decoration: underline;
+}
+
+.sistra07-page .sistra07-btn-aprobar {
+    background: var(--sistra-decision-aprobado, #1E7D3E);
+    border-color: var(--sistra-decision-aprobado, #1E7D3E);
+    color: var(--sistra-superficie, #FFFFFF);
+}
+
+.sistra07-page .sistra07-btn-rechazar {
+    background: var(--sistra-decision-rechazado, #B42318);
+    border-color: var(--sistra-decision-rechazado, #B42318);
+    color: var(--sistra-superficie, #FFFFFF);
+}
+
+.sistra07-page .sistra07-btn-reactivar {
+    background: var(--sistra-accion-reactivar, #8C9CC5);
+    border-color: var(--sistra-accion-reactivar, #8C9CC5);
+    color: var(--sistra-superficie, #FFFFFF);
+}
+
+.sistra07-page :is(.sistra07-btn-aprobar, .sistra07-btn-rechazar, .sistra07-btn-reactivar):hover:not(:disabled) {
+    filter: brightness(.9);
+}
+
+.sistra07-page .btn:disabled {
+    cursor: not-allowed;
+    opacity: .55;
+}
+
+.sistra07-page .sistra07-listado-cabecera {
+    background: var(--sistra-superficie, #FFFFFF);
+    border-bottom: 1px solid var(--sistra-borde, #E3E6EC);
+    color: var(--sistra-texto, #1F2430);
+    font-size: 19px;
+    font-weight: 700;
+    padding: 20px 24px;
+}
+
+.sistra07-page .sistra07-acciones-masivas {
+    border-color: var(--sistra-borde, #E3E6EC) !important;
+    padding: 20px 24px;
+}
+
+.sistra07-page .sistra07-tabla {
+    --bs-table-bg: transparent;
+    color: var(--sistra-texto, #1F2430);
+    font-size: 15px;
+    min-width: 1030px;
+}
+
+.sistra07-page .sistra07-tabla thead th {
+    background: var(--sistra-gris, #E8EAF0);
+    border-bottom: 1px solid var(--sistra-borde, #E3E6EC);
+    color: var(--sistra-gris-texto, #2A3040);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.sistra07-page .sistra07-tabla :is(th, td) {
+    border-color: var(--sistra-borde, #E3E6EC);
+    padding: 16px 12px;
+}
+
+.sistra07-page .sistra07-tabla :is(th, td):first-child {
+    padding-left: 24px;
+    width: 48px;
+}
+
+.sistra07-page .sistra07-tabla :is(th, td):last-child {
+    padding-right: 24px;
+}
+
+.sistra07-page .sistra07-tabla tbody tr.sistra07-fila-verde > * {
+    background: linear-gradient(90deg, var(--sistra-fila-verde-inicio, #CFEBD8), var(--sistra-fila-verde-fin, #F3FAF5));
+}
+
+.sistra07-page .sistra07-tabla tbody tr.sistra07-fila-amarillo > * {
+    background: linear-gradient(90deg, var(--sistra-fila-amarillo-inicio, #FBE7A6), var(--sistra-fila-amarillo-fin, #FFF8E0));
+}
+
+.sistra07-page .sistra07-tabla tbody tr.sistra07-fila-rojo > * {
+    background: linear-gradient(90deg, var(--sistra-fila-rojo-inicio, #F6C5BF), var(--sistra-fila-rojo-fin, #FDF0EE));
+}
+
+.sistra07-page .sistra07-codigo {
+    color: var(--sistra-azul, #003366);
+    font-weight: 600;
+}
+
+.sistra07-page .sistra07-estudiante,
+.sistra07-page .sistra07-cedula {
+    display: block;
+}
+
+.sistra07-page .sistra07-estudiante {
+    font-weight: 700;
+}
+
+.sistra07-page .sistra07-cedula {
+    color: var(--sistra-texto-suave, #4B5263);
+    font-size: 13px;
+}
+
+.sistra07-page :is(.sistra07-estado, .sistra07-semaforo, .sistra07-leyenda .badge) {
+    border-radius: 999px;
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+    padding: 6px 10px;
+    white-space: nowrap;
+}
+
+.sistra07-page :is(.sistra07-estado-revision, .sistra07-semaforo-amarillo, .sistra07-leyenda-amarillo) {
+    background: var(--sistra-amarillo-suave, #FFF1C2);
+    color: var(--sistra-amarillo-texto, #6B4A00);
+}
+
+.sistra07-page .sistra07-estado-modificacion {
+    background: var(--sistra-naranja-suave, #FFE8D6);
+    color: var(--sistra-naranja-texto, #8F3E00);
+}
+
+.sistra07-page :is(.sistra07-estado-aprobado, .sistra07-semaforo-verde, .sistra07-leyenda-verde) {
+    background: var(--sistra-verde-suave, #DDF3E4);
+    color: var(--sistra-verde-texto, #14612F);
+}
+
+.sistra07-page .sistra07-estado-up {
+    background: var(--sistra-azul-suave, #E3EDFC);
+    color: var(--sistra-azul-texto, #174FA3);
+}
+
+.sistra07-page :is(.sistra07-estado-rechazado, .sistra07-semaforo-rojo, .sistra07-leyenda-rojo) {
+    background: var(--sistra-rojo-suave, #FBE3E0);
+    color: var(--sistra-rojo-texto, #8E1C12);
+}
+
+.sistra07-page :is(.sistra07-estado-neutro, .sistra07-semaforo-neutro, .sistra07-semaforo-detenido, .sistra07-semaforo-sin_fecha, .sistra07-leyenda-neutro) {
+    background: var(--sistra-gris, #E8EAF0);
+    color: var(--sistra-gris-texto, #2A3040);
+}
+
+.sistra07-page .sistra07-leyenda {
+    border-top: 1px solid var(--sistra-borde, #E3E6EC);
+    padding: 16px 24px;
+}
+
+.sistra07-page .sistra07-acciones-fila {
+    align-items: center;
+    min-width: 200px;
+}
+
+.sistra07-page .form-check-input:checked {
+    background-color: var(--sistra-rojo, #AD3333);
+    border-color: var(--sistra-rojo, #AD3333);
+}
+
+.sistra07-page .pagination .page-link {
+    color: var(--sistra-azul, #003366);
+}
+
+.sistra07-page .pagination .active .page-link {
+    background: var(--sistra-rojo, #AD3333);
+    border-color: var(--sistra-rojo, #AD3333);
+    color: var(--sistra-superficie, #FFFFFF);
+}
+
+.sistra07-page .modal-header,
+.sistra07-page .modal-footer {
+    border-color: var(--sistra-borde, #E3E6EC);
+    padding: 20px 24px;
+}
+
+.sistra07-page .modal-body {
+    padding: 24px;
+}
+
+.sistra07-page .modal-title {
+    color: var(--sistra-texto, #1F2430);
+    font-size: 19px !important;
+    font-weight: 700;
+}
+
+.sistra07-page .modal .form-range::-webkit-slider-thumb {
+    background: var(--sistra-rojo, #AD3333);
+}
+
+.sistra07-page .modal .form-range::-moz-range-thumb {
+    background: var(--sistra-rojo, #AD3333);
+}
+
+.sistra07-page .modal .btn-outline-secondary {
+    border-color: var(--sistra-borde-campo, #B9BFCC);
+    color: var(--sistra-gris-texto, #2A3040);
+}
+
+@media (max-width: 767.98px) {
+    .sistra07-page {
+        padding: 20px 16px;
+    }
+
+    .sistra07-page .sistra07-filtros .card-body,
+    .sistra07-page .sistra07-acciones-masivas {
+        padding: 16px;
+    }
+
+    .sistra07-page .sistra07-listado-cabecera {
+        padding: 16px;
+    }
+
+    .sistra07-page .sistra07-tabla {
+        min-width: 980px;
+    }
+
+    .sistra07-page .sistra07-leyenda {
+        padding: 16px;
+    }
+}
