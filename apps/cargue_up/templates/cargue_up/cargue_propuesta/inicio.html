@@ -617,9 +617,9 @@
                 <i class="bi bi-person-fill"></i>
             </div>
             <span class="sistra-user-name">{% if request.user.nombre %}{{ request.user.nombre }}{% else %}{{ request.user.nombre_usuario|default:"Estudiante" }}{% endif %}</span>
-            <form method="post" action="{% url 'usuarios:logout' %}" class="ms-2 mb-0">
+            <form method="post" action="{% url 'usuarios:logout' %}">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-outline-light btn-sm">Cerrar sesión</button>
+                <button type="submit" class="btn btn-outline-danger">Cerrar sesión</button>
             </form>
         </div>
     </div>

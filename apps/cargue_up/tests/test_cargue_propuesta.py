@@ -19,7 +19,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.cargue_up.forms.cargue_propuesta import MSG_03_03, MSG_03_06
+from apps.cargue_up.forms.cargue_propuesta import MSG_03_03, MSG_03_05, MSG_03_06
 from apps.cargue_up.models import CargueUp, EstadoVerificacion
 from apps.parametrizacion.models import Carrera, Facultad, Parametro, PeriodoAcademico
 from apps.personas.models import (
@@ -438,7 +438,7 @@ class CargueUpSecurityAndViewsTestCase(TestCase):
         self.assertNotContains(res, "a la espera")
 
     def test_subido_en_up_muestra_title_etapa_completada_sin_cuando_sea_aprobada(self):
-        """E9-3: En Subido en UP los botones desactivados indican 'Etapa de cargue completada' y no 'cuando sea aprobada'."""
+        """E9-3: En Subido en UP ambos botones indican 'Etapa de cargue completada' con y sin url_up configurada."""
         self.propuesta_1.estado = EstadoTramite.SUBIDO_EN_UP
         self.propuesta_1.save(update_fields=["estado"])
         CargueUp.objects.create(
@@ -447,12 +447,45 @@ class CargueUpSecurityAndViewsTestCase(TestCase):
             estado_verificacion=EstadoVerificacion.PENDIENTE,
         )
 
-        self.client.force_login(self.user_estudiante_1)
-        res = self.client.get(reverse("cargue_up:cargue_propuesta"))
+        boton_descargar = (
+            '<button type="button" class="btn btn-up-outline" disabled title="Etapa de cargue completada">'
+            '<i class="bi bi-download"></i>Descargar propuesta'
+            "</button>"
+        )
+        boton_ir_up = (
+            '<button type="button" class="btn btn-up-primary" disabled title="Etapa de cargue completada">'
+            '<i class="bi bi-box-arrow-up-right"></i>Ir a la Plataforma UP'
+            "</button>"
+        )
 
-        self.assertEqual(res.status_code, 200)
-        self.assertContains(res, 'title="Etapa de cargue completada"')
-        self.assertNotContains(res, "cuando sea aprobada")
+        self.client.force_login(self.user_estudiante_1)
+
+        # 1. Sin url_up configurada
+        Parametro.objects.filter(clave="url_up").delete()
+        with self.subTest(url_up_configurada=False):
+            res_sin_url = self.client.get(reverse("cargue_up:cargue_propuesta"))
+            self.assertEqual(res_sin_url.status_code, 200)
+            self.assertContains(res_sin_url, 'title="Etapa de cargue completada"', count=2)
+            self.assertContains(res_sin_url, boton_descargar, html=True)
+            self.assertContains(res_sin_url, boton_ir_up, html=True)
+            self.assertNotContains(res_sin_url, "cuando sea aprobada")
+            self.assertNotContains(res_sin_url, MSG_03_05)
+
+        # 2. Con url_up configurada
+        Parametro.objects.create(
+            clave="url_up",
+            valor="https://portal.unipamplona.edu.co/plataforma",
+            descripcion="URL de la UP",
+            usuario_actualizacion=self.user_admo,
+        )
+        with self.subTest(url_up_configurada=True):
+            res_con_url = self.client.get(reverse("cargue_up:cargue_propuesta"))
+            self.assertEqual(res_con_url.status_code, 200)
+            self.assertContains(res_con_url, 'title="Etapa de cargue completada"', count=2)
+            self.assertContains(res_con_url, boton_descargar, html=True)
+            self.assertContains(res_con_url, boton_ir_up, html=True)
+            self.assertNotContains(res_con_url, "cuando sea aprobada")
+            self.assertNotContains(res_con_url, MSG_03_05)
 
     def test_fecha_aprobacion_se_conserva_tras_rechazado_en_up(self):
         """E9-2a: Cuando el Director rechaza en UP (Subido en UP / Aprobado en UP -> Aprobado), se conserva la fecha original."""
@@ -526,7 +559,11 @@ class CargueUpSecurityAndViewsTestCase(TestCase):
 
         url_logout = reverse("usuarios:logout")
         self.assertContains(res, f'action="{url_logout}"')
-        self.assertContains(res, "Cerrar sesión")
+        self.assertContains(
+            res,
+            '<button type="submit" class="btn btn-outline-danger">Cerrar sesión</button>',
+            html=True,
+        )
 
         res_logout = self.client.post(url_logout)
         self.assertEqual(res_logout.status_code, 302)
