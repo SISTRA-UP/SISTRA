@@ -50,18 +50,18 @@ class AlertasTests(TestCase):
 
     def test_guarda_valores_nuevos_y_audita(self):
         respuesta = self.client.post(self.url, self.datos(
-            verde_hasta_dias='10', amarillo_hasta_dias='20', frecuencia_recordatorio_dias='7',
+            verde_hasta_dias='10', amarillo_hasta_dias='20', frecuencia_recordatorio_dias='5',
             dias_archivado_propuesta='45', dias_archivado_informe='60',
             url_up='https://up.unipamplona.edu.co',
         ))
         self.assertRedirects(respuesta, self.url)
         self.assertEqual(servicios.obtener_entero('semaforo.verde_hasta_dias'), 10)
         self.assertEqual(servicios.obtener_entero('semaforo.amarillo_hasta_dias'), 20)
-        self.assertEqual(servicios.obtener_entero('recordatorio.frecuencia_dias'), 7)
+        self.assertEqual(servicios.obtener_entero('recordatorio.frecuencia_dias'), 5)
         self.assertEqual(servicios.obtener_entero('dias_archivado_propuesta_rechazada'), 45)
         self.assertEqual(servicios.obtener_entero('dias_archivado_informe_rechazado'), 60)
         self.assertEqual(servicios.obtener('url_up'), 'https://up.unipamplona.edu.co')
-        self.assertEqual(Auditoria.objects.filter(accion='Modificar parámetro').count(), 5)
+        self.assertEqual(Auditoria.objects.filter(accion='Modificar parámetro').count(), 6)
 
     def test_sin_cambios_no_escribe_ni_audita(self):
         respuesta = self.client.post(self.url, self.datos(), follow=True)
