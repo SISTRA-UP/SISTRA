@@ -460,6 +460,32 @@ class TestMontajeVistasYFlujos(BaseMontajeTestCase):
         self.assertIsNotNone(auditoria)
         self.assertIn(MSG_01_04, auditoria.detalle)
 
+    def test_limite_docx_parametrizado_rechaza_archivo_mayor_y_muestra_limite(self):
+        """Con propuesta.max_mb_docx=2, un Word de 3 MB se rechaza y el mensaje dice 2 MB."""
+        from apps.parametrizacion.servicios import guardar
+
+        guardar('propuesta.max_mb_docx', 2, self.user_director)
+        self.client.force_login(self.user_estudiante)
+        archivo_3mb = SimpleUploadedFile(
+            'propuesta_grande.docx',
+            b'0' * (3 * 1024 * 1024),
+            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        )
+
+        resp = self.client.post(
+            reverse('propuestas:montaje'),
+            {'accion': 'importar_word', 'archivo': archivo_3mb},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, '2 MB')
+
+        auditoria = Auditoria.objects.filter(
+            usuario=self.user_estudiante,
+            accion='Cargar plantilla',
+            resultado='Fallo',
+        ).latest('fecha_hora')
+        self.assertIn('2 MB', auditoria.detalle)
+
     def test_enviar_incompleto_muestra_msg_05_en_campos_obligatorios(self):
         """Al intentar enviar con campos obligatorios vacíos se muestra MSG-01-05 en cada campo."""
         self.client.force_login(self.user_estudiante)

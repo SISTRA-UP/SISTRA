@@ -5,6 +5,7 @@ Solo el responsable de este requisito edita este archivo.
 from django import forms
 from django.core.exceptions import ValidationError
 
+from apps.parametrizacion.servicios import obtener_entero
 from apps.propuestas.models import EstadoTramite, Propuesta, SectorEntidad
 
 # ---------------------------------------------------------------------------
@@ -13,7 +14,9 @@ from apps.propuestas.models import EstadoTramite, Propuesta, SectorEntidad
 MSG_01_01 = 'Tu propuesta se guardó como borrador.'
 MSG_01_02 = 'Tu propuesta se envió y quedó en revisión. Te avisaremos cuando tu Director la revise.'
 MSG_01_03 = 'El archivo no corresponde a la plantilla de SISTRA o fue modificada su estructura. Descarga la plantilla de nuevo.'
-MSG_01_04 = 'El archivo debe ser .docx y no superar el tamaño permitido.'
+MAX_UPLOAD_MB = 10
+MSG_01_04_TEMPLATE = 'El archivo debe ser .docx y no superar {max_mb} MB.'
+MSG_01_04 = MSG_01_04_TEMPLATE.format(max_mb=MAX_UPLOAD_MB)
 MSG_01_05 = 'Completa este campo.'
 MSG_01_06 = 'La fecha de fin no puede ser anterior a la de inicio.'
 MSG_01_07 = 'No pudimos guardar tu propuesta. Inténtalo de nuevo.'
@@ -47,8 +50,6 @@ ESTADOS_EDITABLES = (
     EstadoTramite.BORRADOR,
     EstadoTramite.REQUIERE_MODIFICACION,
 )
-
-MAX_UPLOAD_MB = 10
 
 
 class PropuestaMontajeForm(forms.ModelForm):
@@ -192,6 +193,7 @@ class CargaPlantillaWordForm(forms.Form):
 
     def clean_archivo(self):
         archivo = self.cleaned_data['archivo']
-        if not archivo.name.lower().endswith('.docx') or archivo.size > MAX_UPLOAD_MB * 1024 * 1024:
-            raise ValidationError(MSG_01_04)
+        max_mb = obtener_entero('propuesta.max_mb_docx', MAX_UPLOAD_MB)
+        if not archivo.name.lower().endswith('.docx') or archivo.size > max_mb * 1024 * 1024:
+            raise ValidationError(MSG_01_04_TEMPLATE.format(max_mb=max_mb))
         return archivo
