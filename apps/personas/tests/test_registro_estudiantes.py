@@ -396,6 +396,34 @@ class CorreoDeCredenciales(BaseRegistro):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ['laura.pena@unipamplona.edu.co'])
 
+    def test_el_texto_es_neutro_y_conserva_datos_de_acceso_para_todos_los_roles(self):
+        rol_nuevo, _ = Rol.objects.get_or_create(nombre='Coordinador')
+        roles = (self.rol_director, self.rol_administrador, rol_nuevo)
+
+        for numero, rol in enumerate(roles, start=1):
+            correo = f'cuenta.{numero}@unipamplona.edu.co'
+            usuario = self.crear_usuario(
+                correo, f'Usuario {numero}', f'100000006{numero}', rol
+            )
+
+            with self.subTest(rol=rol.nombre):
+                mail.outbox.clear()
+                enviado = enviar_credenciales(usuario, 'ClaveTemporalDePrueba')
+
+                self.assertIs(enviado, True)
+                self.assertEqual(len(mail.outbox), 1)
+                self.assertEqual(mail.outbox[0].to, [correo])
+                cuerpo = mail.outbox[0].body
+                self.assertIn('Ya tienes cuenta en SISTRA.', cuerpo)
+                self.assertNotIn('Trabajo Social', cuerpo)
+                self.assertIn(correo, cuerpo)
+                self.assertIn('ClaveTemporalDePrueba', cuerpo)
+                self.assertIn(
+                    'Por seguridad, el sistema te pedirá cambiarla la primera vez '
+                    'que ingreses.',
+                    cuerpo,
+                )
+
     def test_el_correo_lleva_el_usuario_de_ingreso_y_la_contrasena(self):
         mail.outbox.clear()
         with patch(
