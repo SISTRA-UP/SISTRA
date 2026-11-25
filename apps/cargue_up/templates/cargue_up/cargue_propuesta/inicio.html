@@ -617,6 +617,10 @@
                 <i class="bi bi-person-fill"></i>
             </div>
             <span class="sistra-user-name">{% if request.user.nombre %}{{ request.user.nombre }}{% else %}{{ request.user.nombre_usuario|default:"Estudiante" }}{% endif %}</span>
+            <form method="post" action="{% url 'usuarios:logout' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-danger">Cerrar sesión</button>
+            </form>
         </div>
     </div>
 </header>
@@ -696,7 +700,7 @@
                 </div>
                 <div class="project-info-item">
                     <span class="project-info-label">Fecha de aprobación</span>
-                    <span class="project-info-value">{% if fecha_aprobacion %}{{ fecha_aprobacion|date:"d/m/Y" }}{% else %}Pendiente{% endif %}</span>
+                    <span class="project-info-value">{% if fecha_aprobacion %}{{ fecha_aprobacion|date:"d/m/Y" }}{% elif estado_actual == EstadoTramite.APROBADO or estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual == EstadoTramite.APROBADO_EN_UP %}—{% else %}Pendiente{% endif %}</span>
                 </div>
             </div>
 
@@ -705,6 +709,8 @@
                 <span class="project-info-label mb-0">Estado actual</span>
                 {% if estado_actual == EstadoTramite.APROBADO and not cargue_existente %}
                     <span class="up-badge aprobado"><i class="bi bi-check2-circle"></i>Aprobado</span>
+                {% elif estado_actual == EstadoTramite.APROBADO_EN_UP %}
+                    <span class="up-badge aprobado"><i class="bi bi-check2-circle"></i>Aprobado en UP</span>
                 {% elif estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
                     <span class="up-badge cargado"><i class="bi bi-send-check"></i>Cargado en UP</span>
                 {% elif estado_actual == EstadoTramite.RECHAZADO %}
@@ -801,6 +807,11 @@
                         <i class="bi bi-info-circle-fill up-alert-icon"></i>
                         <div>{{ msg_aprobada }}</div>
                     </div>
+                {% elif estado_actual == EstadoTramite.APROBADO_EN_UP %}
+                    <div class="up-alert success">
+                        <i class="bi bi-check-circle-fill up-alert-icon"></i>
+                        <div>Tu Director revisó la Plataforma UP: Aprobado en UP.</div>
+                    </div>
                 {% elif estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
                     <div class="up-alert success">
                         <i class="bi bi-check-circle-fill up-alert-icon"></i>
@@ -827,15 +838,15 @@
         <!-- Tarjeta: Acciones para el cargue en la UP -->
         <div class="up-card">
             <div class="step-card">
-                <div class="step-number {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}done{% else %}azul{% endif %}">
-                    {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
+                <div class="step-number {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual == EstadoTramite.APROBADO_EN_UP or cargue_existente %}done{% else %}azul{% endif %}">
+                    {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual == EstadoTramite.APROBADO_EN_UP or cargue_existente %}
                         <i class="bi bi-check-lg"></i>
                     {% else %}
                         1
                     {% endif %}
                 </div>
                 <div class="step-body">
-                    <h3><i class="bi bi-cloud-arrow-up me-2" style="color: var(--up-azul);"></i>Cargar el proyecto en la UP</h3>
+                    <h3><i class="bi bi-cloud-arrow-up me-2" style="color: var(--up-azul);"></i>Mi propuesta</h3>
                     <p class="step-description">Descarga el documento oficial de tu propuesta y accede a la plataforma de la Universidad de Pamplona para radicarlo.</p>
 
                     <div class="step-actions">
@@ -856,7 +867,7 @@
                                 </div>
                             {% endif %}
                         {% else %}
-                            <button type="button" class="btn btn-up-outline" disabled title="{{ msg_no_aprobada }}">
+                            <button type="button" class="btn btn-up-outline" disabled title="{% if cargue_existente or estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual == EstadoTramite.APROBADO_EN_UP %}Etapa de cargue completada{% else %}{{ msg_no_aprobada }}{% endif %}">
                                 <i class="bi bi-download"></i>Descargar propuesta
                             </button>
                         {% endif %}
@@ -868,7 +879,7 @@
                             </a>
                         {% else %}
                             <div>
-                                <button type="button" class="btn btn-up-primary" disabled title="{% if not url_up_configurada %}{{ msg_enlace_no_disponible }}{% else %}{{ msg_no_aprobada }}{% endif %}">
+                                <button type="button" class="btn btn-up-primary" disabled title="{% if cargue_existente or estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual == EstadoTramite.APROBADO_EN_UP %}Etapa de cargue completada{% elif puede_cargar and not url_up_configurada %}{{ msg_enlace_no_disponible }}{% else %}{{ msg_no_aprobada }}{% endif %}">
                                     <i class="bi bi-box-arrow-up-right"></i>Ir a la Plataforma UP
                                 </button>
                                 {% if puede_cargar and not url_up_configurada %}
@@ -887,7 +898,7 @@
                         </div>
                     {% endif %}
 
-                    {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or cargue_existente %}
+                    {% if estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual == EstadoTramite.APROBADO_EN_UP or cargue_existente %}
                         <div class="step-complete-msg">
                             <i class="bi bi-check-circle-fill"></i>Etapa de cargue completada
                         </div>

@@ -125,11 +125,17 @@ def inicio(request: HttpRequest) -> HttpResponse:
             else:
                 cargue_existente = ultimo_cargue
 
-        # Determinar docente y fecha de aprobación desde el historial
+        # Determinar docente y fecha de aprobación original desde el historial
         historial_aprobado = (
             HistorialEstado.objects.filter(
                 propuesta=propuesta,
                 estado_nuevo=EstadoTramite.APROBADO,
+            )
+            .exclude(
+                estado_anterior__in=[
+                    EstadoTramite.SUBIDO_EN_UP,
+                    EstadoTramite.APROBADO_EN_UP,
+                ]
             )
             .select_related("usuario")
             .order_by("-fecha_hora")
