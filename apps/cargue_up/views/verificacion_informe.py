@@ -416,7 +416,7 @@ def corregir(request: HttpRequest, id_informe: int) -> HttpResponse:
                 resultado=RESULTADO_EXITO,
                 fecha_hora=ahora,
             )
-            # Requerimiento 3: si el resultado es Rechazado en UP y el proceso estaba Finalizada,
+            # E8: si el resultado es Rechazado en UP y el proceso estaba Finalizada,
             # reabrirlo dentro de la misma transacción (decisión D4 del 20/11) después de E7.
             if debe_reabrir:
                 estado_proceso_anterior = proceso.estado

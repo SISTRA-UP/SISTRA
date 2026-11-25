@@ -4,11 +4,13 @@ Solo el responsable de este requisito edita este archivo.
 Se ejecutan con: uv run python manage.py test apps.cargue_up.tests.test_verificacion_informe
 """
 
+import threading
 from datetime import date, timedelta
 from unittest import mock
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.db import connections
+from django.test import TestCase, TransactionTestCase, Client
 from django.urls import reverse
 from django.utils import timezone
 
@@ -21,6 +23,7 @@ from apps.cargue_up.forms.verificacion_informe import (
     MSG_09_CORRECCION,
     MSG_09_CORRECCION_NO_DISPONIBLE,
     MSG_09_ERROR,
+    CorreccionForm,
     resultado_de_correccion,
 )
 from apps.cargue_up.models import CargueUp, EstadoVerificacion, HistorialCargueUp
@@ -675,6 +678,41 @@ class CorreccionTests(BaseVerificacionTests):
         self.assertEqual(HistorialCargueUp.objects.filter(cargue_up=cargue).count(), 1)
         self.assertEqual(Notificacion.objects.filter(informe=informe).count(), 1)
 
+    def test_envio_duplicado_de_correccion_rechazado_a_aprobado_no_duplica(self):
+        informe = self.crear_informe('corr_dup2')
+        cargue = self.verificar_directo(informe, RECHAZADO_UP, observacion='No coincide')
+        self.entrar_como_director()
+
+        # Primer envío: corrige de Rechazado a Aprobado en UP
+        respuesta1 = self.corregir(
+            informe, motivo='Sí coincidía', resultado=APROBADO_UP
+        )
+        self.assertIn(MSG_09_CORRECCION, self.mensajes(respuesta1))
+
+        informe.refresh_from_db()
+        self.assertEqual(informe.estado, EstadoTramite.APROBADO_EN_UP)
+        self.assertEqual(HistorialCargueUp.objects.filter(cargue_up=cargue).count(), 1)
+        self.assertEqual(Notificacion.objects.filter(informe=informe).count(), 1)
+
+        # Segundo envío con los mismos datos originales (intento duplicado)
+        respuesta2 = self.client.post(
+            self.url_corregir(informe),
+            {
+                'id_cargue': cargue.pk,
+                'resultado': APROBADO_UP,
+                'motivo': 'Sí coincidía',
+                'observacion': '',
+            },
+            follow=True,
+        )
+        self.assertIn(MSG_09_CORRECCION_NO_DISPONIBLE, self.mensajes(respuesta2))
+
+        # El informe no debe revertirse a Aprobado (es decir, debe seguir Aprobado en UP)
+        informe.refresh_from_db()
+        self.assertEqual(informe.estado, EstadoTramite.APROBADO_EN_UP)
+        self.assertEqual(HistorialCargueUp.objects.filter(cargue_up=cargue).count(), 1)
+        self.assertEqual(Notificacion.objects.filter(informe=informe).count(), 1)
+
     def test_reapertura_proceso_cuando_estudiante_ya_finalizo(self):
         informe = self.crear_informe('corr_reap')
         proceso = informe.propuesta.proceso
@@ -784,3 +822,177 @@ class PantallaTests(BaseVerificacionTests):
         # Ambos botones de confirmación deben estar presentes y funcionales
         self.assertContains(respuesta, 'Confirmar Aprobado en UP')
         self.assertContains(respuesta, 'Confirmar Rechazado en UP')
+
+    def test_el_formulario_de_correccion_envia_el_resultado_en_un_campo_oculto(self):
+        # Escenario 1: verificado APROBADO_UP → el campo oculto debe contener value="Rechazado en UP"
+        informe1 = self.crear_informe('campo_oculto_apr')
+        self.verificar_directo(informe1, APROBADO_UP)
+        self.entrar_como_director()
+        respuesta1 = self.client.get(self.url_detalle(informe1))
+        self.assertEqual(respuesta1.status_code, 200)
+        self.assertContains(respuesta1, f'<input type="hidden" name="resultado" value="{RECHAZADO_UP}"',
+                            msg_prefix='El campo oculto resultado debe tener value=Rechazado en UP cuando el informe está Aprobado en UP')
+
+        # Escenario 2: verificado RECHAZADO_UP → el campo oculto debe contener value="Aprobado en UP"
+        informe2 = self.crear_informe('campo_oculto_rec')
+        self.verificar_directo(informe2, RECHAZADO_UP, observacion='No coincide')
+        respuesta2 = self.client.get(self.url_detalle(informe2))
+        self.assertEqual(respuesta2.status_code, 200)
+        self.assertContains(respuesta2, f'<input type="hidden" name="resultado" value="{APROBADO_UP}"',
+                            msg_prefix='El campo oculto resultado debe tener value=Aprobado en UP cuando el informe está Rechazado en UP')
+
+
+class ConcurrenciaCorreccionTests(TransactionTestCase):
+    """Verifica que el segundo chequeo (dentro de la transacción con select_for_update)
+    bloquea solicitudes concurrentes e impide correcciones duplicadas."""
+
+    serialized_rollback = True
+
+    def _usuario(self, alias, rol, cedula, nombre=None):
+        Usuario = get_user_model()
+        return Usuario.objects.create_user(
+            correo_institucional=f'{alias}@example.com',
+            nombre=nombre or f'Usuario {alias}',
+            cedula=cedula,
+            nombre_usuario=f'{alias}_conc',
+            password=CLAVE,
+            rol=rol,
+            requiere_cambio_contrasena=False,
+        )
+
+    def setUp(self):
+        rol_director = Rol.objects.get(nombre='Director')
+        rol_estudiante = Rol.objects.get(nombre='Estudiante')
+
+        facultad = Facultad.objects.create(nombre='Facultad Concurrencia')
+        self.carrera = Carrera.objects.create(facultad=facultad, nombre='Carrera Conc', codigo='CONC-A')
+        self.periodo = PeriodoAcademico.objects.create(
+            nombre='2026-CONC',
+            fecha_inicio=date(2026, 1, 1),
+            fecha_fin=date(2026, 6, 30),
+            fecha_cierre_propuesta=date(2026, 3, 1),
+            fecha_cierre_informe=date(2026, 6, 1),
+            estado=EstadoPeriodo.CERRADO,
+        )
+        self.director_user = self._usuario('dir_conc', rol_director, '9900001')
+        self.perfil_director = Director.objects.create(usuario=self.director_user)
+        DirectorCarrera.objects.create(
+            director=self.perfil_director,
+            carrera=self.carrera,
+            fecha_inicio=timezone.localdate(),
+            activo=True,
+        )
+
+        # Informe verificado con APROBADO_UP para que la corrección sea hacia RECHAZADO_UP
+        est_user = self._usuario('est_conc', rol_estudiante, '8800001', 'Estudiante Conc')
+        inscripcion = EstudianteCarrera.objects.create(
+            estudiante=Estudiante.objects.create(usuario=est_user),
+            carrera=self.carrera,
+            estado='Activo',
+        )
+        proceso = ProcesoTrabajoSocial.objects.create(
+            estudiante_carrera=inscripcion,
+            fecha_inicio=timezone.now(),
+            estado='En curso',
+        )
+        propuesta = Propuesta.objects.create(
+            proceso=proceso, periodo_academico=self.periodo, codigo='PROP-CONC',
+            titulo='Titulo Conc', estado=EstadoTramite.APROBADO_EN_UP,
+        )
+        self.informe = Informe.objects.create(
+            propuesta=propuesta, periodo_academico=self.periodo,
+            codigo='INF-CONC', estado=EstadoTramite.SUBIDO_EN_UP,
+        )
+        self.cargue = CargueUp.objects.create(
+            informe=self.informe, fecha_declaracion=timezone.now() - timedelta(hours=1)
+        )
+        # Verificar directamente
+        self.cargue.estado_verificacion = APROBADO_UP
+        self.cargue.director = self.perfil_director
+        self.cargue.fecha_verificacion = timezone.now()
+        self.cargue.save()
+        self.informe.estado = EstadoTramite.APROBADO_EN_UP
+        self.informe.save()
+
+    def test_segundo_chequeo_bloquea_solicitudes_concurrentes(self):
+        """Dos solicitudes de corrección simultáneas: solo una debe persistir.
+
+        Se sincronizan ambos hilos justo después de superar el primer chequeo
+        (al instanciar CorreccionForm, antes de entrar a transaction.atomic)
+        mediante threading.Barrier(2), garantizando que ambos superan el primer
+        chequeo y compiten por el bloqueo select_for_update del segundo chequeo.
+        """
+        url = reverse('cargue_up:verificacion_informe_corregir', args=[self.informe.pk])
+        datos = {
+            'id_cargue': self.cargue.pk,
+            'resultado': RECHAZADO_UP,
+            'motivo': 'Corrección concurrente',
+            'observacion': 'No coincide',
+        }
+
+        barrier_primer_chequeo = threading.Barrier(2)
+        hilos_tras_primer_chequeo = 0
+        lock_contador = threading.Lock()
+        resultados = []
+        errores = []
+
+        def correccion_form_sincronizado(*args, **kwargs):
+            nonlocal hilos_tras_primer_chequeo
+            form = CorreccionForm(*args, **kwargs)
+            with lock_contador:
+                hilos_tras_primer_chequeo += 1
+            barrier_primer_chequeo.wait(timeout=10)
+            return form
+
+        def enviar():
+            # Cada hilo usa su propio Client con su propia sesión y cierra sus conexiones al terminar.
+            client = Client()
+            client.force_login(self.director_user)
+            try:
+                resp = client.post(url, datos, follow=False)
+                resultados.append((client, resp))
+            except Exception as exc:  # noqa: BLE001
+                errores.append(exc)
+            finally:
+                connections.close_all()
+
+        with mock.patch(
+            'apps.cargue_up.views.verificacion_informe.CorreccionForm',
+            side_effect=correccion_form_sincronizado,
+        ):
+            hilos = [threading.Thread(target=enviar) for _ in range(2)]
+            for h in hilos:
+                h.start()
+            for h in hilos:
+                h.join(timeout=30)
+
+        self.assertEqual(len(errores), 0, f'Errores en los hilos: {errores}')
+        self.assertEqual(hilos_tras_primer_chequeo, 2, 'Ambos hilos debieron superar el primer chequeo')
+        self.assertEqual(len(resultados), 2, 'Se esperaban 2 respuestas')
+
+        mensajes_por_resp = []
+        for client, resp in resultados:
+            self.assertEqual(resp.status_code, 302)
+            seguida = client.get(resp.url)
+            mensajes_por_resp.append([str(m) for m in seguida.context['messages']])
+
+        exitos = sum(1 for msgs in mensajes_por_resp if MSG_09_CORRECCION in msgs)
+        rechazos = sum(1 for msgs in mensajes_por_resp if MSG_09_CORRECCION_NO_DISPONIBLE in msgs)
+
+        # Solo una solicitud debe haber completado la corrección
+        self.assertEqual(exitos, 1, f'Se esperaba exactamente 1 éxito; mensajes: {mensajes_por_resp}')
+        self.assertEqual(rechazos, 1, f'Se esperaba exactamente 1 rechazo; mensajes: {mensajes_por_resp}')
+
+        # Exactamente un registro en el historial y una notificación
+        self.assertEqual(
+            HistorialCargueUp.objects.filter(cargue_up=self.cargue).count(), 1,
+            'Solo debe existir un registro en el historial',
+        )
+        self.assertEqual(
+            Notificacion.objects.filter(informe=self.informe).count(), 1,
+            'Solo debe enviarse una notificación',
+        )
+
+        # El estado final del informe debe ser el correspondiente a RECHAZADO_UP (Aprobado)
+        self.informe.refresh_from_db()
+        self.assertEqual(self.informe.estado, EstadoTramite.APROBADO)
