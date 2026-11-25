@@ -300,6 +300,7 @@ class MontajeInformeTests(TestCase):
 # ==============================================================================
 
 class MontajeInformeConcurrenciaTests(TransactionTestCase):
+    serialized_rollback = True
     
     def setUp(self):
         self.rol, _ = Rol.objects.get_or_create(nombre='Estudiante', defaults={'estado': 'Activo'})
