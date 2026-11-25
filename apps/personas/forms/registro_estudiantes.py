@@ -211,6 +211,91 @@ def enviar_credenciales(usuario, contrasena, conexion=None):
         return False
 
 
+def reenviar_credenciales(usuario, *, autor):
+    """Le pone una contraseña temporal nueva y se la manda (R5 · MSG-10-08).
+
+    Reenviar no es volver a mandar lo mismo: la contraseña anterior **solo
+    existía en el correo que no salió** —en la base está su hash—, así que no
+    hay nada que reenviar. Se genera otra.
+
+    Se guarda **antes** de mandar el correo, a propósito: si el envío falla, la
+    cuenta queda con una contraseña temporal consistente y el botón se puede
+    volver a pulsar. Al revés se habría mandado una contraseña distinta de la
+    que quedó guardada.
+
+    **Desbloquea la cuenta**, y no es un extra: el login rechaza la sesión
+    aunque la contraseña sea correcta mientras `bloqueado_hasta` siga en el
+    futuro. Y el caso típico de R5 es justo ese — a alguien no le llegó el
+    correo, intentó entrar a ciegas hasta bloquearse y pidió ayuda —, así que
+    sin esto el botón mandaría una contraseña que no sirve y el mensaje diría
+    que sí. Es lo mismo que hacen los otros dos sitios que ponen una contraseña
+    temporal (`logueo.py`, recuperación y cambio de contraseña).
+
+    El correo se manda **después de confirmar** la transacción: un correo no se
+    puede deshacer, así que si saliera dentro y algo fallara después —la
+    auditoría, por ejemplo—, la contraseña nueva se revertiría y la persona se
+    quedaría con una que no sirve. Por lo mismo, el envío tampoco mantiene
+    abierta la transacción ni la fila mientras el servidor de correo responde.
+
+    **El intercambio que eso acepta, dicho en voz alta:** la auditoría también
+    quedó fuera, así que si *ella* falla, la contraseña queda cambiada **sin
+    rastro**. Se acepta porque el otro lado era peor —un correo con una
+    contraseña muerta y nadie enterado— y porque esto se recupera: la bandera
+    sigue en `True` y el botón sigue ahí. No es simétrico con
+    `registrar_estudiante`, que audita el alta **dentro** de la transacción y
+    solo deja fuera el resultado del correo; aquí hay un solo registro y está
+    afuera, que es lo que pidió la revisión de la PR #48.
+
+    **Quien la llame no debe envolverla en `transaction.atomic()`:** el savepoint
+    del llamador se volvería a tragar el guardado y el defecto reaparecería sin
+    que ninguna prueba se ponga roja. Hoy ninguna de las dos vistas abre
+    transacción y el proyecto no usa `ATOMIC_REQUESTS`.
+
+    Audita aquí mismo, como `registrar_estudiante`, para que ninguna de las dos
+    pantallas que la usan pueda olvidarlo. El **envío** no lanza nunca (lo
+    garantiza `enviar_credenciales`); un fallo de base de datos sí sale, y debe
+    salir. `autor` va solo por nombre para que no se pueda confundir con el
+    segundo parámetro de `enviar_credenciales`, que es la contraseña.
+    """
+    contrasena = _poner_contrasena_temporal(usuario)
+    enviado = enviar_credenciales(usuario, contrasena)
+    _auditar(
+        autor,
+        'Reenviar credenciales',
+        'usuario',
+        usuario.pk,
+        f'correo: {usuario.correo_institucional}',
+        'Éxito' if enviado else 'Fallo',
+    )
+    return enviado
+
+
+@transaction.atomic
+def _poner_contrasena_temporal(usuario):
+    """Lo único que toca la base del reenvío.
+
+    El `atomic` va por simetría con `_registrar_en_la_base` y para que siga
+    siendo una unidad si algún día se le añade otra escritura: hoy envuelve un
+    solo `UPDATE` de una fila, que ya es atómico de por sí. La garantía que da
+    este cambio es **el orden** (confirmar, enviar, auditar), no la atomicidad.
+    """
+    contrasena = get_random_string(16)
+    usuario.set_password(contrasena)
+    # Sigue siendo temporal: hay que cambiarla en el primer ingreso.
+    usuario.requiere_cambio_contrasena = True
+    usuario.intentos_fallidos = 0
+    usuario.bloqueado_hasta = None
+    usuario.save(
+        update_fields=[
+            'password',
+            'requiere_cambio_contrasena',
+            'intentos_fallidos',
+            'bloqueado_hasta',
+        ]
+    )
+    return contrasena
+
+
 def _validar(nombre, cedula, correo):
     """Devuelve los tres datos limpios o levanta `FilaInvalida` con el motivo."""
     nombre = (nombre or '').strip()
