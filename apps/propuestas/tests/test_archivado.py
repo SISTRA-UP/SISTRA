@@ -72,6 +72,7 @@ class TestArchivarRechazados(BaseAprobacionTestCase):
         )
 
     def test_sin_parametro_no_archiva_y_lo_dice(self):
+        servicios.guardar(PLAZO, '', self.user_director)
         prop = self._rechazada_hace(self.estudiante_1, 'PROP-ARCH-SIN-PLAZO', dias=400)
 
         salida = self._archivar()

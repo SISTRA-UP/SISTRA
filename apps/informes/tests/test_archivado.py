@@ -89,6 +89,7 @@ class TestArchivarInformes(BaseAprobacionTestCase):
         self.assertEqual(Auditoria.objects.filter(accion=ACCION, tabla_afectada='informe').count(), 1)
 
     def test_sin_parametro_no_archiva_ni_audita(self):
+        servicios.guardar(PLAZO, '', self.user_director)
         informe = self._rechazado_hace(self.estudiante_1, 'INF-B6B-SIN-PLAZO', 400)
 
         salida = self._ejecutar()
