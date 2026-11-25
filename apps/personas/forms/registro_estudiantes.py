@@ -194,7 +194,7 @@ def enviar_credenciales(usuario, contrasena, conexion=None):
             subject='SISTRA · Tus datos de acceso',
             message=(
                 f'Hola {usuario.nombre}.\n\n'
-                f'Ya tienes cuenta en SISTRA para tu Trabajo Social.\n\n'
+                f'Ya tienes cuenta en SISTRA.\n\n'
                 f'Ingresa con tu correo institucional: {usuario.correo_institucional}\n'
                 f'Contraseña temporal: {contrasena}\n\n'
                 f'Por seguridad, el sistema te pedirá cambiarla la primera vez '
