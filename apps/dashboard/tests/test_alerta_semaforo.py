@@ -1,5 +1,8 @@
+"""Pruebas del comando de gestión `alerta_semaforo` (SISTRA-14 / RG-08 · Tarea B5)."""
+
 from datetime import timedelta
 from io import StringIO
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core import mail
@@ -8,10 +11,7 @@ from django.db import models
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.dashboard.management.commands.alerta_semaforo import (
-    MSG_14_03,
-    TIPOS_ALERTA_SEMAFORO,
-)
+from apps.dashboard.management.commands.alerta_semaforo import TIPOS_ALERTA_SEMAFORO
 from apps.informes.models import Informe
 from apps.parametrizacion.models import (
     Carrera,
@@ -28,10 +28,10 @@ from apps.personas.models import (
     EstudianteCarrera,
 )
 from apps.procesos.models import ProcesoTrabajoSocial
-from apps.propuestas.forms.aprobacion import RESULTADO_EXITO
+from apps.propuestas.forms.aprobacion import RESULTADO_EXITO, RESULTADO_FALLO
 from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.seguimiento.models import Auditoria, HistorialEstado, Notificacion
-from apps.usuarios.models import Rol
+from apps.usuarios.models import Estado, Rol
 
 Usuario = get_user_model()
 
@@ -79,7 +79,7 @@ class AlertaSemaforoCommandTests(TestCase):
             requiere_cambio_contrasena=False,
         )
         self.director = Director.objects.create(usuario=self.director_user)
-        DirectorCarrera.objects.create(
+        self.asignacion_director = DirectorCarrera.objects.create(
             director=self.director,
             carrera=self.carrera,
             fecha_inicio=hoy,
@@ -105,7 +105,7 @@ class AlertaSemaforoCommandTests(TestCase):
 
         self.estudiante_user, self.proceso = self._crear_proceso_estudiante()
 
-    def _crear_proceso_estudiante(self):
+    def _crear_proceso_estudiante(self, carrera=None):
         self._contador_estudiantes += 1
         idx = self._contador_estudiantes
         usuario = Usuario.objects.create_user(
@@ -120,7 +120,7 @@ class AlertaSemaforoCommandTests(TestCase):
         estudiante = Estudiante.objects.create(usuario=usuario)
         inscripcion = EstudianteCarrera.objects.create(
             estudiante=estudiante,
-            carrera=self.carrera,
+            carrera=carrera or self.carrera,
             estado=EstadoInscripcion.ACTIVO,
         )
         campo_estado = ProcesoTrabajoSocial._meta.get_field('estado')
@@ -170,7 +170,7 @@ class AlertaSemaforoCommandTests(TestCase):
         self.assertEqual(notif_amarilla.usuario, self.director_user)
         self.assertEqual(
             notif_amarilla.mensaje,
-            MSG_14_03.format(cantidad=1, nivel='amarillo'),
+            'Tienes 1 registros en amarillo esperando tu revisión.',
         )
         self.assertEqual(mail.outbox, [])
 
@@ -193,7 +193,7 @@ class AlertaSemaforoCommandTests(TestCase):
         self.assertEqual(notifs_rojas.count(), 1)
         self.assertEqual(
             notifs_rojas.first().mensaje,
-            MSG_14_03.format(cantidad=1, nivel='rojo'),
+            'Tienes 1 registros en rojo esperando tu revisión.',
         )
 
         # Correrlo de nuevo en rojo no crea otro
@@ -316,3 +316,45 @@ class AlertaSemaforoCommandTests(TestCase):
             ).count(),
             2,
         )
+
+    def test_carrera_sin_director_activo_no_genera_avisos(self):
+        carrera_sin_director = Carrera.objects.create(
+            facultad=self.facultad,
+            nombre='Ingeniería Civil',
+            codigo='IC-SEM',
+        )
+        _, proceso_sin_dir = self._crear_proceso_estudiante(carrera=carrera_sin_director)
+        self._crear_propuesta(
+            dias_en_revision=10,
+            codigo='PROP-SIN-DIR-01',
+            proceso=proceso_sin_dir,
+        )
+
+        call_command('alerta_semaforo', stdout=StringIO())
+        self.assertEqual(Notificacion.objects.count(), 0)
+
+    def test_director_con_usuario_inactivo_no_genera_avisos(self):
+        self.director_user.estado = Estado.INACTIVO
+        self.director_user.save(update_fields=['estado'])
+        self._crear_propuesta(dias_en_revision=10, codigo='PROP-DIR-INACT-01')
+
+        call_command('alerta_semaforo', stdout=StringIO())
+        self.assertEqual(Notificacion.objects.count(), 0)
+
+    def test_fallo_en_ejecucion_audita_fallo_y_relanza_excepcion(self):
+        self._crear_propuesta(dias_en_revision=10, codigo='PROP-FALLO-01')
+
+        with patch(
+            'apps.dashboard.management.commands.alerta_semaforo.evaluar_semaforo',
+            side_effect=RuntimeError('Error simulado al calcular semáforo'),
+        ):
+            with self.assertRaises(RuntimeError):
+                call_command('alerta_semaforo', stdout=StringIO())
+
+        auditoria = Auditoria.objects.filter(
+            tabla_afectada='notificacion',
+            resultado=RESULTADO_FALLO,
+        ).latest('id_auditoria')
+        self.assertIsNone(auditoria.usuario)
+        self.assertEqual(auditoria.resultado, RESULTADO_FALLO)
+        self.assertIn('Error simulado al calcular semáforo', auditoria.detalle)
