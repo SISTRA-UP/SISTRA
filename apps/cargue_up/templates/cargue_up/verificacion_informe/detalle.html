@@ -65,6 +65,7 @@
             <form method="post" action="{% url 'cargue_up:verificacion_informe_corregir' informe.pk %}">
                 {% csrf_token %}
                 {{ formulario_correccion.id_cargue }}
+                {{ formulario_correccion.resultado }}
                 <div class="mb-3">
                     <label for="{{ formulario_correccion.motivo.id_for_label }}" class="form-label">{{ formulario_correccion.motivo.label }}</label>
                     {{ formulario_correccion.motivo }}
