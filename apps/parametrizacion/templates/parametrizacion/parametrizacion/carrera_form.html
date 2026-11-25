@@ -1,0 +1,21 @@
+{% extends 'parametrizacion/parametrizacion/_pagina.html' %}
+
+{% block titulo %}{% if carrera %}Editar carrera{% else %}Crear carrera{% endif %} · Parametrización · SISTRA-UP{% endblock %}
+
+{% block principal %}
+<p class="sis-eyebrow">Parametrización · SISTRA-11</p>
+<h1 class="sis-titulo mb-4">{% if carrera %}Editar carrera{% else %}Crear carrera{% endif %}</h1>
+<section class="sis-card"><form method="post" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="row g-3">{% for campo in form %}<div class="col-md-6">
+        <label class="form-label fw-semibold" for="{{ campo.id_for_label }}">{{ campo.label }}{% if campo.field.required %}<span class="text-danger" aria-hidden="true"> *</span>{% endif %}</label>
+        {{ campo }}
+        {% for error in campo.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+    </div>{% endfor %}</div>
+    <div class="d-flex justify-content-end gap-2 mt-4">
+        <a class="btn btn-outline-secondary" href="{% url 'parametrizacion:facultades_carreras' %}">Cancelar</a>
+        <button class="btn btn-primary" type="submit">Guardar carrera</button>
+    </div>
+</form></section>
+{% endblock %}

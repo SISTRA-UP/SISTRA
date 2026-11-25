@@ -20,8 +20,8 @@ PARAMETROS_POR_DEFECTO = {
     'propuesta.max_mb_docx': ('10', 'Tamaño máximo (MB) del archivo Word de propuesta.'),
     'documentos_extra.max_mb': ('10', 'Tamaño máximo (MB) de cada PDF de documentos extra (PRO-16).'),
     'url_up': (None, 'Dirección de la plataforma UP.'),
-    'dias_archivado_propuesta_rechazada': (None, 'Días para archivar una propuesta rechazada.'),
-    'dias_archivado_informe_rechazado': (None, 'Días para archivar un informe rechazado.'),
+    'dias_archivado_propuesta_rechazada': ('30', 'Días para archivar una propuesta rechazada.'),
+    'dias_archivado_informe_rechazado': ('30', 'Días para archivar un informe rechazado.'),
 }
 
 
