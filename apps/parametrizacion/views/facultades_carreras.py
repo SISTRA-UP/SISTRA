@@ -24,6 +24,15 @@ def _auditar(request, accion, tabla, registro, detalle, resultado):
     )
 
 
+def _detalle_cambios(anteriores, nuevos):
+    cambios = [
+        f'{campo}: {valor_anterior} → {nuevos[campo]}'
+        for campo, valor_anterior in anteriores.items()
+        if valor_anterior != nuevos[campo]
+    ]
+    return '; '.join(cambios) if cambios else 'Sin cambios'
+
+
 class AccesoFacultadesCarrerasRequeridoMixin(ParametrizarRequeridoMixin):
     """Registra en auditoría los intentos autenticados bloqueados por permiso."""
 
@@ -62,6 +71,11 @@ class FacultadFormView(AccesoFacultadesCarrerasRequeridoMixin, View):
     def post(self, request, pk=None):
         facultad = get_object_or_404(Facultad, pk=pk) if pk else None
         estado_anterior = facultad.estado if facultad else None
+        valores_anteriores = ({
+            'Nombre': facultad.nombre,
+            'Descripción': facultad.descripcion,
+            'Estado': facultad.estado,
+        } if facultad else None)
         form = FacultadForm(request.POST, instance=facultad)
         accion = 'Editar facultad' if facultad else 'Crear facultad'
         if not form.is_valid():
@@ -74,9 +88,18 @@ class FacultadFormView(AccesoFacultadesCarrerasRequeridoMixin, View):
         try:
             with transaction.atomic():
                 guardada = form.save()
+                detalle = (
+                    _detalle_cambios(valores_anteriores, {
+                        'Nombre': guardada.nombre,
+                        'Descripción': guardada.descripcion,
+                        'Estado': guardada.estado,
+                    })
+                    if valores_anteriores is not None
+                    else f'Nombre: {guardada.nombre}, Estado: {guardada.estado}'
+                )
                 _auditar(
                     request, accion_auditoria, 'facultad', guardada,
-                    f'Nombre: {guardada.nombre}, Estado: {guardada.estado}', 'Éxito',
+                    detalle, 'Éxito',
                 )
         except IntegrityError:
             form.add_error('nombre', 'Ya existe una facultad con ese nombre.')
@@ -105,6 +128,12 @@ class CarreraFormView(AccesoFacultadesCarrerasRequeridoMixin, View):
     def post(self, request, pk=None):
         carrera = get_object_or_404(Carrera, pk=pk) if pk else None
         estado_anterior = carrera.estado if carrera else None
+        valores_anteriores = ({
+            'Nombre': carrera.nombre,
+            'Código': carrera.codigo,
+            'Facultad': carrera.facultad.nombre,
+            'Estado': carrera.estado,
+        } if carrera else None)
         form = CarreraForm(request.POST, instance=carrera)
         accion = 'Editar carrera' if carrera else 'Crear carrera'
         if not form.is_valid():
@@ -117,11 +146,20 @@ class CarreraFormView(AccesoFacultadesCarrerasRequeridoMixin, View):
         try:
             with transaction.atomic():
                 guardada = form.save()
+                detalle = (
+                    _detalle_cambios(valores_anteriores, {
+                        'Nombre': guardada.nombre,
+                        'Código': guardada.codigo,
+                        'Facultad': guardada.facultad.nombre,
+                        'Estado': guardada.estado,
+                    })
+                    if valores_anteriores is not None
+                    else f'Nombre: {guardada.nombre}, Código: {guardada.codigo}, '
+                    f'Facultad: {guardada.facultad.nombre}, Estado: {guardada.estado}'
+                )
                 _auditar(
                     request, accion_auditoria, 'carrera', guardada,
-                    f'Nombre: {guardada.nombre}, Código: {guardada.codigo}, '
-                    f'Facultad: {guardada.facultad.nombre}, Estado: {guardada.estado}',
-                    'Éxito',
+                    detalle, 'Éxito',
                 )
         except IntegrityError:
             form.add_error(None, 'No se pudo guardar la carrera. Revise el código y el nombre de la facultad.')

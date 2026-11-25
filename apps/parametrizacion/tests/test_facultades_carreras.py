@@ -80,7 +80,8 @@ class FacultadesCarrerasTests(TestCase):
         self.facultad.refresh_from_db()
         self.assertEqual(self.facultad.estado, Estado.INACTIVO)
         self.assertTrue(Facultad.objects.filter(pk=self.facultad.pk).exists())
-        self.assertTrue(Auditoria.objects.filter(accion='Inactivar facultad', resultado='Éxito').exists())
+        auditoria = Auditoria.objects.get(accion='Inactivar facultad', resultado='Éxito')
+        self.assertIn('Estado: Activo → Inactivo', auditoria.detalle)
 
     def test_crea_carrera_asociada_y_audita(self):
         respuesta = self.client.post(reverse('parametrizacion:carrera_nueva'), {
@@ -100,7 +101,8 @@ class FacultadesCarrerasTests(TestCase):
         self.assertRedirects(respuesta, self.lista)
         self.carrera.refresh_from_db()
         self.assertEqual(self.carrera.facultad, self.otra_facultad)
-        self.assertTrue(Auditoria.objects.filter(accion='Editar carrera', resultado='Éxito').exists())
+        auditoria = Auditoria.objects.get(accion='Editar carrera', resultado='Éxito')
+        self.assertIn('Facultad: Facultad de prueba → Otra facultad', auditoria.detalle)
 
     def test_codigo_repetido_muestra_error_y_audita_fallo(self):
         respuesta = self.client.post(reverse('parametrizacion:carrera_nueva'), {
@@ -135,7 +137,17 @@ class FacultadesCarrerasTests(TestCase):
         self.assertRedirects(respuesta, self.lista)
         self.carrera.refresh_from_db()
         self.assertEqual(self.carrera.estado, Estado.INACTIVO)
-        self.assertTrue(Auditoria.objects.filter(accion='Inactivar carrera', resultado='Éxito').exists())
+        auditoria = Auditoria.objects.get(accion='Inactivar carrera', resultado='Éxito')
+        self.assertIn('Estado: Activo → Inactivo', auditoria.detalle)
+
+    def test_auditoria_de_edicion_solo_menciona_campos_cambiados(self):
+        respuesta = self.client.post(reverse('parametrizacion:carrera_editar', args=[self.carrera.pk]), {
+            'nombre': 'Carrera actualizada', 'codigo': 'CP-01',
+            'facultad': self.facultad.pk, 'estado': 'Activo',
+        })
+        self.assertRedirects(respuesta, self.lista)
+        auditoria = Auditoria.objects.get(accion='Editar carrera', resultado='Éxito')
+        self.assertEqual(auditoria.detalle, 'Nombre: Carrera de prueba → Carrera actualizada')
 
     def test_director_y_estudiante_reciben_403_en_todas_las_rutas_nuevas(self):
         rutas = [
