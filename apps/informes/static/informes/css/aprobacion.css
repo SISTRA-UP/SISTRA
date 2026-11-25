@@ -1,7 +1,4 @@
 /* SISTRA-07: presentación de la bandeja y sus diálogos. La cabecera y el menú son comunes. */
-body:has(.sistra07-page) {
-    background: var(--sistra-fondo, #F5F6F9);
-}
 
 .sistra07-page {
     color: var(--sistra-texto, #1F2430);
@@ -83,13 +80,13 @@ body:has(.sistra07-page) {
     outline-offset: 2px;
 }
 
-.sistra07-page :is(.sistra07-btn-principal, .sistra07-btn-evaluar, .modal-footer .btn-primary) {
+.sistra07-page :is(.sistra07-btn-principal, .modal-footer .btn-primary) {
     background: var(--sistra-rojo, #AD3333);
     border-color: var(--sistra-rojo, #AD3333);
     color: var(--sistra-superficie, #FFFFFF);
 }
 
-.sistra07-page :is(.sistra07-btn-principal, .sistra07-btn-evaluar, .modal-footer .btn-primary):hover:not(:disabled) {
+.sistra07-page :is(.sistra07-btn-principal, .modal-footer .btn-primary):hover:not(:disabled) {
     background: var(--sistra-rojo-hover, #8F2828);
     border-color: var(--sistra-rojo-hover, #8F2828);
     color: var(--sistra-superficie, #FFFFFF);
@@ -119,20 +116,20 @@ body:has(.sistra07-page) {
 }
 
 .sistra07-page .sistra07-btn-aprobar {
-    background: var(--sistra-decision-aprobado, #1E7D3E);
-    border-color: var(--sistra-decision-aprobado, #1E7D3E);
+    background: #1E7D3E;
+    border-color: #1E7D3E;
     color: var(--sistra-superficie, #FFFFFF);
 }
 
 .sistra07-page .sistra07-btn-rechazar {
-    background: var(--sistra-decision-rechazado, #B42318);
-    border-color: var(--sistra-decision-rechazado, #B42318);
+    background: #B42318;
+    border-color: #B42318;
     color: var(--sistra-superficie, #FFFFFF);
 }
 
 .sistra07-page .sistra07-btn-reactivar {
-    background: var(--sistra-accion-reactivar, #8C9CC5);
-    border-color: var(--sistra-accion-reactivar, #8C9CC5);
+    background: #8C9CC5;
+    border-color: #8C9CC5;
     color: var(--sistra-superficie, #FFFFFF);
 }
 
@@ -163,7 +160,7 @@ body:has(.sistra07-page) {
     --bs-table-bg: transparent;
     color: var(--sistra-texto, #1F2430);
     font-size: 15px;
-    min-width: 1030px;
+    min-width: 1250px;
 }
 
 .sistra07-page .sistra07-tabla thead th {
@@ -192,15 +189,15 @@ body:has(.sistra07-page) {
 }
 
 .sistra07-page .sistra07-tabla tbody tr.sistra07-fila-verde > * {
-    background: linear-gradient(90deg, var(--sistra-fila-verde-inicio, #CFEBD8), var(--sistra-fila-verde-fin, #F3FAF5));
+    background: linear-gradient(90deg, #CFEBD8, #F3FAF5);
 }
 
 .sistra07-page .sistra07-tabla tbody tr.sistra07-fila-amarillo > * {
-    background: linear-gradient(90deg, var(--sistra-fila-amarillo-inicio, #FBE7A6), var(--sistra-fila-amarillo-fin, #FFF8E0));
+    background: linear-gradient(90deg, #FBE7A6, #FFF8E0);
 }
 
 .sistra07-page .sistra07-tabla tbody tr.sistra07-fila-rojo > * {
-    background: linear-gradient(90deg, var(--sistra-fila-rojo-inicio, #F6C5BF), var(--sistra-fila-rojo-fin, #FDF0EE));
+    background: linear-gradient(90deg, #F6C5BF, #FDF0EE);
 }
 
 .sistra07-page .sistra07-codigo {
@@ -222,7 +219,7 @@ body:has(.sistra07-page) {
     font-size: 13px;
 }
 
-.sistra07-page :is(.sistra07-estado, .sistra07-semaforo, .sistra07-leyenda .badge) {
+.sistra07-page :is(.sistra07-estado, .sistra07-semaforo) {
     border-radius: 999px;
     display: inline-block;
     font-size: 12px;
@@ -232,44 +229,93 @@ body:has(.sistra07-page) {
     white-space: nowrap;
 }
 
-.sistra07-page :is(.sistra07-estado-revision, .sistra07-semaforo-amarillo, .sistra07-leyenda-amarillo) {
-    background: var(--sistra-amarillo-suave, #FFF1C2);
-    color: var(--sistra-amarillo-texto, #6B4A00);
+.sistra07-page :is(.sistra07-estado-revision, .sistra07-semaforo-amarillo) {
+    background: #FFF1C2;
+    color: #6B4A00;
 }
 
 .sistra07-page .sistra07-estado-modificacion {
-    background: var(--sistra-naranja-suave, #FFE8D6);
-    color: var(--sistra-naranja-texto, #8F3E00);
+    background: #FFE8D6;
+    color: #8F3E00;
 }
 
-.sistra07-page :is(.sistra07-estado-aprobado, .sistra07-semaforo-verde, .sistra07-leyenda-verde) {
-    background: var(--sistra-verde-suave, #DDF3E4);
-    color: var(--sistra-verde-texto, #14612F);
+.sistra07-page :is(.sistra07-estado-aprobado, .sistra07-semaforo-verde) {
+    background: #DDF3E4;
+    color: #14612F;
 }
 
 .sistra07-page .sistra07-estado-up {
-    background: var(--sistra-azul-suave, #E3EDFC);
-    color: var(--sistra-azul-texto, #174FA3);
+    background: #E3EDFC;
+    color: #174FA3;
 }
 
-.sistra07-page :is(.sistra07-estado-rechazado, .sistra07-semaforo-rojo, .sistra07-leyenda-rojo) {
-    background: var(--sistra-rojo-suave, #FBE3E0);
-    color: var(--sistra-rojo-texto, #8E1C12);
+.sistra07-page :is(.sistra07-estado-rechazado, .sistra07-semaforo-rojo) {
+    background: #FBE3E0;
+    color: #8E1C12;
 }
 
-.sistra07-page :is(.sistra07-estado-neutro, .sistra07-semaforo-neutro, .sistra07-semaforo-detenido, .sistra07-semaforo-sin_fecha, .sistra07-leyenda-neutro) {
+.sistra07-page :is(.sistra07-estado-neutro, .sistra07-semaforo-neutro, .sistra07-semaforo-detenido, .sistra07-semaforo-sin_fecha) {
     background: var(--sistra-gris, #E8EAF0);
     color: var(--sistra-gris-texto, #2A3040);
 }
 
 .sistra07-page .sistra07-leyenda {
-    border-top: 1px solid var(--sistra-borde, #E3E6EC);
-    padding: 16px 24px;
+    color: var(--sistra-texto-suave, #4B5263);
+    font-size: 13px;
+    margin: 12px 0 0;
 }
 
 .sistra07-page .sistra07-acciones-fila {
     align-items: center;
-    min-width: 200px;
+    flex-wrap: nowrap !important;
+    min-width: 405px;
+}
+
+.sistra07-page .sistra07-semaforo {
+    display: block;
+    margin-top: 6px;
+    width: fit-content;
+}
+
+.sistra07-page .sistra07-decidir-grupo {
+    display: inline-flex;
+    white-space: nowrap;
+}
+
+.sistra07-page .sistra07-decidir-grupo .btn {
+    border-radius: 0;
+    padding-inline: 10px;
+    white-space: nowrap;
+}
+
+.sistra07-page .sistra07-decidir-grupo .btn:first-child {
+    border-radius: 8px 0 0 8px;
+}
+
+.sistra07-page .sistra07-decidir-grupo .btn:last-child {
+    border-radius: 0 8px 8px 0;
+}
+
+.sistra07-page .sistra07-decidir-rechazar {
+    background: #B42318;
+    border-color: #B42318;
+    color: #FFFFFF;
+}
+
+.sistra07-page .sistra07-decidir-modificar {
+    background: #F2B01E;
+    border-color: #F2B01E;
+    color: #2E2100;
+}
+
+.sistra07-page .sistra07-decidir-aprobar {
+    background: #1E7D3E;
+    border-color: #1E7D3E;
+    color: #FFFFFF;
+}
+
+.sistra07-page .sistra07-decidir-grupo .btn:hover {
+    filter: brightness(.9);
 }
 
 .sistra07-page .form-check-input:checked {
@@ -330,11 +376,5 @@ body:has(.sistra07-page) {
         padding: 16px;
     }
 
-    .sistra07-page .sistra07-tabla {
-        min-width: 980px;
-    }
-
-    .sistra07-page .sistra07-leyenda {
-        padding: 16px;
-    }
+    .sistra07-page .sistra07-tabla { min-width: 1250px; }
 }

@@ -10,7 +10,7 @@
 {% block contenido %}
 <main class="sistra07-page">
     <header class="sistra07-encabezado">
-        <p class="sistra07-contexto">Trámites · Revisión de informes</p>
+        <p class="sistra07-contexto">Aprobación de informes</p>
         <h1>Aprobación de informes</h1>
         <p>Consulta y evalúa los informes de los estudiantes de tu carrera.</p>
     </header>
@@ -79,15 +79,7 @@
                 </div>
             </form>
         </div>
-    </section>
-
-    <section class="card sistra07-card sistra07-listado">
-        <div class="card-header sistra07-listado-cabecera">
-            Informes encontrados:
-            <strong>{{ pagina.paginator.count }}</strong>
-        </div>
-
-        <div class="card-body sistra07-acciones-masivas border-bottom">
+        <div class="card-body sistra07-acciones-masivas border-top">
             <div class="d-flex flex-wrap align-items-center gap-2 sistra07-acciones-grupo">
                 <span>
                     Seleccionados:
@@ -135,6 +127,13 @@
                 Para aprobar, selecciona solo informes En revisión.
             </p>
         </div>
+    </section>
+
+    <section class="card sistra07-card sistra07-listado">
+        <div class="card-header sistra07-listado-cabecera">
+            Informes encontrados:
+            <strong>{{ pagina.paginator.count }}</strong>
+        </div>
 
         <div class="table-responsive">
             <table class="table align-middle mb-0 sistra07-tabla">
@@ -152,8 +151,7 @@
                         <th scope="col">Estudiante</th>
                         <th scope="col">Título de la propuesta</th>
                         <th scope="col">Fecha de envío</th>
-                        <th scope="col">Estado</th>
-                        <th scope="col">Semáforo</th>
+                        <th scope="col">Estado y días</th>
                         <th scope="col">Acciones</th>
                     </tr>
                 </thead>
@@ -186,10 +184,8 @@
                                 <span class="sistra07-estado {% if informe.estado == 'En revisión' %}sistra07-estado-revision{% elif informe.estado == 'Requiere modificación' %}sistra07-estado-modificacion{% elif informe.estado == 'Aprobado' or informe.estado == 'Aprobado en UP' %}sistra07-estado-aprobado{% elif informe.estado == 'Subido en UP' %}sistra07-estado-up{% elif informe.estado == 'Rechazado' %}sistra07-estado-rechazado{% else %}sistra07-estado-neutro{% endif %}">
                                     {{ informe.get_estado_display }}
                                 </span>
-                            </td>
-                            <td>
                                 <span
-                                    class="badge sistra07-semaforo sistra07-semaforo-{{ informe.semaforo.color }}"
+                                    class="sistra07-semaforo sistra07-semaforo-{{ informe.semaforo.color }}"
                                     title="{{ informe.semaforo.descripcion }}"
                                 >
                                     {{ informe.semaforo.texto }}
@@ -223,25 +219,30 @@
                                     </button>
 
                                     {% if informe.puede_decidir %}
-                                        <button
-                                            type="button"
-                                            class="btn sistra07-btn-evaluar"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#modal-decision"
-                                            data-url="{% url 'informes:decidir' informe.pk %}"
-                                            data-codigo="{{ informe.codigo }}"
-                                            data-version="{{ informe.version_decision }}"
-                                            data-estado="{{ informe.estado }}"
-                                        >
-                                            Evaluar
-                                        </button>
+                                        <div class="sistra07-decidir-grupo" role="group" aria-label="Decidir sobre el informe {{ informe.codigo }}">
+                                            <button type="button" class="btn sistra07-decidir-rechazar"
+                                                data-bs-toggle="modal" data-bs-target="#modal-decision"
+                                                data-url="{% url 'informes:decidir' informe.pk %}"
+                                                data-codigo="{{ informe.codigo }}" data-version="{{ informe.version_decision }}"
+                                                data-estado="{{ informe.estado }}" data-decision="Rechazado">Rechazado</button>
+                                            <button type="button" class="btn sistra07-decidir-modificar"
+                                                data-bs-toggle="modal" data-bs-target="#modal-decision"
+                                                data-url="{% url 'informes:decidir' informe.pk %}"
+                                                data-codigo="{{ informe.codigo }}" data-version="{{ informe.version_decision }}"
+                                                data-estado="{{ informe.estado }}" data-decision="Requiere modificación">Modificar</button>
+                                            <button type="button" class="btn sistra07-decidir-aprobar"
+                                                data-bs-toggle="modal" data-bs-target="#modal-decision"
+                                                data-url="{% url 'informes:decidir' informe.pk %}"
+                                                data-codigo="{{ informe.codigo }}" data-version="{{ informe.version_decision }}"
+                                                data-estado="{{ informe.estado }}" data-decision="Aprobado">Aprobado</button>
+                                        </div>
                                     {% endif %}
                                 </div>
                             </td>
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="8" class="text-center text-secondary py-5">
+                            <td colspan="7" class="text-center text-secondary py-5">
                                 {% if hay_filtros %}
                                     No se encontraron informes con esos filtros.
                                 {% else %}
@@ -253,13 +254,8 @@
                 </tbody>
             </table>
         </div>
-        <div class="sistra07-leyenda d-flex flex-wrap gap-2" aria-label="Límites del semáforo">
-            <span class="badge sistra07-leyenda-verde">Verde: 0–{{ limite_verde }} días</span>
-            <span class="badge sistra07-leyenda-amarillo">Amarillo: {{ inicio_amarillo }}–{{ limite_amarillo }} días</span>
-            <span class="badge sistra07-leyenda-rojo">Rojo: desde {{ inicio_rojo }} días</span>
-            <span class="badge sistra07-leyenda-neutro">Detenido: fuera de revisión</span>
-        </div>
     </section>
+    <p class="sistra07-leyenda">Semáforo en informes En revisión: verde de 0 a {{ limite_verde }} días, amarillo de {{ inicio_amarillo }} a {{ limite_amarillo }} y rojo desde {{ inicio_rojo }}. Los demás estados: fondo neutro.</p>
 
     {% if pagina.has_other_pages %}
         <nav class="mt-4" aria-label="Páginas de informes">
