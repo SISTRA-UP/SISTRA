@@ -23,6 +23,7 @@ from django.views.decorators.http import require_GET, require_POST
 from apps.cargue_up.forms.verificacion_informe import (
     ACCION_AUDITORIA_CORREGIR,
     ACCION_AUDITORIA_DENEGADO,
+    ACCION_AUDITORIA_REAPERTURA,
     ACCION_AUDITORIA_VERIFICAR,
     MSG_09_01,
     MSG_09_02,
@@ -54,6 +55,7 @@ from apps.cargue_up.forms.verificacion_informe import (
 from apps.cargue_up.models import CargueUp, EstadoVerificacion, HistorialCargueUp
 from apps.propuestas.models import EstadoTramite
 from apps.seguimiento.models import Auditoria, HistorialEstado, Notificacion
+from apps.procesos.models import EstadoAvance
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +139,7 @@ def _contexto_detalle(informe, *, formulario_decision=None, formulario_correccio
         'formulario_correccion': formulario_correccion
         or (
             CorreccionForm(
-                initial={'id_cargue': ultimo.pk}, resultado_nuevo=resultado_nuevo
+                initial={'id_cargue': ultimo.pk, 'resultado': resultado_nuevo}, resultado_nuevo=resultado_nuevo
             )
             if resultado_nuevo and ultimo
             else None
@@ -313,7 +315,7 @@ def corregir(request: HttpRequest, id_informe: int) -> HttpResponse:
     resultado_nuevo = resultado_de_correccion(
         informe_vista.estado, ultimo_vista.estado_verificacion if ultimo_vista else None
     )
-    if resultado_nuevo is None:
+    if resultado_nuevo is None or request.POST.get('resultado') != resultado_nuevo:
         messages.warning(request, MSG_09_CORRECCION_NO_DISPONIBLE)
         return redirect('cargue_up:verificacion_informe_lista')
 
@@ -345,7 +347,7 @@ def corregir(request: HttpRequest, id_informe: int) -> HttpResponse:
                 informe.estado, cargue.estado_verificacion if cargue else None
             )
             # Sin nuevo cargue y con el estado que dejó la verificación; si no, no se corrige.
-            if resultado_nuevo is None or cargue.pk != id_cargue:
+            if resultado_nuevo is None or cargue.pk != id_cargue or formulario.cleaned_data['resultado'] != resultado_nuevo:
                 messages.warning(request, MSG_09_CORRECCION_NO_DISPONIBLE)
                 return redirect('cargue_up:verificacion_informe_lista')
 
@@ -384,11 +386,21 @@ def corregir(request: HttpRequest, id_informe: int) -> HttpResponse:
                 tipo_accion=ACCION_AUDITORIA_CORREGIR,
                 fecha_hora=ahora,
             )
+
+            proceso = informe.propuesta.proceso
+            debe_reabrir = (
+                resultado_nuevo == EstadoVerificacion.RECHAZADO_EN_UP
+                and proceso is not None
+                and proceso.estado == EstadoAvance.FINALIZADA
+            )
+
             Notificacion.objects.create(
                 usuario=informe.propuesta.proceso.estudiante_carrera.estudiante.usuario,
                 informe=informe,
                 tipo=TIPO_NOTIFICACION_CORRECCION,
-                mensaje=mensaje_notificacion(resultado_nuevo, observacion, corregida=True),
+                mensaje=mensaje_notificacion(
+                    resultado_nuevo, observacion, corregida=True, proceso_reabierto=debe_reabrir
+                ),
                 fecha_creacion=ahora,
             )
             Auditoria.objects.create(
@@ -404,6 +416,26 @@ def corregir(request: HttpRequest, id_informe: int) -> HttpResponse:
                 resultado=RESULTADO_EXITO,
                 fecha_hora=ahora,
             )
+            # E8: si el resultado es Rechazado en UP y el proceso estaba Finalizada,
+            # reabrirlo dentro de la misma transacción (decisión D4 del 20/11) después de E7.
+            if debe_reabrir:
+                estado_proceso_anterior = proceso.estado
+                proceso.estado = EstadoAvance.EN_CURSO
+                proceso.fecha_finalizacion = None
+                proceso.save(update_fields=['estado', 'fecha_finalizacion'])
+                Auditoria.objects.create(
+                    usuario=request.user,
+                    accion=ACCION_AUDITORIA_REAPERTURA,
+                    tabla_afectada='proceso_trabajo_social',
+                    id_registro_afectado=proceso.pk,
+                    detalle=(
+                        f'Proceso {proceso.pk} | Estado: {estado_proceso_anterior} -> {EstadoAvance.EN_CURSO} | '
+                        f'Informe {informe.pk} | Corrección de verificación en UP por Director ocasionó la reapertura | '
+                        f'Motivo: {motivo}'
+                    ),
+                    resultado=RESULTADO_EXITO,
+                    fecha_hora=ahora,
+                )
     except Http404:
         raise
     except Exception:

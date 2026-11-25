@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{# SISTRA-10 · R8 · Página de error. Solo llena `contenido`, así que toma el
+   diseño de `base.html` cuando R10 lo cambie, sin tocar este archivo.
+   No consulta la base ni usa `request`: la del 500 tiene que poder mostrarse
+   justo cuando lo que falló es la base. #}
+
+{% block titulo %}El formulario ya no era válido · SISTRA{% endblock %}
+
+{% block contenido %}
+<main class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+      <div class="card shadow-sm">
+        <div class="card-body text-center p-4 p-md-5">
+          <p class="text-uppercase small fw-semibold text-body-secondary mb-2">Error 403</p>
+          <h1 class="h3 mb-3">El formulario ya no era válido</h1>
+          <p class="mb-3">No se pudo enviar el formulario porque su comprobación de seguridad había vencido.</p>
+          <p class="text-body-secondary small mb-4">Suele pasar cuando la pantalla estuvo abierta mucho tiempo o quedó en otra pestaña. Vuelve a abrirla, llénala de nuevo y envíala.</p>
+          <a class="btn btn-primary" href="/" onclick="if (history.length > 1) { history.back(); return false; }">Volver</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+{% endblock %}

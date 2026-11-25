@@ -26,6 +26,7 @@ PERMISO_VERIFICAR = 'informe.aprobar'
 ACCION_AUDITORIA_VERIFICAR = 'verificacion_informe'
 ACCION_AUDITORIA_CORREGIR = 'correccion_verif_informe'  # tipo_accion admite 30 caracteres
 ACCION_AUDITORIA_DENEGADO = 'intento_verificacion_informe'
+ACCION_AUDITORIA_REAPERTURA = 'reapertura_proceso_informe'
 TIPO_NOTIFICACION_VERIFICACION = 'verificacion_informe'
 TIPO_NOTIFICACION_CORRECCION = 'correccion_verif_informe'
 
@@ -55,7 +56,7 @@ MSG_09_DENEGADO = 'Tu sesión expiró o no tienes permiso para consultar esta in
 _ETIQUETA_HTML = re.compile(r'<[^>]*>|[<>]')
 
 
-def mensaje_notificacion(resultado: str, observacion: str, *, corregida: bool = False) -> str:
+def mensaje_notificacion(resultado: str, observacion: str, *, corregida: bool = False, proceso_reabierto: bool = False) -> str:
     """MSG-09-03 para el estudiante (también para correcciones, con prefijo)."""
     if resultado == EstadoVerificacion.APROBADO_EN_UP:
         cuerpo = 'Aprobado en UP.'
@@ -67,7 +68,13 @@ def mensaje_notificacion(resultado: str, observacion: str, *, corregida: bool = 
     inicio = 'Tu Director corrigió su verificación de la Plataforma UP: ' if corregida else (
         'Tu Director revisó la Plataforma UP: '
     )
-    return inicio + cuerpo
+    mensaje = inicio + cuerpo
+    if proceso_reabierto:
+        mensaje += (
+            ' Además, tu proceso fue reabierto: vuelve a cargar el informe en UP'
+            ' y continúa con el procedimiento correspondiente.'
+        )
+    return mensaje
 
 
 def _texto_sin_html(valor: str) -> str:
@@ -131,6 +138,13 @@ class CorreccionForm(forms.Form):
     """TXT-MOTIVO-CORR (siempre) y TXT-OBS-UP (si el nuevo resultado es Rechazado en UP)."""
 
     id_cargue = forms.IntegerField(min_value=1, widget=forms.HiddenInput)
+    resultado = forms.ChoiceField(
+        choices=[
+            (EstadoVerificacion.APROBADO_EN_UP, 'Aprobado en UP'),
+            (EstadoVerificacion.RECHAZADO_EN_UP, 'Rechazado en UP'),
+        ],
+        widget=forms.HiddenInput,
+    )
     motivo = _campo_texto('Motivo de la corrección', 'Explica por qué corriges la verificación.')
     observacion = _campo_texto('Observación para el estudiante', 'Escribe qué no coincide.')
 

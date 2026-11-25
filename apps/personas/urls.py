@@ -18,4 +18,9 @@ urlpatterns = [
     # SISTRA-10 · Roles (registro de estudiantes)
     path('estudiantes/', registro_estudiantes.registrar, name='estudiantes'),
     path('estudiantes/csv/', registro_estudiantes.cargar_csv, name='estudiantes_csv'),
+    path(
+        'estudiantes/<int:id_usuario>/reenviar/',
+        registro_estudiantes.reenviar_credenciales_estudiante,
+        name='estudiante_reenviar',
+    ),
 ]
