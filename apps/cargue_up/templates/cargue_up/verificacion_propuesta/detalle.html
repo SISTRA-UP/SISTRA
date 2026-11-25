@@ -83,7 +83,9 @@
         </section>
         {% endif %}
 
-        {% if not pendiente and not formulario_correccion %}
+        {% if correccion_bloqueada_informe %}
+        <div class="vi-card vi-empty mb-4" role="status">{{ mensaje_correccion_bloqueada }}</div>
+        {% elif not pendiente and not formulario_correccion %}
         <div class="vi-card vi-empty mb-4" role="status">Esta propuesta ya no está pendiente de verificación.</div>
         {% endif %}
 
