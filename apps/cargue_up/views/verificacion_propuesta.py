@@ -28,6 +28,7 @@ from apps.cargue_up.forms.verificacion_propuesta import (
     MSG_05_02,
     MSG_05_04,
     MSG_05_06,
+    MSG_05_CORRECCION_BLOQUEADA_INFORME,
     MSG_05_CORRECCION_NO_DISPONIBLE,
     MSG_05_ERROR,
     POR_PAGINA,
@@ -41,6 +42,7 @@ from apps.cargue_up.forms.verificacion_propuesta import (
     BusquedaForm,
     CorreccionForm,
     DecisionForm,
+    correccion_bloqueada_por_informe,
     director_y_carreras,
     estado_propuesta_para,
     filtrar_por_busqueda,
@@ -109,6 +111,21 @@ def _auditar_fallo(request: HttpRequest, accion: str, id_propuesta: int) -> None
         logger.exception('No se pudo auditar el fallo de la verificación de la propuesta %s.', id_propuesta)
 
 
+def _auditar_correccion_bloqueada(request: HttpRequest, id_propuesta: int) -> None:
+    """E13: deja constancia de la corrección bloqueada por informe enviado."""
+    try:
+        Auditoria.objects.create(
+            usuario=request.user,
+            accion=ACCION_AUDITORIA_CORREGIR,
+            tabla_afectada='propuesta',
+            id_registro_afectado=id_propuesta,
+            detalle='Corrección a Rechazado en UP bloqueada: el estudiante ya envió su informe.',
+            resultado=RESULTADO_BLOQUEADO,
+        )
+    except Exception:
+        logger.exception('No se pudo auditar la corrección bloqueada de la propuesta %s.', id_propuesta)
+
+
 def _contexto_detalle(propuesta, *, formulario_decision=None, formulario_correccion=None):
     cargues = list(propuesta.cargues_up.select_related('director__usuario').order_by('-fecha_declaracion', '-pk'))
     ultimo = cargues[0] if cargues else None
@@ -120,6 +137,9 @@ def _contexto_detalle(propuesta, *, formulario_decision=None, formulario_correcc
     resultado_nuevo = resultado_de_correccion(
         propuesta.estado, ultimo.estado_verificacion if ultimo else None
     )
+    bloqueada_por_informe = correccion_bloqueada_por_informe(propuesta, resultado_nuevo)
+    if bloqueada_por_informe:
+        resultado_nuevo = None
     historial = (
         HistorialCargueUp.objects.filter(cargue_up__in=cargues)
         .select_related('director__usuario')
@@ -132,6 +152,8 @@ def _contexto_detalle(propuesta, *, formulario_decision=None, formulario_correcc
         'ultimo_cargue': ultimo,
         'pendiente': pendiente,
         'resultado_correccion': resultado_nuevo,
+        'correccion_bloqueada_informe': bloqueada_por_informe,
+        'mensaje_correccion_bloqueada': MSG_05_CORRECCION_BLOQUEADA_INFORME,
         'historial': historial,
         'formulario_decision': formulario_decision,
         'formulario_correccion': formulario_correccion
@@ -319,6 +341,12 @@ def corregir(request: HttpRequest, id_propuesta: int) -> HttpResponse:
         messages.warning(request, MSG_05_CORRECCION_NO_DISPONIBLE)
         return redirect('cargue_up:verificacion_propuesta')
 
+    # E13 (primera revisión): informe ya enviado.
+    if correccion_bloqueada_por_informe(propuesta_vista, resultado_nuevo):
+        _auditar_correccion_bloqueada(request, id_propuesta)
+        messages.warning(request, MSG_05_CORRECCION_BLOQUEADA_INFORME)
+        return redirect('cargue_up:verificacion_propuesta')
+
     formulario = CorreccionForm(request.POST, resultado_nuevo=resultado_nuevo)
     if not formulario.is_valid():
         return render(
@@ -353,6 +381,12 @@ def corregir(request: HttpRequest, id_propuesta: int) -> HttpResponse:
                 or formulario.cleaned_data['resultado'] != resultado_nuevo
             ):
                 messages.warning(request, MSG_05_CORRECCION_NO_DISPONIBLE)
+                return redirect('cargue_up:verificacion_propuesta')
+
+            # E13 (segunda revisión): el estudiante pudo enviar el informe mientras tanto.
+            if correccion_bloqueada_por_informe(propuesta, resultado_nuevo):
+                _auditar_correccion_bloqueada(request, id_propuesta)
+                messages.warning(request, MSG_05_CORRECCION_BLOQUEADA_INFORME)
                 return redirect('cargue_up:verificacion_propuesta')
 
             ahora = timezone.now()

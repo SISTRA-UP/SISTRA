@@ -18,12 +18,14 @@ from apps.cargue_up.forms.verificacion_propuesta import (
     MSG_05_04,
     MSG_05_05,
     MSG_05_06,
+    MSG_05_CORRECCION_BLOQUEADA_INFORME,
     MSG_05_CORRECCION_NO_DISPONIBLE,
     MSG_05_ERROR,
     resultado_de_correccion,
 )
 from apps.cargue_up.forms.aviso_propuesta import TIPO_NOTIFICACION_AVISO
 from apps.cargue_up.models import CargueUp, EstadoVerificacion, HistorialCargueUp
+from apps.informes.models import Informe
 from apps.parametrizacion.models import Carrera, EstadoPeriodo, Facultad, PeriodoAcademico
 from apps.personas.models import Director, DirectorCarrera, Estudiante, EstudianteCarrera
 from apps.procesos.models import ProcesoTrabajoSocial
@@ -750,3 +752,106 @@ class IntegracionTests(BaseVerificacionTests):
         self.entrar_como_director()
         html = self.client.get(self.url_lista).content.decode()
         self.assertLess(html.index('</main>'), html.index(f'id="modal-apr-{propuesta.pk}"'))
+
+
+class CorreccionConInformeTests(BaseVerificacionTests):
+    """E13 (SIS-58): no se corrige a Rechazado en UP si el estudiante ya envió su informe."""
+
+    ESTADOS_ENVIADOS = [
+        EstadoTramite.EN_REVISION,
+        EstadoTramite.REQUIERE_MODIFICACION,
+        EstadoTramite.RECHAZADO,
+        EstadoTramite.APROBADO,
+        EstadoTramite.SUBIDO_EN_UP,
+        EstadoTramite.APROBADO_EN_UP,
+    ]
+
+    def crear_informe(self, propuesta, estado, archivado=False):
+        return Informe.objects.create(
+            propuesta=propuesta, periodo_academico=self.periodo,
+            codigo=f'INF-{propuesta.pk}-{estado}-{archivado}'[:30], estado=estado, archivado=archivado,
+        )
+
+    def propuesta_aprobada_en_up(self, alias):
+        propuesta = self.crear_propuesta(alias, nombre=f'Estudiante {alias}')
+        self.verificar_directo(propuesta, APROBADO_UP)
+        return propuesta
+
+    def test_con_informe_enviado_no_corrige_a_rechazado_y_queda_auditado(self):
+        self.entrar_como_director()
+        for indice, estado in enumerate(self.ESTADOS_ENVIADOS):
+            with self.subTest(estado=estado):
+                propuesta = self.propuesta_aprobada_en_up(f'e13-env{indice}')
+                self.crear_informe(propuesta, estado)
+                cargue = self.ultimo_cargue(propuesta)
+
+                respuesta = self.corregir(propuesta, motivo='Error', observacion='No coincide')
+
+                self.assertIn(MSG_05_CORRECCION_BLOQUEADA_INFORME, self.mensajes(respuesta))
+                propuesta.refresh_from_db()
+                cargue.refresh_from_db()
+                self.assertEqual(propuesta.estado, EstadoTramite.APROBADO_EN_UP)
+                self.assertEqual(cargue.estado_verificacion, APROBADO_UP)
+                self.assertFalse(HistorialCargueUp.objects.filter(cargue_up=cargue).exists())
+                self.assertFalse(Notificacion.objects.filter(propuesta=propuesta).exists())
+                self.assertTrue(Auditoria.objects.filter(
+                    accion='correccion_verif_propuesta', resultado='Bloqueado',
+                    id_registro_afectado=propuesta.pk,
+                ).exists())
+
+    def test_con_informe_en_borrador_si_deja_corregir(self):
+        propuesta = self.propuesta_aprobada_en_up('e13-borr')
+        self.crear_informe(propuesta, EstadoTramite.BORRADOR)
+        self.entrar_como_director()
+
+        respuesta = self.corregir(propuesta, motivo='Error', observacion='No coincide')
+
+        self.assertIn(MSG_05_06, self.mensajes(respuesta))
+        propuesta.refresh_from_db()
+        self.assertEqual(propuesta.estado, EstadoTramite.APROBADO)
+
+    def test_un_informe_archivado_no_bloquea(self):
+        propuesta = self.propuesta_aprobada_en_up('e13-arch')
+        self.crear_informe(propuesta, EstadoTramite.EN_REVISION, archivado=True)
+        self.entrar_como_director()
+
+        respuesta = self.corregir(propuesta, motivo='Error', observacion='No coincide')
+
+        self.assertIn(MSG_05_06, self.mensajes(respuesta))
+        propuesta.refresh_from_db()
+        self.assertEqual(propuesta.estado, EstadoTramite.APROBADO)
+
+    def test_el_detalle_explica_por_que_no_se_puede_corregir(self):
+        propuesta = self.propuesta_aprobada_en_up('e13-det')
+        self.crear_informe(propuesta, EstadoTramite.EN_REVISION)
+        self.entrar_como_director()
+
+        respuesta = self.client.get(self.url_detalle(propuesta))
+
+        self.assertContains(respuesta, MSG_05_CORRECCION_BLOQUEADA_INFORME)
+        self.assertNotContains(respuesta, 'Corregir verificación')
+        self.assertNotContains(respuesta, self.url_corregir(propuesta))
+
+    def test_la_pestana_verificados_no_ofrece_esas_propuestas(self):
+        bloqueada = self.propuesta_aprobada_en_up('e13-lb')
+        self.crear_informe(bloqueada, EstadoTramite.APROBADO)
+        libre = self.propuesta_aprobada_en_up('e13-ll')
+        self.crear_informe(libre, EstadoTramite.BORRADOR)
+        self.entrar_como_director()
+
+        respuesta = self.client.get(self.url_lista, {'vista': 'verificados'})
+
+        self.assertNotContains(respuesta, 'Estudiante e13-lb')
+        self.assertContains(respuesta, 'Estudiante e13-ll')
+
+    def test_de_rechazado_a_aprobado_en_up_se_corrige_siempre(self):
+        propuesta = self.crear_propuesta('e13-apr')
+        self.verificar_directo(propuesta, RECHAZADO_UP, 'No coincidía')
+        self.crear_informe(propuesta, EstadoTramite.APROBADO_EN_UP)
+        self.entrar_como_director()
+
+        respuesta = self.corregir(propuesta, motivo='Sí coincidía')
+
+        self.assertIn(MSG_05_06, self.mensajes(respuesta))
+        propuesta.refresh_from_db()
+        self.assertEqual(propuesta.estado, EstadoTramite.APROBADO_EN_UP)
