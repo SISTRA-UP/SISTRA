@@ -3,7 +3,6 @@
 Solo el responsable de este requisito edita este archivo.
 """
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
 from django.shortcuts import redirect, render
@@ -31,6 +30,7 @@ from apps.propuestas.services.montaje import (
     extraer_datos_plantilla,
 )
 from apps.seguimiento.models import Auditoria, HistorialEstado, Notificacion
+from apps.usuarios.permisos import requiere_permiso
 
 
 def _obtener_proceso_estudiante(usuario):
@@ -86,7 +86,7 @@ def _registrar_auditoria(usuario, accion, resultado, id_registro=None, detalle='
     )
 
 
-@login_required
+@requiere_permiso('propuesta.montar')
 @require_http_methods(['GET', 'POST'])
 def inicio(request):
     """Vista principal para registro, importación de Word y envío de propuesta."""
