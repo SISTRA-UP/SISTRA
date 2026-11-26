@@ -115,6 +115,27 @@ class DashboardVistasTests(TestCase):
             ).exists()
         )
 
+    def test_panel_administrador_muestra_carrera_por_usuario(self):
+        self.client.force_login(self.admin)
+
+        respuesta = self.client.get(reverse('dashboard:inicio'), follow=True)
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, '<th>Carrera</th>', html=True)
+        usuarios = {
+            usuario.pk: usuario for usuario in respuesta.context['usuarios_listado']
+        }
+        self.assertEqual(
+            usuarios[self.director_user.pk].carreras,
+            ['Ingeniería de Sistemas'],
+        )
+        self.assertEqual(
+            usuarios[self.estudiante_user.pk].carreras,
+            ['Ingeniería de Sistemas'],
+        )
+        self.assertEqual(usuarios[self.admin.pk].carreras, [])
+        self.assertContains(respuesta, '<td>—</td>', html=True)
+
     def test_panel_director_muestra_tarjetas_tabla_estudiantes_y_accesos(self):
         self.client.force_login(self.director_user)
         respuesta = self.client.get(reverse('dashboard:inicio'), follow=True)
