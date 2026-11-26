@@ -188,15 +188,20 @@
     padding-right: 24px;
 }
 
-.sistra07-page .sistra07-tabla tbody tr.sistra07-fila-verde > * {
+.sistra07-page .sistra07-tabla tbody tr:is(.sistra07-fila-verde, .sistra07-fila-amarillo, .sistra07-fila-rojo) > * {
+    background: transparent;
+    box-shadow: none;
+}
+
+.sistra07-page .sistra07-tabla tbody tr.sistra07-fila-verde {
     background: linear-gradient(90deg, #CFEBD8, #F3FAF5);
 }
 
-.sistra07-page .sistra07-tabla tbody tr.sistra07-fila-amarillo > * {
+.sistra07-page .sistra07-tabla tbody tr.sistra07-fila-amarillo {
     background: linear-gradient(90deg, #FBE7A6, #FFF8E0);
 }
 
-.sistra07-page .sistra07-tabla tbody tr.sistra07-fila-rojo > * {
+.sistra07-page .sistra07-tabla tbody tr.sistra07-fila-rojo {
     background: linear-gradient(90deg, #F6C5BF, #FDF0EE);
 }
 
