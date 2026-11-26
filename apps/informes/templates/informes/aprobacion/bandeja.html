@@ -1,17 +1,23 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block titulo %}Aprobación de informes · SISTRA-UP{% endblock %}
 
-{% block contenido %}
-<main class="container py-4">
-    <h1 class="h3 text-primary">Aprobación de informes</h1>
-    <p class="text-secondary">
-        Consulta y evalúa los informes de los estudiantes de tu carrera.
-    </p>
+{% block css %}
+<link rel="stylesheet" href="{% static 'informes/css/aprobacion.css' %}">
+{% endblock %}
 
-    <div class="card shadow-sm mb-4">
+{% block contenido %}
+<main class="sistra07-page">
+    <header class="sistra07-encabezado">
+        <p class="sistra07-contexto">Aprobación de informes</p>
+        <h1>Aprobación de informes</h1>
+        <p>Consulta y evalúa los informes de los estudiantes de tu carrera.</p>
+    </header>
+
+    <section class="card sistra07-card sistra07-filtros mb-4" aria-label="Filtros de informes">
         <div class="card-body">
-            <form method="get" class="row g-3 align-items-end">
+            <form method="get" class="row g-3 align-items-end sistra07-filtros-form">
                 <div class="col-lg-5">
                     <label for="buscar" class="form-label">Buscar informe</label>
                     <input
@@ -55,7 +61,7 @@
                 </div>
 
                 <div class="col-lg-2">
-                    <button class="btn btn-primary w-100" type="submit">
+                    <button class="btn sistra07-btn-principal w-100" type="submit">
                         Filtrar
                     </button>
                 </div>
@@ -63,7 +69,7 @@
                 <div class="col-12">
                     <a
                         href="{% url 'informes:aprobacion' %}"
-                        class="btn btn-outline-secondary btn-sm"
+                        class="btn sistra07-btn-secundario"
                     >
                         Limpiar filtros
                     </a>
@@ -73,42 +79,8 @@
                 </div>
             </form>
         </div>
-    </div>
-
-    <div class="d-flex flex-wrap gap-2 mb-3">
-        <span class="badge text-bg-success">
-            Verde: 0–{{ limite_verde }} días
-        </span>
-        <span class="badge text-bg-warning text-dark">
-            Amarillo: {{ inicio_amarillo }}–{{ limite_amarillo }} días
-        </span>
-        <span class="badge text-bg-danger">
-            Rojo: desde {{ inicio_rojo }} días
-        </span>
-        <span class="badge text-bg-secondary">
-            Detenido: fuera de revisión
-        </span>
-    </div>
-
-    <div class="card shadow-sm">
-        <div class="card-header bg-white">
-            Informes encontrados:
-            <strong>{{ pagina.paginator.count }}</strong>
-        </div>
-
-        <div class="card-body border-bottom">
-    <button
-        type="button"
-        id="reactivar-masivo"
-        class="btn btn-outline-warning btn-sm mb-2"
-        data-bs-toggle="modal"
-        data-bs-target="#modal-masivo"
-        data-decision="Reactivar"
-        disabled
-    >
-        Reactivar seleccionados
-    </button>
-            <div class="d-flex flex-wrap align-items-center gap-2">
+        <div class="card-body sistra07-acciones-masivas border-top">
+            <div class="d-flex flex-wrap align-items-center gap-2 sistra07-acciones-grupo">
                 <span>
                     Seleccionados:
                     <strong id="contador-seleccion">0</strong>
@@ -117,7 +89,7 @@
                 <button
                     type="button"
                     id="aprobar-masivo"
-                    class="btn btn-success btn-sm"
+                    class="btn sistra07-btn-aprobar"
                     data-bs-toggle="modal"
                     data-bs-target="#modal-masivo"
                     data-decision="Aprobado"
@@ -129,7 +101,7 @@
                 <button
                     type="button"
                     id="rechazar-masivo"
-                    class="btn btn-outline-danger btn-sm"
+                    class="btn sistra07-btn-rechazar"
                     data-bs-toggle="modal"
                     data-bs-target="#modal-masivo"
                     data-decision="Rechazado"
@@ -137,16 +109,35 @@
                 >
                     Rechazar seleccionados
                 </button>
+
+                <button
+                    type="button"
+                    id="reactivar-masivo"
+                    class="btn sistra07-btn-reactivar"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modal-masivo"
+                    data-decision="Reactivar"
+                    disabled
+                >
+                    Reactivar seleccionados
+                </button>
             </div>
             <p class="small text-secondary mb-0 mt-2">
                 La selección corresponde únicamente a esta página.
                 Para aprobar, selecciona solo informes En revisión.
             </p>
         </div>
+    </section>
+
+    <section class="card sistra07-card sistra07-listado">
+        <div class="card-header sistra07-listado-cabecera">
+            Informes encontrados:
+            <strong>{{ pagina.paginator.count }}</strong>
+        </div>
 
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
+            <table class="table align-middle mb-0 sistra07-tabla">
+                <thead>
                     <tr>
                         <th scope="col">
                             <input
@@ -158,17 +149,15 @@
                         </th>
                         <th scope="col">Código</th>
                         <th scope="col">Estudiante</th>
-                        <th scope="col">Cédula</th>
                         <th scope="col">Título de la propuesta</th>
                         <th scope="col">Fecha de envío</th>
-                        <th scope="col">Estado</th>
-                        <th scope="col">Semáforo</th>
+                        <th scope="col">Estado y días</th>
                         <th scope="col">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for informe in pagina %}
-                        <tr>
+                        <tr class="{% if informe.estado == 'En revisión' %}sistra07-fila-{{ informe.semaforo.color }}{% endif %}">
                             <td>
                                {% if informe.puede_decidir or informe.estado == "Rechazado" %}
                                     <input
@@ -182,21 +171,21 @@
                                     >
                                 {% endif %}
                             </td>
-                            <td>{{ informe.codigo }}</td>
+                            <td><span class="sistra07-codigo">{{ informe.codigo }}</span></td>
                             <td>
-                                {{ informe.propuesta.proceso.estudiante_carrera.estudiante.usuario.nombre }}
-                            </td>
-                            <td>
-                                {{ informe.propuesta.proceso.estudiante_carrera.estudiante.usuario.cedula }}
+                                <span class="sistra07-estudiante">{{ informe.propuesta.proceso.estudiante_carrera.estudiante.usuario.nombre }}</span>
+                                <span class="sistra07-cedula">C.C. {{ informe.propuesta.proceso.estudiante_carrera.estudiante.usuario.cedula }}</span>
                             </td>
                             <td>{{ informe.propuesta.titulo }}</td>
                             <td>
                                 {{ informe.fecha_envio|date:"d/m/Y H:i"|default:"Sin fecha" }}
                             </td>
-                            <td>{{ informe.get_estado_display }}</td>
                             <td>
+                                <span class="sistra07-estado {% if informe.estado == 'En revisión' %}sistra07-estado-revision{% elif informe.estado == 'Requiere modificación' %}sistra07-estado-modificacion{% elif informe.estado == 'Aprobado' or informe.estado == 'Aprobado en UP' %}sistra07-estado-aprobado{% elif informe.estado == 'Subido en UP' %}sistra07-estado-up{% elif informe.estado == 'Rechazado' %}sistra07-estado-rechazado{% else %}sistra07-estado-neutro{% endif %}">
+                                    {{ informe.get_estado_display }}
+                                </span>
                                 <span
-                                    class="badge {{ informe.semaforo.clase }}"
+                                    class="sistra07-semaforo sistra07-semaforo-{{ informe.semaforo.color }}"
                                     title="{{ informe.semaforo.descripcion }}"
                                 >
                                     {{ informe.semaforo.texto }}
@@ -206,23 +195,23 @@
                                 </span>
                             </td>
                             <td>
-                                <div class="d-flex gap-2">
-    {% if informe.estado == "Rechazado" %}
-        <button
-            type="button"
-            class="btn btn-outline-warning btn-sm"
-            data-bs-toggle="modal"
-            data-bs-target="#modal-reactivacion"
-            data-url="{% url 'informes:reactivar' informe.pk %}"
-            data-codigo="{{ informe.codigo }}"
-            data-version="{{ informe.version_decision }}"
-        >
-            Reactivar
-        </button>
-    {% endif %}
+                                <div class="d-flex flex-wrap gap-2 sistra07-acciones-fila">
+                                    {% if informe.estado == "Rechazado" %}
+                                        <button
+                                            type="button"
+                                            class="btn sistra07-btn-reactivar"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modal-reactivacion"
+                                            data-url="{% url 'informes:reactivar' informe.pk %}"
+                                            data-codigo="{{ informe.codigo }}"
+                                            data-version="{{ informe.version_decision }}"
+                                        >
+                                            Reactivar
+                                        </button>
+                                    {% endif %}
                                     <button
                                         type="button"
-                                        class="btn btn-outline-primary btn-sm text-nowrap"
+                                        class="btn sistra07-btn-enlace text-nowrap"
                                         data-bs-toggle="modal"
                                         data-bs-target="#detalle-informe-{{ informe.pk }}"
                                     >
@@ -230,25 +219,30 @@
                                     </button>
 
                                     {% if informe.puede_decidir %}
-                                        <button
-                                            type="button"
-                                            class="btn btn-primary btn-sm"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#modal-decision"
-                                            data-url="{% url 'informes:decidir' informe.pk %}"
-                                            data-codigo="{{ informe.codigo }}"
-                                            data-version="{{ informe.version_decision }}"
-                                            data-estado="{{ informe.estado }}"
-                                        >
-                                            Evaluar
-                                        </button>
+                                        <div class="sistra07-decidir-grupo" role="group" aria-label="Decidir sobre el informe {{ informe.codigo }}">
+                                            <button type="button" class="btn sistra07-decidir-rechazar"
+                                                data-bs-toggle="modal" data-bs-target="#modal-decision"
+                                                data-url="{% url 'informes:decidir' informe.pk %}"
+                                                data-codigo="{{ informe.codigo }}" data-version="{{ informe.version_decision }}"
+                                                data-estado="{{ informe.estado }}" data-decision="Rechazado">Rechazado</button>
+                                            <button type="button" class="btn sistra07-decidir-modificar"
+                                                data-bs-toggle="modal" data-bs-target="#modal-decision"
+                                                data-url="{% url 'informes:decidir' informe.pk %}"
+                                                data-codigo="{{ informe.codigo }}" data-version="{{ informe.version_decision }}"
+                                                data-estado="{{ informe.estado }}" data-decision="Requiere modificación">Modificar</button>
+                                            <button type="button" class="btn sistra07-decidir-aprobar"
+                                                data-bs-toggle="modal" data-bs-target="#modal-decision"
+                                                data-url="{% url 'informes:decidir' informe.pk %}"
+                                                data-codigo="{{ informe.codigo }}" data-version="{{ informe.version_decision }}"
+                                                data-estado="{{ informe.estado }}" data-decision="Aprobado">Aprobado</button>
+                                        </div>
                                     {% endif %}
                                 </div>
                             </td>
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="9" class="text-center text-secondary py-5">
+                            <td colspan="7" class="text-center text-secondary py-5">
                                 {% if hay_filtros %}
                                     No se encontraron informes con esos filtros.
                                 {% else %}
@@ -260,7 +254,8 @@
                 </tbody>
             </table>
         </div>
-    </div>
+    </section>
+    <p class="sistra07-leyenda">Semáforo en informes En revisión: verde de 0 a {{ limite_verde }} días, amarillo de {{ inicio_amarillo }} a {{ limite_amarillo }} y rojo desde {{ inicio_rojo }}. Los demás estados: fondo neutro.</p>
 
     {% if pagina.has_other_pages %}
         <nav class="mt-4" aria-label="Páginas de informes">
@@ -303,7 +298,7 @@
 
     {% include "informes/aprobacion/decision.html" %}
     {% include "informes/aprobacion/masiva.html" %}
-{% include "informes/aprobacion/reactivacion.html" %}
+    {% include "informes/aprobacion/reactivacion.html" %}
 </main>
 {% endblock %}
 
