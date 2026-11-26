@@ -98,8 +98,8 @@ class PropuestaMontajeForm(forms.ModelForm):
             'referente_teorico': forms.Textarea(attrs={'class': 'form-control', 'rows': 4, 'placeholder': 'Fundamentos teóricos, legales o conceptuales que sustentan la propuesta'}),
             'propuesta_social': forms.Textarea(attrs={'class': 'form-control', 'rows': 4, 'placeholder': 'Metodología, fases, estrategias y actividades planificadas'}),
             'impacto_social': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Transformaciones, beneficios o cambios esperados en la comunidad'}),
-            'fecha_inicio': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'fecha_fin': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'fecha_inicio': forms.DateInput(format='%Y-%m-%d', attrs={'class': 'form-control', 'type': 'date'}),
+            'fecha_fin': forms.DateInput(format='%Y-%m-%d', attrs={'class': 'form-control', 'type': 'date'}),
         }
         # Labels exactos de la tabla de campos del BRD SISTRA-01
         labels = {
