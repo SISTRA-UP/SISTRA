@@ -20,7 +20,7 @@ from apps.personas.models import (
 from apps.procesos.models import EstadoAvance, ProcesoTrabajoSocial
 from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.propuestas.tests.test_montaje import DATOS_COMPLETOS_ENVIO
-from apps.seguimiento.models import HistorialEstado, Notificacion
+from apps.seguimiento.models import Auditoria, HistorialEstado, Notificacion
 from apps.usuarios.models import Estado, Rol
 
 Usuario = get_user_model()
@@ -157,5 +157,13 @@ class ConcurrencySendTest(TransactionTestCase):
         )
         self.assertEqual(
             Notificacion.objects.filter(propuesta=self.propuesta).count(),
+            1,
+        )
+        self.assertEqual(
+            Auditoria.objects.filter(
+                tabla_afectada='propuesta',
+                id_registro_afectado=self.propuesta.pk,
+                resultado='Bloqueado',
+            ).count(),
             1,
         )

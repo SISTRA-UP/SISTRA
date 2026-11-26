@@ -197,8 +197,8 @@ def inicio(request):
         if form.is_valid():
             try:
                 with transaction.atomic():
-                    # Lock the proceso to serialize creation of a new proposal
-                    proceso_locked = ProcesoTrabajoSocial.objects.select_for_update().get(pk=proceso.pk)
+                    # Bloquea el proceso para que dos envíos no creen dos propuestas
+                    ProcesoTrabajoSocial.objects.select_for_update().get(pk=proceso.pk)
                     instancia = form.save(commit=False)
                     es_nueva = not instancia.pk
 
@@ -257,7 +257,11 @@ def inicio(request):
                     if not es_nueva:
                         propuesta_locked = Propuesta.objects.select_for_update().get(pk=instancia.pk)
                         if propuesta_locked.estado not in ESTADOS_EDITABLES:
-                            # Abort saving and show blocked message
+                            _registrar_auditoria(
+                                request.user, 'Editar propuesta', 'Bloqueado',
+                                id_registro=propuesta_locked.pk,
+                                detalle=f'Intento de {accion} en estado {propuesta_locked.estado}.',
+                            )
                             messages.error(request, 'La propuesta está en revisión y no admite modificaciones.')
                             return render(
                                 request,

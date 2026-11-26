@@ -1,0 +1,321 @@
+/* SISTRA-01: presentación de «Mi propuesta» según la guía de diseño SISTRA-UP. */
+
+.sistra01-page {
+    background-color: var(--sistra-fondo, #F5F6F9);
+    color: var(--sistra-texto, #1F2430);
+    font-family: var(--sistra-letra, 'IBM Plex Sans', system-ui, sans-serif);
+    min-height: 100vh;
+    padding: 32px 16px;
+}
+
+.sistra01-page .sistra01-contenedor {
+    margin: 0 auto;
+    max-width: 980px;
+}
+
+/* Encabezado */
+.sistra01-page .sistra01-encabezado {
+    align-items: flex-start;
+    border-bottom: 1px solid var(--sistra-borde, #E3E6EC);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+}
+
+.sistra01-page .sistra01-contexto {
+    color: var(--sistra-texto-suave, #4B5263);
+    font-size: 13px;
+    font-weight: 400;
+    margin-bottom: 4px;
+}
+
+.sistra01-page h1 {
+    color: var(--sistra-texto, #1F2430);
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: 4px;
+}
+
+.sistra01-page .sistra01-carrera {
+    color: var(--sistra-texto-suave, #4B5263);
+    font-size: 14px;
+    margin-bottom: 0;
+}
+
+/* Pastilla de estado */
+.sistra01-page .sistra01-estado {
+    border-radius: 999px;
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.35;
+    padding: 6px 14px;
+    white-space: nowrap;
+}
+
+.sistra01-page .sistra01-estado-neutro {
+    background: #E8EAF0;
+    color: #2A3040;
+}
+
+.sistra01-page .sistra01-estado-revision {
+    background: #FFF1C2;
+    color: #6B4A00;
+}
+
+.sistra01-page .sistra01-estado-modificacion {
+    background: #FFE8D6;
+    color: #8F3E00;
+}
+
+.sistra01-page .sistra01-estado-aprobado {
+    background: #DDF3E4;
+    color: #14612F;
+}
+
+.sistra01-page .sistra01-estado-up {
+    background: #E3EDFC;
+    color: #174FA3;
+}
+
+.sistra01-page .sistra01-estado-rechazado {
+    background: #FBE3E0;
+    color: #8E1C12;
+}
+
+/* Avisos y mensajes */
+.sistra01-page .sistra01-aviso {
+    border-radius: 12px;
+    border-width: 1px;
+    border-style: solid;
+    font-size: 15px;
+    margin-bottom: 20px;
+    padding: 16px 20px;
+}
+
+.sistra01-page .sistra01-aviso-exito {
+    background-color: #DDF3E4;
+    border-color: #A6DFBA;
+    color: #14612F;
+}
+
+.sistra01-page .sistra01-aviso-advertencia {
+    background-color: #FFF1C2;
+    border-color: #F2D37A;
+    color: #6B4A00;
+}
+
+.sistra01-page .sistra01-aviso-error {
+    background-color: #FBE3E0;
+    border-color: #F0B5AE;
+    color: #8E1C12;
+}
+
+.sistra01-page .sistra01-aviso-titulo {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+/* Tarjetas */
+.sistra01-page .sistra01-card,
+.sistra01-page .modal-content {
+    background: var(--sistra-superficie, #FFFFFF);
+    border: 1px solid var(--sistra-borde, #E3E6EC);
+    border-radius: 12px;
+    box-shadow: 0 3px 15px rgba(31, 36, 48, .04);
+    margin-bottom: 24px;
+    padding: 24px;
+}
+
+.sistra01-page .sistra01-card-progreso {
+    position: sticky;
+    top: 12px;
+    z-index: 1020;
+}
+
+.sistra01-page .sistra01-seccion-titulo {
+    color: var(--sistra-texto, #1F2430);
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 16px;
+}
+
+/* Barra de avance */
+.sistra01-page .sistra01-progreso-cabecera {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.sistra01-page .sistra01-progreso-rotulo {
+    color: var(--sistra-texto-suave, #4B5263);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.sistra01-page .sistra01-progreso-dato {
+    color: var(--sistra-texto, #1F2430);
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.sistra01-page .sistra01-progress {
+    background-color: var(--sistra-gris, #E8EAF0);
+    border-radius: 999px;
+    height: 10px;
+    overflow: hidden;
+}
+
+.sistra01-page .sistra01-progress-bar {
+    background-color: var(--sistra-rojo, #AD3333);
+    border-radius: 999px;
+    transition: width 0.25s ease;
+}
+
+.sistra01-page .sistra01-ayuda {
+    color: var(--sistra-texto-suave, #4B5263);
+    display: block;
+    font-size: 13px;
+    margin-top: 6px;
+}
+
+/* Campos y errores */
+.sistra01-page .form-label {
+    color: var(--sistra-texto, #1F2430);
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.sistra01-page .sistra01-asterisco {
+    color: #B42318;
+}
+
+.sistra01-page .form-control,
+.sistra01-page .form-select {
+    background-color: var(--sistra-superficie, #FFFFFF);
+    border-color: var(--sistra-borde-campo, #B9BFCC);
+    border-radius: 6px;
+    color: var(--sistra-texto, #1F2430);
+    font-size: 15px;
+    min-height: 44px;
+}
+
+.sistra01-page .form-control:focus,
+.sistra01-page .form-select:focus,
+.sistra01-page .btn:focus-visible {
+    box-shadow: none;
+    outline: 3px solid var(--sistra-azul, #003366);
+    outline-offset: 2px;
+}
+
+.sistra01-page .sistra01-error-campo {
+    color: #B42318;
+    font-size: 13px;
+    font-weight: 500;
+    margin-top: 4px;
+}
+
+/* Botones */
+.sistra01-page .btn {
+    align-items: center;
+    border-radius: 8px;
+    display: inline-flex;
+    font-size: 15px;
+    font-weight: 600;
+    justify-content: center;
+    min-height: 44px;
+    padding: 8px 18px;
+    white-space: normal;
+}
+
+.sistra01-page .sistra01-btn-principal {
+    background-color: var(--sistra-rojo, #AD3333);
+    border-color: var(--sistra-rojo, #AD3333);
+    color: var(--sistra-superficie, #FFFFFF);
+}
+
+.sistra01-page .sistra01-btn-principal:hover:not(:disabled),
+.sistra01-page .sistra01-btn-principal:active:not(:disabled) {
+    background-color: var(--sistra-rojo-hover, #8F2828);
+    border-color: var(--sistra-rojo-hover, #8F2828);
+    color: var(--sistra-superficie, #FFFFFF);
+}
+
+.sistra01-page .sistra01-btn-principal:disabled {
+    background-color: var(--sistra-rojo, #AD3333);
+    border-color: var(--sistra-rojo, #AD3333);
+    color: var(--sistra-superficie, #FFFFFF);
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.sistra01-page .sistra01-btn-secundario {
+    background-color: var(--sistra-gris, #E8EAF0);
+    border-color: var(--sistra-gris, #E8EAF0);
+    color: var(--sistra-gris-texto, #2A3040);
+}
+
+.sistra01-page .sistra01-btn-secundario:hover:not(:disabled),
+.sistra01-page .sistra01-btn-secundario:active:not(:disabled) {
+    background-color: var(--sistra-borde, #E3E6EC);
+    border-color: var(--sistra-borde-campo, #B9BFCC);
+    color: var(--sistra-gris-texto, #2A3040);
+}
+
+/* Modal */
+.sistra01-page .modal-content {
+    margin-bottom: 0;
+    padding: 0;
+}
+
+.sistra01-page .modal-header,
+.sistra01-page .modal-footer {
+    border-color: var(--sistra-borde, #E3E6EC);
+    padding: 20px 24px;
+}
+
+.sistra01-page .modal-body {
+    padding: 24px;
+}
+
+.sistra01-page .modal-title {
+    color: var(--sistra-texto, #1F2430);
+    font-size: 19px;
+    font-weight: 700;
+}
+
+/* Celular (390 px) */
+@media (max-width: 767.98px) {
+    .sistra01-page {
+        padding: 20px 12px;
+    }
+
+    .sistra01-page .sistra01-card {
+        margin-bottom: 20px;
+        padding: 16px;
+    }
+
+    .sistra01-page .sistra01-acciones {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .sistra01-page .sistra01-acciones-grupo {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .sistra01-page .sistra01-acciones .btn {
+        width: 100%;
+    }
+}
