@@ -7,7 +7,8 @@ Preparado para integrarse con SISTRA-07 (Aprobación de informe).
 """
 
 import logging
-
+from django.http import HttpResponse
+from apps.informes.services.documento_pdf import generar_pdf_informe
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
@@ -385,3 +386,53 @@ def inicio(request):
         'minimo_caracteres': MINIMO_CARACTERES,
     }
     return render(request, 'informes/montaje/inicio.html', context)
+
+@requiere_permiso('informe.montar')
+def descargar_pdf_informe(request, informe_id):
+    """Vista para que el estudiante descargue el PDF de su informe (B1b)."""
+    usuario = request.user
+    
+    try:
+        # Usamos select_related para evitar consultas N+1 al obtener los datos del estudiante
+        informe = Informe.objects.select_related(
+            'propuesta__proceso__estudiante_carrera__estudiante__usuario',
+            'propuesta__proceso__estudiante_carrera__carrera',
+            'periodo_academico'
+        ).get(id_informe=informe_id)
+    except Informe.DoesNotExist:
+        raise PermissionDenied("El informe no existe.")
+
+    # Validar que el usuario sea el dueño del informe (seguridad)
+    if informe.propuesta.proceso.estudiante_carrera.estudiante.usuario != usuario:
+        raise PermissionDenied("No tienes permiso para descargar este informe.")
+
+    try:
+        # Generar el PDF en memoria
+        pdf_bytes = generar_pdf_informe(informe)
+        
+        # Registrar auditoría de Éxito
+        _registrar_auditoria(
+            usuario,
+            informe,
+            'Descargar PDF informe',
+            RESULTADO_EXITO,
+            f'Descarga exitosa del informe {informe.codigo}'
+        )
+        
+        # Retornar el archivo como respuesta HTTP
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="Informe_{informe.codigo}.pdf"'
+        return response
+        
+    except Exception as e:
+        # Registrar auditoría de Fallo
+        logger.exception(f'SISTRA-06: Falló la generación del PDF para el informe {informe_id}')
+        _registrar_auditoria(
+            usuario,
+            informe,
+            'Descargar PDF informe',
+            'Fallo',
+            f'Error al generar PDF: {str(e)}'
+        )
+        messages.error(request, 'Ocurrió un error al generar el PDF. Intenta de nuevo.')
+        return redirect('informes:montaje')
