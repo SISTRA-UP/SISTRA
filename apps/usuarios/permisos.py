@@ -57,6 +57,7 @@ OPCIONES_DEL_MENU = (
         'Verificar cargues de propuestas',
         GRUPO_TRAMITES,
     ),
+    Opcion('propuesta.montar', 'propuestas:montaje', 'Mi propuesta', GRUPO_TRAMITES),
     Opcion('informe.montar', 'informes:montaje', 'Montar informe', GRUPO_TRAMITES),
     Opcion(
         'informe.aprobar',

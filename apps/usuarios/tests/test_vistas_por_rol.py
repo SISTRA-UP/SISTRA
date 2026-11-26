@@ -172,7 +172,12 @@ class MenuPorPermisos(BaseVistasPorRol):
         etiquetas = self.etiquetas_de(usuario)
         self.assertEqual(
             etiquetas,
-            ['Inicio', 'Montar informe', 'Cargue en la Plataforma UP'],
+            [
+                'Inicio',
+                'Mi propuesta',
+                'Montar informe',
+                'Cargue en la Plataforma UP',
+            ],
         )
         self.assertNotIn('Roles y permisos', etiquetas)
         # Lo pide la tarjeta: ninguna aprobación, ni de propuestas ni de
@@ -220,6 +225,7 @@ class MenuPorPermisos(BaseVistasPorRol):
                 'cargue_up:documentos_extra_recibidos',
                 GRUPO_TRAMITES,
             ),
+            'Mi propuesta': ('propuestas:montaje', GRUPO_TRAMITES),
         }
         catalogo = {opcion.etiqueta: opcion for opcion in OPCIONES_DEL_MENU}
 
@@ -235,6 +241,10 @@ class MenuPorPermisos(BaseVistasPorRol):
         Los dos de «Verificar cargues» no están en un decorador sino dentro de
         `director_y_carreras`, que lanza 403 si falta; se leen de la constante
         del propio módulo para que un cambio allá rompa aquí.
+
+        «Mi propuesta» no tiene una constante equivalente: `propuestas:montaje`
+        lleva el permiso literal en su decorador, así que aquí se afirma el
+        literal, como con «Inicio» y «Reportes».
         """
         from apps.cargue_up.forms.verificacion_informe import (
             PERMISO_VERIFICAR as PERMISO_INFORME,
@@ -250,6 +260,7 @@ class MenuPorPermisos(BaseVistasPorRol):
         self.assertEqual(catalogo['Inicio'], 'dashboard.ver')
         self.assertEqual(catalogo['Reportes'], 'reporte.descargar')
         self.assertEqual(catalogo['Documentos extra recibidos'], 'informe.aprobar')
+        self.assertEqual(catalogo['Mi propuesta'], 'propuesta.montar')
 
     def test_montar_informe_sale_solo_con_su_permiso(self):
         """Los dos casos del criterio, en una sola prueba."""
@@ -309,14 +320,15 @@ class MenuPorPermisos(BaseVistasPorRol):
             self.assertEqual(opciones_visibles(usuario), [])
 
     def test_cada_permiso_del_catalogo_esta_sembrado(self):
-        """Diagnóstico claro: siete de los diez permisos los siembran otros.
+        """Diagnóstico claro: ocho de los once permisos los siembran otros.
 
-        Las 13 opciones usan 10 permisos distintos, y solo tres son de
+        Las 14 opciones usan 11 permisos distintos, y solo tres son de
         SISTRA-10. Vienen de migraciones de datos ajenas `sistema.parametrizar`
-        (SISTRA-11), `propuesta.aprobar` (SISTRA-02), `informe.montar`
-        (SISTRA-06), `informe.aprobar` (SISTRA-07), `cargue_up.avisar`
-        (SISTRA-04), `dashboard.ver` (SISTRA-14) y `reporte.descargar`
-        (SISTRA-12). Si una se cae, esta prueba dice cuál.
+        (SISTRA-11), `propuesta.aprobar` (SISTRA-02), `propuesta.montar`
+        (SISTRA-01), `informe.montar` (SISTRA-06), `informe.aprobar`
+        (SISTRA-07), `cargue_up.avisar` (SISTRA-04), `dashboard.ver`
+        (SISTRA-14) y `reporte.descargar` (SISTRA-12). Si una se cae, esta
+        prueba dice cuál.
         """
         sembrados = set(Permiso.objects.values_list('nombre', flat=True))
         for opcion in OPCIONES_DEL_MENU:
@@ -469,13 +481,14 @@ class AccesoALasUrlProtegidas(BaseVistasPorRol):
     def test_el_estudiante_puede_abrir_las_opciones_que_ve(self):
         """Ninguna opción del Estudiante puede darle 403 al abrirla.
 
-        Las dos son de requisitos ajenos y ninguna se contenta con el permiso:
-        `cargue_up:cargue_propuesta` (SISTRA-03) e `informes:montaje`
-        (SISTRA-06) exigen además perfil de estudiante. Un Estudiante de verdad
-        lo tiene, y esta prueba lo fija para que un cambio allá se note aquí.
-        El montaje responde 200 con su propio mensaje cuando el estudiante
-        todavía no tiene propuesta aprobada en UP, que es el caso de esta
-        prueba: sigue siendo una pantalla que abre, no un 403.
+        Las tres son de requisitos ajenos y ninguna se contenta con el permiso:
+        `propuestas:montaje` (SISTRA-01), `informes:montaje` (SISTRA-06) y
+        `cargue_up:cargue_propuesta` (SISTRA-03) exigen además perfil de
+        estudiante. Un Estudiante de verdad lo tiene, y esta prueba lo fija
+        para que un cambio allá se note aquí. Los dos montajes responden 200
+        con su propio mensaje cuando el estudiante todavía no tiene proceso
+        activo ni propuesta aprobada en UP, que es el caso de esta prueba:
+        siguen siendo pantallas que abren, no un 403.
         """
         usuario = self.crear_usuario(self.rol_estudiante)
         Estudiante.objects.create(usuario=usuario)
@@ -489,6 +502,7 @@ class AccesoALasUrlProtegidas(BaseVistasPorRol):
             destinos,
             [
                 reverse('dashboard:inicio'),
+                reverse('propuestas:montaje'),
                 reverse('informes:montaje'),
                 reverse('cargue_up:cargue_propuesta'),
             ],
