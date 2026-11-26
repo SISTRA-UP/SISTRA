@@ -1,0 +1,630 @@
+"""SISTRA-01 · Generación de documento PDF oficial de la propuesta de Trabajo Social.
+
+Genera en memoria (sin persistir en disco ni base de datos, decisión M4)
+el PDF oficial con:
+- Código, Estudiante, Carrera, Periodo académico.
+- Fechas de inicio y fin (o indicador si no están definidas).
+- Los 16 campos oficiales del formulario de Trabajo Social.
+- Cronograma de actividades (si existen actividades registradas).
+
+Las partes comunes (estilos, encabezado, tabla de campos) quedan modularizadas
+en funciones públicas reutilizables para que puedan ser aprovechadas en otros
+documentos del sistema, tales como el informe de Trabajo Social (RG-10).
+"""
+
+from __future__ import annotations
+
+import io
+from typing import Any
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.pdfgen import canvas
+from reportlab.platypus import (
+    HRFlowable,
+    KeepTogether,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
+
+# ---------------------------------------------------------------------------
+# Definición de los 16 campos oficiales del formulario (SISTRA-01)
+# ---------------------------------------------------------------------------
+CAMPOS_FORMULARIO_PROPUESTA: tuple[tuple[str, str], ...] = (
+    ("Título de la propuesta", "titulo"),
+    ("Entidad", "entidad"),
+    ("Sector de la entidad", "sector_entidad"),
+    ("Población beneficiada", "poblacion_beneficiada"),
+    ("Identificación de la población", "identificacion_poblacion"),
+    ("Reseña histórica", "resena_historica"),
+    ("Identificación de la necesidad", "identificacion_necesidad"),
+    ("Justificación", "justificacion"),
+    ("Objetivos", "objetivos"),
+    ("Referente teórico", "referente_teorico"),
+    ("Propuesta social", "propuesta_social"),
+    ("Impacto social", "impacto_social"),
+    ("Zona", "zona"),
+    ("Área", "area"),
+    ("Sector", "sector"),
+    ("Unidad", "unidad"),
+)
+
+# Paleta institucional SISTRA / Universidad de Pamplona
+COLOR_PRIMARIO = colors.HexColor("#1B365D")      # Azul marino institucional
+COLOR_SECUNDARIO = colors.HexColor("#334E68")    # Azul medio
+COLOR_FONDO_CABECERA = colors.HexColor("#EBF3FB")# Azul muy claro
+COLOR_FONDO_ALT = colors.HexColor("#F8FAFC")     # Gris azulado tenue
+COLOR_BORDE = colors.HexColor("#CBD5E1")         # Gris suave para líneas
+COLOR_TEXTO = colors.HexColor("#1E293B")         # Carbón legible
+
+
+# ---------------------------------------------------------------------------
+# Escape y saneamiento de textos
+# ---------------------------------------------------------------------------
+def _texto_seguro(texto: Any) -> str:
+    """Sanea y escapa texto para evitar errores de sintaxis XML en ReportLab Paragraph.
+
+    Reemplaza caracteres especiales (&, <, >, ", ') por sus entidades XML correspondientes,
+    permitiendo que caracteres como '<b>' o '&' introducidos por el usuario se impriman
+    literalmente en el documento final. También preserva saltos de línea sustituyendo \\n
+    por <br/>.
+    """
+    if texto is None:
+        return ""
+    s = str(texto)
+    # Escapar ampersand primero para no re-escapar entidades
+    s = s.replace("&", "&amp;")
+    s = s.replace("<", "&lt;")
+    s = s.replace(">", "&gt;")
+    s = s.replace('"', "&quot;")
+    s = s.replace("'", "&#39;")
+    s = s.replace("\r\n", "<br/>").replace("\n", "<br/>")
+    return s
+
+
+def _formatear_fecha(fecha: Any) -> str:
+    """Formatea fechas de manera segura tolerando None o cadenas."""
+    if not fecha:
+        return "No definida"
+    if hasattr(fecha, "strftime"):
+        return fecha.strftime("%d/%m/%Y")
+    return str(fecha)
+
+
+def _es_mock(obj: Any) -> bool:
+    """Determina si un objeto es un Mock para evitar evaluarlo como string '<MagicMock...>'."""
+    return hasattr(obj, "_mock_name") or hasattr(obj, "_mock_wraps")
+
+
+def _obtener_nombre_estudiante(propuesta: Any) -> str:
+    """Obtiene el nombre completo del estudiante de forma tolerante a mocks u ORM."""
+    val = getattr(propuesta, "estudiante_nombre", None)
+    if isinstance(val, str) and val.strip():
+        return val.strip()
+
+    # 1. Buscar a través del proceso (estructura ORM estándar de SISTRA)
+    proceso = getattr(propuesta, "proceso", None)
+    if proceso is not None:
+        ec = getattr(proceso, "estudiante_carrera", None)
+        if ec is not None:
+            est = getattr(ec, "estudiante", None)
+            if est is not None:
+                u = getattr(est, "usuario", None)
+                if u is not None:
+                    nombre = getattr(u, "nombre", None)
+                    if isinstance(nombre, str) and nombre.strip():
+                        return nombre.strip()
+                nombre_est = getattr(est, "nombre", None)
+                if isinstance(nombre_est, str) and nombre_est.strip():
+                    return nombre_est.strip()
+                if not _es_mock(est):
+                    return str(est)
+
+    # 2. Atributo directo estudiante
+    est = getattr(propuesta, "estudiante", None)
+    if est is not None:
+        u = getattr(est, "usuario", None)
+        if u is not None:
+            nombre = getattr(u, "nombre", None)
+            if isinstance(nombre, str) and nombre.strip():
+                return nombre.strip()
+        nombre_est = getattr(est, "nombre", None)
+        if isinstance(nombre_est, str) and nombre_est.strip():
+            return nombre_est.strip()
+        if not _es_mock(est):
+            return str(est)
+
+    return "No asignado"
+
+
+def _obtener_nombre_carrera(propuesta: Any) -> str:
+    """Obtiene el nombre de la carrera de forma tolerante a mocks u ORM."""
+    val = getattr(propuesta, "carrera_nombre", None)
+    if isinstance(val, str) and val.strip():
+        return val.strip()
+
+    # 1. A través de proceso.estudiante_carrera.carrera
+    proceso = getattr(propuesta, "proceso", None)
+    if proceso is not None:
+        ec = getattr(proceso, "estudiante_carrera", None)
+        if ec is not None:
+            carr = getattr(ec, "carrera", None)
+            if carr is not None:
+                nombre = getattr(carr, "nombre", None)
+                if isinstance(nombre, str) and nombre.strip():
+                    return nombre.strip()
+                if not _es_mock(carr):
+                    return str(carr)
+
+    # 2. Atributo directo carrera
+    carr = getattr(propuesta, "carrera", None)
+    if carr is not None:
+        nombre = getattr(carr, "nombre", None)
+        if isinstance(nombre, str) and nombre.strip():
+            return nombre.strip()
+        if not _es_mock(carr):
+            return str(carr)
+
+    return "No asignada"
+
+
+def _obtener_nombre_periodo(propuesta: Any) -> str:
+    """Obtiene el nombre del periodo académico de forma tolerante."""
+    val = getattr(propuesta, "periodo_nombre", None)
+    if isinstance(val, str) and val.strip():
+        return val.strip()
+
+    periodo = getattr(propuesta, "periodo_academico", None)
+    if periodo is not None:
+        nombre = getattr(periodo, "nombre", None)
+        if isinstance(nombre, str) and nombre.strip():
+            return nombre.strip()
+        if not _es_mock(periodo):
+            return str(periodo)
+
+    p = getattr(propuesta, "periodo", None)
+    if p is not None:
+        nombre = getattr(p, "nombre", None)
+        if isinstance(nombre, str) and nombre.strip():
+            return nombre.strip()
+        if not _es_mock(p):
+            return str(p)
+
+    return "No asignado"
+
+
+# ---------------------------------------------------------------------------
+# Partes comunes reutilizables (para Propuesta y para Informe RG-10)
+# ---------------------------------------------------------------------------
+def obtener_estilos_pdf() -> dict[str, ParagraphStyle]:
+    """Genera y retorna un diccionario de estilos tipográficos para los documentos PDF."""
+    estilos_base = getSampleStyleSheet()
+
+    estilos: dict[str, ParagraphStyle] = {
+        "Titulo": ParagraphStyle(
+            "SistraTitulo",
+            parent=estilos_base["Heading1"],
+            fontName="Helvetica-Bold",
+            fontSize=16,
+            leading=20,
+            textColor=COLOR_PRIMARIO,
+            alignment=1,  # Centrado
+            spaceAfter=4,
+        ),
+        "Subtitulo": ParagraphStyle(
+            "SistraSubtitulo",
+            parent=estilos_base["Normal"],
+            fontName="Helvetica",
+            fontSize=10,
+            leading=13,
+            textColor=COLOR_SECUNDARIO,
+            alignment=1,
+            spaceAfter=12,
+        ),
+        "Seccion": ParagraphStyle(
+            "SistraSeccion",
+            parent=estilos_base["Heading2"],
+            fontName="Helvetica-Bold",
+            fontSize=11,
+            leading=14,
+            textColor=COLOR_PRIMARIO,
+            spaceBefore=8,
+            spaceAfter=6,
+        ),
+        "MetaEtiqueta": ParagraphStyle(
+            "SistraMetaEtiqueta",
+            parent=estilos_base["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=8.5,
+            leading=11,
+            textColor=COLOR_PRIMARIO,
+        ),
+        "MetaValor": ParagraphStyle(
+            "SistraMetaValor",
+            parent=estilos_base["Normal"],
+            fontName="Helvetica",
+            fontSize=8.5,
+            leading=11,
+            textColor=COLOR_TEXTO,
+        ),
+        "CampoTitulo": ParagraphStyle(
+            "SistraCampoTitulo",
+            parent=estilos_base["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=9,
+            leading=12,
+            textColor=COLOR_PRIMARIO,
+        ),
+        "CampoContenido": ParagraphStyle(
+            "SistraCampoContenido",
+            parent=estilos_base["Normal"],
+            fontName="Helvetica",
+            fontSize=8.5,
+            leading=12,
+            textColor=COLOR_TEXTO,
+        ),
+        "TablaHeader": ParagraphStyle(
+            "SistraTablaHeader",
+            parent=estilos_base["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=8.5,
+            leading=11,
+            textColor=colors.white,
+            alignment=1,
+        ),
+        "TablaCelda": ParagraphStyle(
+            "SistraTablaCelda",
+            parent=estilos_base["Normal"],
+            fontName="Helvetica",
+            fontSize=8,
+            leading=10,
+            textColor=COLOR_TEXTO,
+        ),
+        "TablaCeldaCentro": ParagraphStyle(
+            "SistraTablaCeldaCentro",
+            parent=estilos_base["Normal"],
+            fontName="Helvetica",
+            fontSize=8,
+            leading=10,
+            textColor=COLOR_TEXTO,
+            alignment=1,
+        ),
+    }
+
+    return estilos
+
+
+def construir_encabezado_pdf(
+    titulo: str,
+    subtitulo: str,
+    metadatos: list[tuple[str, str]],
+    estilos: dict[str, ParagraphStyle] | None = None,
+) -> list[Any]:
+    """Construye los flowables del encabezado del documento y la tabla de metadatos.
+
+    Args:
+        titulo: Título principal (p.ej. 'PROPUESTA DE TRABAJO SOCIAL').
+        subtitulo: Subtítulo o texto institucional.
+        metadatos: Pares de (Etiqueta, Valor) informativos (código, estudiante, carrera, etc.).
+        estilos: Diccionario de ParagraphStyle (opcional, usa obtener_estilos_pdf() por defecto).
+
+    Returns:
+        Lista de Flowables listos para agregar a la historia de ReportLab.
+    """
+    if estilos is None:
+        estilos = obtener_estilos_pdf()
+
+    elementos: list[Any] = []
+    elementos.append(Paragraph(_texto_seguro(titulo), estilos["Titulo"]))
+    elementos.append(Paragraph(_texto_seguro(subtitulo), estilos["Subtitulo"]))
+    elementos.append(
+        HRFlowable(
+            width="100%",
+            thickness=1.5,
+            color=COLOR_PRIMARIO,
+            spaceBefore=0,
+            spaceAfter=8,
+        )
+    )
+
+    if metadatos:
+        filas_tabla: list[list[Any]] = []
+        # Agrupar metadatos en pares de 2 columnas (Etiqueta 1, Valor 1, Etiqueta 2, Valor 2)
+        for i in range(0, len(metadatos), 2):
+            par1 = metadatos[i]
+            par2 = metadatos[i + 1] if i + 1 < len(metadatos) else ("", "")
+
+            celda_lbl1 = Paragraph(f"<b>{_texto_seguro(par1[0])}:</b>", estilos["MetaEtiqueta"]) if par1[0] else ""
+            celda_val1 = Paragraph(_texto_seguro(par1[1]), estilos["MetaValor"]) if par1[0] else ""
+
+            celda_lbl2 = Paragraph(f"<b>{_texto_seguro(par2[0])}:</b>", estilos["MetaEtiqueta"]) if par2[0] else ""
+            celda_val2 = Paragraph(_texto_seguro(par2[1]), estilos["MetaValor"]) if par2[0] else ""
+
+            filas_tabla.append([celda_lbl1, celda_val1, celda_lbl2, celda_val2])
+
+        # Ancho total: 540 pt (8.5 * 72 = 612 - 72 de márgenes = 540 pt)
+        tabla_meta = Table(filas_tabla, colWidths=[90, 180, 90, 180])
+        tabla_meta.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("BACKGROUND", (0, 0), (-1, -1), COLOR_FONDO_ALT),
+                    ("BOX", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                    ("INNERGRID", (0, 0), (-1, -1), 0.25, COLOR_BORDE),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ]
+            )
+        )
+        elementos.append(tabla_meta)
+        elementos.append(Spacer(1, 10))
+
+    return elementos
+
+
+def construir_tabla_campos(
+    campos: list[tuple[str, str]],
+    estilos: dict[str, ParagraphStyle] | None = None,
+) -> list[Any]:
+    """Construye los bloques visuales para la lista de campos (Etiqueta, Valor).
+
+    Cada campo se presenta como una tarjeta compacta con una franja de encabezado
+    con el nombre del campo y el bloque de contenido debajo. Si el valor está vacío,
+    se muestra un guion largo (—).
+    """
+    if estilos is None:
+        estilos = obtener_estilos_pdf()
+
+    elementos: list[Any] = []
+
+    for etiqueta, valor in campos:
+        contenido = (str(valor).strip() if valor is not None else "") or "—"
+        par_etiqueta = Paragraph(f"<b>{_texto_seguro(etiqueta)}</b>", estilos["CampoTitulo"])
+        par_contenido = Paragraph(_texto_seguro(contenido), estilos["CampoContenido"])
+
+        # Ancho 540 pt
+        tabla_campo = Table([[par_etiqueta], [par_contenido]], colWidths=[540])
+        tabla_campo.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (0, 0), COLOR_FONDO_CABECERA),
+                    ("BACKGROUND", (0, 1), (0, 1), colors.white),
+                    ("BOX", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                    ("LINEBELOW", (0, 0), (0, 0), 0.5, COLOR_BORDE),
+                    ("TOPPADDING", (0, 0), (0, 0), 4),
+                    ("BOTTOMPADDING", (0, 0), (0, 0), 4),
+                    ("LEFTPADDING", (0, 0), (0, 0), 6),
+                    ("RIGHTPADDING", (0, 0), (0, 0), 6),
+                    ("TOPPADDING", (0, 1), (0, 1), 5),
+                    ("BOTTOMPADDING", (0, 1), (0, 1), 6),
+                    ("LEFTPADDING", (0, 1), (0, 1), 6),
+                    ("RIGHTPADDING", (0, 1), (0, 1), 6),
+                ]
+            )
+        )
+        elementos.append(tabla_campo)
+        elementos.append(Spacer(1, 5))
+
+    return elementos
+
+
+def construir_tabla_cronograma(
+    actividades: Any,
+    estilos: dict[str, ParagraphStyle] | None = None,
+) -> list[Any]:
+    """Construye la sección y tabla del cronograma si existen actividades.
+
+    Si la colección de actividades es nula o vacía, retorna una lista vacía.
+    """
+    if not actividades:
+        return []
+
+    # Verificar si es iterable no vacío
+    try:
+        lista_actividades = list(actividades)
+    except Exception:
+        return []
+
+    if not lista_actividades:
+        return []
+
+    if estilos is None:
+        estilos = obtener_estilos_pdf()
+
+    elementos: list[Any] = []
+    elementos.append(Spacer(1, 8))
+    elementos.append(Paragraph("CRONOGRAMA DE ACTIVIDADES", estilos["Seccion"]))
+
+    filas: list[list[Any]] = [
+        [
+            Paragraph("<b>#</b>", estilos["TablaHeader"]),
+            Paragraph("<b>Actividad</b>", estilos["TablaHeader"]),
+            Paragraph("<b>Descripción</b>", estilos["TablaHeader"]),
+            Paragraph("<b>Inicio</b>", estilos["TablaHeader"]),
+            Paragraph("<b>Fin</b>", estilos["TablaHeader"]),
+            Paragraph("<b>Responsable</b>", estilos["TablaHeader"]),
+        ]
+    ]
+
+    for act in lista_actividades:
+        orden = getattr(act, "orden", "")
+        nombre = getattr(act, "nombre", "")
+        desc = getattr(act, "descripcion", "") or "—"
+        f_inicio = _formatear_fecha(getattr(act, "fecha_inicio", None))
+        f_fin = _formatear_fecha(getattr(act, "fecha_fin", None))
+        resp = getattr(act, "responsable", "") or "—"
+
+        filas.append(
+            [
+                Paragraph(_texto_seguro(orden), estilos["TablaCeldaCentro"]),
+                Paragraph(_texto_seguro(nombre), estilos["TablaCelda"]),
+                Paragraph(_texto_seguro(desc), estilos["TablaCelda"]),
+                Paragraph(_texto_seguro(f_inicio), estilos["TablaCeldaCentro"]),
+                Paragraph(_texto_seguro(f_fin), estilos["TablaCeldaCentro"]),
+                Paragraph(_texto_seguro(resp), estilos["TablaCelda"]),
+            ]
+        )
+
+    # Anchos: [24, 110, 160, 68, 68, 110] = 540 pt
+    tabla_cronograma = Table(filas, colWidths=[24, 110, 160, 68, 68, 110], repeatRows=1)
+    tabla_cronograma.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), COLOR_PRIMARIO),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("GRID", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, COLOR_FONDO_ALT]),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+
+    elementos.append(tabla_cronograma)
+    elementos.append(Spacer(1, 10))
+
+    return elementos
+
+
+# ---------------------------------------------------------------------------
+# Canvas con numeración de páginas y pie institucional
+# ---------------------------------------------------------------------------
+class _CanvasConNumeracion(canvas.Canvas):
+    """Canvas de ReportLab que calcula el número total de páginas en dos pasadas."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._saved_page_states: list[dict[str, Any]] = []
+
+    def showPage(self) -> None:
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self) -> None:
+        num_paginas = len(self._saved_page_states)
+        for estado in self._saved_page_states:
+            self.__dict__.update(estado)
+            self._dibujar_pie(num_paginas)
+            super().showPage()
+        super().save()
+
+    def _dibujar_pie(self, total_paginas: int) -> None:
+        self.saveState()
+        self.setFont("Helvetica", 8)
+        self.setFillColor(colors.HexColor("#64748B"))
+
+        # Línea divisoria inferior
+        self.setStrokeColor(COLOR_BORDE)
+        self.setLineWidth(0.5)
+        self.line(36, 32, 576, 32)
+
+        texto_izq = "SISTRA · Universidad de Pamplona — Propuesta de Trabajo Social"
+        texto_der = f"Página {self._pageNumber} de {total_paginas}"
+
+        self.drawString(36, 20, texto_izq)
+        self.drawRightString(576, 20, texto_der)
+        self.restoreState()
+
+
+# ---------------------------------------------------------------------------
+# Función principal de generación
+# ---------------------------------------------------------------------------
+def generar_pdf_propuesta(propuesta: Any) -> bytes:
+    """Genera los bytes del documento PDF oficial para una propuesta de Trabajo Social.
+
+    Incluye:
+    - Código oficial de la propuesta.
+    - Datos del estudiante, carrera y periodo académico.
+    - Fechas de inicio y fin (o 'No definida' si están en blanco).
+    - Los 16 campos oficiales del formulario de la propuesta.
+    - Cronograma de actividades planificadas si existe.
+
+    El PDF se genera en memoria al vuelo y nunca se guarda en disco ni en base
+    de datos (decisión arquitectónica M4).
+
+    Args:
+        propuesta: Instancia de Propuesta o equivalente con sus atributos y relaciones.
+
+    Returns:
+        bytes: Contenido binario del documento PDF generado.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=36,
+        bottomMargin=45,
+    )
+
+    estilos = obtener_estilos_pdf()
+    historia: list[Any] = []
+
+    # 1. Metadatos del encabezado
+    codigo = getattr(propuesta, "codigo", "") or "Sin código"
+    estudiante = _obtener_nombre_estudiante(propuesta)
+    carrera = _obtener_nombre_carrera(propuesta)
+    periodo = _obtener_nombre_periodo(propuesta)
+    fecha_inicio = _formatear_fecha(getattr(propuesta, "fecha_inicio", None))
+    fecha_fin = _formatear_fecha(getattr(propuesta, "fecha_fin", None))
+
+    metadatos = [
+        ("Código", codigo),
+        ("Estudiante", estudiante),
+        ("Carrera", carrera),
+        ("Periodo académico", periodo),
+        ("Fecha de inicio", fecha_inicio),
+        ("Fecha de fin", fecha_fin),
+    ]
+
+    historia.extend(
+        construir_encabezado_pdf(
+            titulo="PROPUESTA DE TRABAJO SOCIAL",
+            subtitulo="Sistema de Seguimiento y Trámites de Trabajo Social (SISTRA)",
+            metadatos=metadatos,
+            estilos=estilos,
+        )
+    )
+
+    # 2. Extracción de los 16 campos oficiales
+    campos_extraidos: list[tuple[str, str]] = []
+    for etiqueta, nombre_campo in CAMPOS_FORMULARIO_PROPUESTA:
+        valor = getattr(propuesta, nombre_campo, "")
+        campos_extraidos.append((etiqueta, valor))
+
+    historia.append(Paragraph("DETALLE DE LA PROPUESTA", estilos["Seccion"]))
+    historia.extend(construir_tabla_campos(campos_extraidos, estilos=estilos))
+
+    # 3. Cronograma de actividades si existe
+    actividades = None
+    if hasattr(propuesta, "cronograma"):
+        crono_rel = propuesta.cronograma
+        if hasattr(crono_rel, "all"):
+            try:
+                actividades = crono_rel.all().order_by("orden")
+            except Exception:
+                actividades = crono_rel.all()
+        elif isinstance(crono_rel, (list, tuple)):
+            actividades = crono_rel
+    elif hasattr(propuesta, "actividades"):
+        actividades = propuesta.actividades
+
+    if actividades:
+        historia.extend(construir_tabla_cronograma(actividades, estilos=estilos))
+
+    # 4. Compilar documento en memoria
+    doc.build(historia, canvasmaker=_CanvasConNumeracion)
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+
+    return pdf_bytes
