@@ -226,9 +226,11 @@
                 <tr>
                   <th>Estudiante</th>
                   <th>Carrera</th>
+                  <th>Etapa actual</th>
                   <th>Propuesta</th>
                   <th>Informe</th>
                   <th>Semáforo</th>
+                  <th>Último envío</th>
                 </tr>
               </thead>
               <tbody>
@@ -239,6 +241,7 @@
                       <div class="small text-muted">{{ fila.estudiante.cedula }}</div>
                     </td>
                     <td>{{ fila.carrera.nombre }}</td>
+                    <td>{{ fila.etapa_actual|default:"—" }}</td>
                     <td>
                       {% if fila.propuesta %}
                         <div class="small fw-semibold">{{ fila.propuesta.codigo }}</div>
@@ -258,10 +261,17 @@
                     <td>
                       <span class="badge bg-{{ fila.semaforo.color }}">{{ fila.semaforo.etiqueta }}</span>
                     </td>
+                    <td>
+                      {% if fila.ultimo_envio %}
+                        {{ fila.ultimo_envio|date:"d/m/Y H:i" }}
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
                   </tr>
                 {% empty %}
                   <tr>
-                    <td colspan="5" class="text-center text-muted py-3">No hay estudiantes que coincidan con los criterios seleccionados.</td>
+                    <td colspan="7" class="text-center text-muted py-3">No hay estudiantes que coincidan con los criterios seleccionados.</td>
                   </tr>
                 {% endfor %}
               </tbody>

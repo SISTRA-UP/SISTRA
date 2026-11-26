@@ -9,7 +9,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.dashboard.views.dashboard import MSG_14_02
+from apps.informes.models import Informe
 from apps.parametrizacion.models import (
+    Actividad,
     Carrera,
     EstadoPeriodo,
     Facultad,
@@ -23,11 +25,11 @@ from apps.personas.models import (
     Estudiante,
     EstudianteCarrera,
 )
-from apps.procesos.models import EstadoAvance, ProcesoTrabajoSocial
+from apps.procesos.models import EstadoAvance, ProcesoActividad, ProcesoTrabajoSocial
 from apps.propuestas.forms.aprobacion import RESULTADO_EXITO
 from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.seguimiento.models import Auditoria, Notificacion
-from apps.usuarios.models import Permiso, Rol, RolPermiso
+from apps.usuarios.models import Estado, Permiso, Rol, RolPermiso
 
 Usuario = get_user_model()
 
@@ -346,6 +348,77 @@ class DashboardIntegracionTests(TestCase):
             respuesta.context['inscripcion_actual'].carrera,
             segunda_carrera,
         )
+
+    def test_tabla_director_muestra_la_etapa_actual_del_proceso(self):
+        proceso = ProcesoTrabajoSocial.objects.create(
+            estudiante_carrera=self.inscripcion,
+            fecha_inicio=timezone.now(),
+            estado=EstadoAvance.EN_CURSO,
+        )
+        etapa = Actividad.objects.create(
+            nombre='Ejecución del proyecto',
+            orden=1,
+            obligatoria=True,
+            estado=Estado.ACTIVO,
+        )
+        ProcesoActividad.objects.create(
+            proceso=proceso,
+            actividad=etapa,
+            estado=EstadoAvance.EN_CURSO,
+        )
+        self.client.force_login(self.director_user)
+
+        respuesta = self.client.get(reverse('dashboard:director'))
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, 'Ejecución del proyecto')
+        fila = next(
+            fila
+            for fila in respuesta.context['filas_estudiantes']
+            if fila['estudiante'].pk == self.estudiante_user.pk
+        )
+        self.assertEqual(fila['etapa_actual'], 'Ejecución del proyecto')
+
+    def test_tabla_director_muestra_fecha_del_ultimo_envio_del_informe(self):
+        propuesta = self._crear_propuesta_en_revision(dias_atras=10)
+        fecha_envio_informe = timezone.now() - timedelta(days=2)
+        Informe.objects.create(
+            propuesta=propuesta,
+            periodo_academico=self.periodo,
+            codigo='INF-ULTIMO-ENVIO',
+            estado=EstadoTramite.EN_REVISION,
+            fecha_envio=fecha_envio_informe,
+        )
+        self.client.force_login(self.director_user)
+
+        respuesta = self.client.get(reverse('dashboard:director'))
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(
+            respuesta,
+            timezone.localtime(fecha_envio_informe).strftime('%d/%m/%Y %H:%M'),
+        )
+        fila = next(
+            fila
+            for fila in respuesta.context['filas_estudiantes']
+            if fila['estudiante'].pk == self.estudiante_user.pk
+        )
+        self.assertEqual(fila['ultimo_envio'], fecha_envio_informe)
+
+    def test_tabla_director_muestra_guion_si_no_hay_envios(self):
+        self.client.force_login(self.director_user)
+
+        respuesta = self.client.get(reverse('dashboard:director'))
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, '—')
+        fila = next(
+            fila
+            for fila in respuesta.context['filas_estudiantes']
+            if fila['estudiante'].pk == self.estudiante_user.pk
+        )
+        self.assertIn('ultimo_envio', fila)
+        self.assertIsNone(fila['ultimo_envio'])
 
 
 class AvisosDashboardTests(DashboardVistasTests):

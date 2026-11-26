@@ -1,7 +1,7 @@
 """Consultas, métricas, semáforo y auditoría del dashboard (SISTRA-14)."""
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.urls import NoReverseMatch, reverse
 
 from apps.cargue_up.models import CargueUp, EstadoVerificacion
@@ -372,6 +372,17 @@ def construir_contexto_director(usuario, filtros):
             carrera_id__in=carreras_ids, estado=EstadoInscripcion.ACTIVO
         )
         .select_related('estudiante__usuario', 'carrera', 'proceso')
+        .prefetch_related(
+            Prefetch(
+                'proceso__etapas',
+                queryset=(
+                    ProcesoActividad.objects.filter(estado=EstadoAvance.EN_CURSO)
+                    .select_related('actividad')
+                    .order_by('actividad__orden')
+                ),
+                to_attr='etapas_en_curso',
+            )
+        )
         .order_by('estudiante__usuario__nombre')
     )
 
@@ -406,6 +417,17 @@ def construir_contexto_director(usuario, filtros):
                 .first()
             )
 
+        etapas_en_curso = getattr(proceso, 'etapas_en_curso', []) if proceso else []
+        etapa_actual = (
+            etapas_en_curso[0].actividad.nombre if etapas_en_curso else None
+        )
+        fechas_envio = [
+            registro.fecha_envio
+            for registro in (propuesta, informe)
+            if registro and registro.fecha_envio
+        ]
+        ultimo_envio = max(fechas_envio, default=None)
+
         estado_actual = (
             informe.estado
             if informe
@@ -427,6 +449,8 @@ def construir_contexto_director(usuario, filtros):
                 'estudiante': ins.estudiante.usuario,
                 'carrera': ins.carrera,
                 'proceso': proceso,
+                'etapa_actual': etapa_actual,
+                'ultimo_envio': ultimo_envio,
                 'propuesta': propuesta,
                 'propuesta_badge': BADGES_ESTADO_TRAMITE.get(
                     propuesta.estado, 'secondary'
