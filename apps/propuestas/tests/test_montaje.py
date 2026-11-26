@@ -198,6 +198,7 @@ class TestMontajeVistasYFlujos(BaseMontajeTestCase):
         url = reverse('propuestas:montaje')
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 302)
+        self.assertIn('/login', resp['Location'])
 
     def test_director_recibe_403(self):
         """Un Director que abre /propuestas/mi-propuesta/ recibe 403, no 500."""
@@ -205,6 +206,20 @@ class TestMontajeVistasYFlujos(BaseMontajeTestCase):
         url = reverse('propuestas:montaje')
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 403)
+
+    def test_usuario_sin_permiso_montar_recibe_403(self):
+        """Un usuario con perfil Estudiante pero sin permiso propuesta.montar recibe 403."""
+        rol_sin_permiso = Rol.objects.create(nombre='Estudiante Restringido')
+        self.user_estudiante.rol = rol_sin_permiso
+        self.user_estudiante.save(update_fields=['rol'])
+
+        self.client.force_login(self.user_estudiante)
+        resp = self.client.get(reverse('propuestas:montaje'))
+        self.assertEqual(resp.status_code, 403)
+
+    def test_permiso_propuesta_montar_asignado_a_estudiante(self):
+        """La migración siembra propuesta.montar activo y asignado al rol Estudiante."""
+        self.assertTrue(self.user_estudiante.has_perm('propuesta.montar'))
 
     def test_get_muestra_formulario_inicial_vacio(self):
         """Un estudiante sin propuesta ve el formulario de nueva propuesta."""
