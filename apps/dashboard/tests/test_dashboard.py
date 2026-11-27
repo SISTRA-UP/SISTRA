@@ -116,15 +116,28 @@ class DashboardVistasTests(TestCase):
         )
 
     def test_panel_administrador_muestra_carrera_por_usuario(self):
+        # R7: se agrega una carrera inactiva al Director para demostrar
+        # que el filtro `asignacion.activo` en services.py la excluye.
+        carrera_anterior = Carrera.objects.create(
+            facultad=self.facultad,
+            nombre='Derecho',
+            codigo='DER-TEST',
+        )
+        DirectorCarrera.objects.create(
+            director=self.director,
+            carrera=carrera_anterior,
+            fecha_inicio=timezone.localdate(),
+            activo=False,
+        )
+
         self.client.force_login(self.admin)
-
         respuesta = self.client.get(reverse('dashboard:inicio'), follow=True)
-
         self.assertEqual(respuesta.status_code, 200)
         self.assertContains(respuesta, '<th>Carrera</th>', html=True)
         usuarios = {
             usuario.pk: usuario for usuario in respuesta.context['usuarios_listado']
         }
+        # La carrera inactiva 'Derecho' NO debe aparecer; solo la activa.
         self.assertEqual(
             usuarios[self.director_user.pk].carreras,
             ['Ingeniería de Sistemas'],
