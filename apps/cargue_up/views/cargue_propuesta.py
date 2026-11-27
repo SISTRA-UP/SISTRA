@@ -8,9 +8,9 @@ Implementa los flujos del requerimiento de negocio BR-03 (SISTRA-03):
 - Auditoría integral de cada acción con vocabulario estandarizado (CA-12).
 """
 
-from pathlib import Path
+import logging
+from io import BytesIO
 
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -30,7 +30,10 @@ from apps.cargue_up.models import CargueUp, EstadoVerificacion
 from apps.parametrizacion.models import Parametro
 from apps.personas.models import DirectorCarrera
 from apps.propuestas.models import EstadoTramite, Propuesta
+from apps.propuestas.services.documento_pdf import generar_pdf_propuesta
 from apps.seguimiento.models import HistorialEstado
+
+logger = logging.getLogger(__name__)
 
 
 def _obtener_url_up() -> tuple[str | None, bool]:
@@ -42,25 +45,6 @@ def _obtener_url_up() -> tuple[str | None, bool]:
     except Exception:
         pass
     return None, False
-
-
-def _obtener_documento_propuesta_pdf(propuesta: Propuesta) -> tuple[Path | None, str | None]:
-    """Busca el documento PDF oficial de la propuesta aprobada.
-    
-    Solo busca el archivo en MEDIA_ROOT. Cuando SISTRA-01 (Deyson) tenga la función
-    compartida que genera el PDF, se conecta aquí. Si no hay archivo, retorna (None, None).
-    """
-    if getattr(settings, "MEDIA_ROOT", None):
-        raiz = Path(settings.MEDIA_ROOT).resolve()
-        posibles_rutas = [
-            raiz / "propuestas" / f"{propuesta.codigo}.pdf",
-            raiz / f"{propuesta.codigo}.pdf",
-        ]
-        for ruta in posibles_rutas:
-            if ruta.is_file():
-                return ruta, f"Propuesta_{propuesta.codigo}.pdf"
-
-    return None, None
 
 
 def _obtener_propuesta_estudiante(request: HttpRequest) -> Propuesta | None:
@@ -102,12 +86,9 @@ def inicio(request: HttpRequest) -> HttpResponse:
     observacion_rechazo_up = None
     puede_cargar = False
     estado_actual = None
-    pdf_disponible = False
 
     if propuesta:
         estado_actual = propuesta.estado
-        pdf_ruta, _ = _obtener_documento_propuesta_pdf(propuesta)
-        pdf_disponible = pdf_ruta is not None
 
         # Consultar el último cargue en UP registrado para este proyecto
         ultimo_cargue = (
@@ -187,7 +168,6 @@ def inicio(request: HttpRequest) -> HttpResponse:
         "estado_actual": estado_actual,
         "url_up": url_up,
         "url_up_configurada": url_up_configurada,
-        "pdf_disponible": pdf_disponible,
         "EstadoTramite": EstadoTramite,
         "msg_aprobada": MSG_03_01,
         "msg_nueva_pestana": MSG_03_02,
@@ -201,19 +181,23 @@ def inicio(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_GET
 def descargar_propuesta(request: HttpRequest, id_propuesta: int) -> HttpResponse:
-    """Descarga autenticada del documento PDF de la propuesta aprobada (CA-03, E2).
+    """Descarga autenticada del documento PDF de la propuesta aprobada (CA-03, B1c).
     
     - Requiere sesión y rol Estudiante (PermissionDenied a otros roles).
     - Valida que la propuesta pertenezca estrictamente al estudiante en sesión.
     - Valida que el estado de la propuesta sea Aprobado (BTN-DESCARGAR: «Solo con Aprobado»).
-    - Mientras la función compartida de generación en PDF con SISTRA-01 no exista,
-      informa al estudiante que no se pudo descargar.
+    - Genera el PDF al vuelo mediante generar_pdf_propuesta(propuesta) (B1a) y lo entrega
+      como descarga Propuesta_<código>.pdf; si falla, muestra MSG-03-04 y audita Fallo.
     """
     if not hasattr(request.user, "estudiante") or not request.user.estudiante:
         raise PermissionDenied
 
     propuesta = get_object_or_404(
-        Propuesta,
+        Propuesta.objects.select_related(
+            "proceso__estudiante_carrera__estudiante__usuario",
+            "proceso__estudiante_carrera__carrera",
+            "periodo_academico",
+        ),
         pk=id_propuesta,
         proceso__estudiante_carrera__estudiante=request.user.estudiante,
     )
@@ -231,17 +215,22 @@ def descargar_propuesta(request: HttpRequest, id_propuesta: int) -> HttpResponse
         messages.warning(request, MSG_03_06)
         return redirect("cargue_up:cargue_propuesta")
 
-    pdf_ruta, pdf_nombre = _obtener_documento_propuesta_pdf(propuesta)
-    if not pdf_ruta or not pdf_ruta.is_file():
+    pdf_nombre = f"Propuesta_{propuesta.codigo}.pdf"
+    try:
+        pdf_bytes = generar_pdf_propuesta(propuesta)
+        if not isinstance(pdf_bytes, bytes) or not pdf_bytes.startswith(b"%PDF-"):
+            raise ValueError("El generador no devolvió un PDF válido.")
+    except Exception:
+        logger.exception("Error al generar el PDF de la propuesta %s.", propuesta.pk)
         registrar_auditoria(
             usuario=request.user,
             accion="Descargar propuesta",
             tabla_afectada="propuesta",
             id_registro=propuesta.pk,
-            detalle="Descarga no disponible: función generadora de PDF en integración con SISTRA-01.",
-            resultado="Bloqueado",
+            detalle=f"Fallo al generar el PDF de la propuesta {propuesta.codigo}.",
+            resultado="Fallo",
         )
-        messages.warning(request, MSG_03_04)
+        messages.error(request, MSG_03_04)
         return redirect("cargue_up:cargue_propuesta")
 
     registrar_auditoria(
@@ -252,8 +241,12 @@ def descargar_propuesta(request: HttpRequest, id_propuesta: int) -> HttpResponse
         detalle=f"Descarga de propuesta {propuesta.codigo} ({pdf_nombre})",
         resultado="Éxito",
     )
-    archivo = open(pdf_ruta, "rb")
-    return FileResponse(archivo, filename=pdf_nombre, as_attachment=True, content_type="application/pdf")
+    return FileResponse(
+        BytesIO(pdf_bytes),
+        as_attachment=True,
+        filename=pdf_nombre,
+        content_type="application/pdf",
+    )
 
 
 @login_required
