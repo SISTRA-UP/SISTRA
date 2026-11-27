@@ -22,9 +22,6 @@
 <div class="sis-layout">
     <aside>{% include 'parametrizacion/parametrizacion/_menu.html' %}</aside>
     <main>
-        {% for mensaje in messages %}
-        <div class="sis-alert sis-alert-{{ mensaje.level_tag }}" role="status">{{ mensaje }}</div>
-        {% endfor %}
         {% block principal %}{% endblock %}
     </main>
 </div>
