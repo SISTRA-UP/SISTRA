@@ -337,29 +337,27 @@
             <table class="sistra14-table">
               <thead>
                 <tr>
-                  <th scope="col">Nombre</th>
-                  <th scope="col">Cédula</th>
-                  <th scope="col">Correo institucional</th>
-                  <th scope="col">Rol</th>
-                  <th scope="col">Estado</th>
+                  <th>Nombre</th>
+                  <th>Carrera</th>
+                  <th>Correo institucional</th>
+                  <th>Rol</th>
+                  <th>Estado</th>
+                  <th>Cédula</th>
                 </tr>
               </thead>
               <tbody>
                 {% for u in usuarios_listado %}
                   <tr>
-                    <td><strong>{{ u.nombre }}</strong></td>
-                    <td>{{ u.cedula }}</td>
+                    <td>{{ u.nombre }}</td>
+                    <td>{% if u.carreras %}{{ u.carreras|join:", " }}{% else %}—{% endif %}</td>
                     <td>{{ u.correo_institucional }}</td>
                     <td>{{ u.rol.nombre }}</td>
-                    <td>
-                      <span class="sistra14-pastilla" data-estado="{{ u.estado }}">
-                        {{ u.estado }}
-                      </span>
-                    </td>
+                    <td>{{ u.cedula }}</td>
+                    <td><span class="sistra14-pastilla" data-estado="{{ u.estado }}">{{ u.estado }}</span></td>
                   </tr>
                 {% empty %}
                   <tr>
-                    <td colspan="5" class="sistra14-empty-row">No hay usuarios que coincidan con el filtro aplicado.</td>
+                    <td colspan="6" class="sistra14-empty-row">No hay usuarios que coincidan con el filtro aplicado.</td>
                   </tr>
                 {% endfor %}
               </tbody>

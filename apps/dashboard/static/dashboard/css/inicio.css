@@ -1,4 +1,4 @@
-.sistra14-page {
+﻿.sistra14-page {
   width: 100%;
   min-width: 0;
   min-height: 100vh;
@@ -28,7 +28,7 @@
 }
 
 .sistra14-page .sistra14-sidebar {
-  border-right: 1px solid var(--sistra-borde, #DADADA);
+  border-right: 1px solid var(--sistra-borde, #E3E6EC);
   background: var(--sistra-superficie, #FFFFFF);
 }
 
@@ -44,8 +44,8 @@
 }
 
 .sistra14-page .sistra14-sidebar nav ul.nav-pills {
-  flex-direction: column;
-  gap: 2px !important;
+flex-direction: column !important;
+gap: 2px !important;
 }
 
 .sistra14-page .sistra14-sidebar nav p {
@@ -81,7 +81,7 @@
 
 .sistra14-page .sistra14-period-card {
   padding: 16px;
-  border: 1px solid var(--sistra-borde, #DADADA);
+  border: 1px solid var(--sistra-borde, #E3E6EC);
   border-radius: 10px;
   background: var(--sistra-fondo, #F5F6F9);
 }
@@ -112,7 +112,7 @@
   flex-direction: column;
   gap: 2px;
   padding-top: 10px;
-  border-top: 1px solid var(--sistra-borde, #DADADA);
+  border-top: 1px solid var(--sistra-borde, #E3E6EC);
 }
 
 .sistra14-page .sistra14-period-careers strong {
@@ -199,18 +199,18 @@
 }
 
 .sistra14-page .sistra14-button-secondary:hover {
-  border-color: var(--sistra-borde, #DADADA);
+  border-color: var(--sistra-borde, #E3E6EC);
   color: var(--sistra-gris-texto, #2A3040);
   background: #DDE1E9;
 }
 
 .sistra14-page .sistra14-button-outline {
-  border-color: var(--sistra-borde, #DADADA);
+  border-color: var(--sistra-borde, #E3E6EC);
   background: var(--sistra-superficie, #FFFFFF);
 }
 
 .sistra14-page .sistra14-button-logout {
-  border-color: var(--sistra-borde, #DADADA);
+  border-color: var(--sistra-borde, #E3E6EC);
   color: var(--sistra-rojo, #AD3333);
   background: var(--sistra-superficie, #FFFFFF);
 }
@@ -243,7 +243,7 @@
 
 .sistra14-page .sistra14-card {
   padding: 24px;
-  border: 1px solid var(--sistra-borde, #DADADA);
+  border: 1px solid var(--sistra-borde, #E3E6EC);
   border-radius: 12px;
   background: var(--sistra-superficie, #FFFFFF);
   box-shadow: none;
@@ -282,7 +282,7 @@
 .sistra14-page .sistra14-career-selector .form-select {
   min-height: 44px;
   padding: 8px 12px;
-  border: 1px solid var(--sistra-borde-campo, #DADADA);
+  border: 1px solid var(--sistra-borde-campo, #B9BFCC);
   border-radius: 6px;
   color: var(--sistra-texto, #1F2430);
   background-color: var(--sistra-superficie, #FFFFFF);
@@ -317,7 +317,7 @@
   flex-direction: column;
   align-items: flex-start;
   padding: 24px;
-  border: 1px solid var(--sistra-borde, #DADADA);
+  border: 1px solid var(--sistra-borde, #E3E6EC);
   border-radius: 12px;
   background: var(--sistra-superficie, #FFFFFF);
 }
@@ -426,7 +426,7 @@
   overflow-x: auto;
   margin-top: 24px;
   padding: 4px 2px 10px;
-  scrollbar-color: var(--sistra-borde-campo, #DADADA) transparent;
+  scrollbar-color: var(--sistra-borde-campo, #B9BFCC) transparent;
 }
 
 .sistra14-page .sistra14-roadmap-stage {
@@ -444,7 +444,7 @@
   width: 40px;
   height: 40px;
   place-items: center;
-  border: 1px solid var(--sistra-borde-campo, #DADADA);
+  border: 1px solid var(--sistra-borde-campo, #B9BFCC);
   border-radius: 50%;
   color: var(--sistra-texto-suave, #4B5263);
   background: var(--sistra-superficie, #FFFFFF);
@@ -498,7 +498,7 @@
 
 .sistra14-page .sistra14-message {
   padding: 16px 20px;
-  border: 1px solid var(--sistra-borde, #DADADA);
+  border: 1px solid var(--sistra-borde, #E3E6EC);
   border-radius: 12px;
   background: var(--sistra-superficie, #FFFFFF);
   font-size: 15px;
@@ -546,8 +546,8 @@
 
 .sistra14-page .sistra14-table thead th {
   padding: 12px 16px;
-  border-top: 1px solid var(--sistra-borde, #DADADA);
-  border-bottom: 1px solid var(--sistra-borde, #DADADA);
+  border-top: 1px solid var(--sistra-borde, #E3E6EC);
+  border-bottom: 1px solid var(--sistra-borde, #E3E6EC);
   color: var(--sistra-gris-texto, #2A3040);
   background: var(--sistra-gris, #E8EAF0);
   font-size: 12px;
@@ -561,7 +561,7 @@
 .sistra14-page .sistra14-table tbody td {
   min-height: 54px;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--sistra-borde, #DADADA);
+  border-bottom: 1px solid var(--sistra-borde, #E3E6EC);
   color: var(--sistra-texto, #1F2430);
   vertical-align: middle;
 }
@@ -597,12 +597,12 @@
   white-space: nowrap;
 }
 
-.sistra14-page .sistra14-pastilla[data-estado="En revisión"] {
+.sistra14-page .sistra14-pastilla[data-estado="En revisiÃ³n"] {
   color: #6B4A00;
   background: #FFF1C2;
 }
 
-.sistra14-page .sistra14-pastilla[data-estado="Requiere modificación"] {
+.sistra14-page .sistra14-pastilla[data-estado="Requiere modificaciÃ³n"] {
   color: #8F3E00;
   background: #FFE8D6;
 }
@@ -714,7 +714,7 @@
 
   .sistra14-page .sistra14-sidebar {
     border-right: 0;
-    border-bottom: 1px solid var(--sistra-borde, #DADADA);
+    border-bottom: 1px solid var(--sistra-borde, #E3E6EC);
   }
 
   .sistra14-page .sistra14-content {
@@ -793,4 +793,9 @@
   .sistra14-page .sistra14-career-selector .form-select {
     width: 100%;
   }
+}
+
+/* La pastilla no se estira dentro de una tarjeta (la .card de Bootstrap es flex en columna). */
+.sistra14-page .sistra14-card > .sistra14-pastilla {
+  align-self: flex-start;
 }
