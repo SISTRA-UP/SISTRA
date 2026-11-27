@@ -9,7 +9,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.dashboard.views.dashboard import MSG_14_02
+from apps.informes.models import Informe
 from apps.parametrizacion.models import (
+    Actividad,
     Carrera,
     EstadoPeriodo,
     Facultad,
@@ -23,11 +25,11 @@ from apps.personas.models import (
     Estudiante,
     EstudianteCarrera,
 )
-from apps.procesos.models import EstadoAvance, ProcesoTrabajoSocial
+from apps.procesos.models import EstadoAvance, ProcesoActividad, ProcesoTrabajoSocial
 from apps.propuestas.forms.aprobacion import RESULTADO_EXITO
 from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.seguimiento.models import Auditoria, Notificacion
-from apps.usuarios.models import Permiso, Rol, RolPermiso
+from apps.usuarios.models import Estado, Permiso, Rol, RolPermiso
 
 Usuario = get_user_model()
 
@@ -99,7 +101,7 @@ class DashboardVistasTests(TestCase):
         respuesta = self.client.get(reverse('dashboard:inicio'))
         self.assertEqual(respuesta.status_code, 403)
 
-    def test_panel_administrador_muestra_tarjetas_filtros_y_accesos(self):
+    def test_panel_administrador_muestra_tarjetas_filtros_y_tablas(self):
         self.client.force_login(self.admin)
         respuesta = self.client.get(reverse('dashboard:inicio'), follow=True)
         self.assertEqual(respuesta.status_code, 200)
@@ -107,8 +109,10 @@ class DashboardVistasTests(TestCase):
         self.assertContains(respuesta, 'Propuestas en revisión')
         self.assertContains(respuesta, 'Roles y permisos')
         self.assertContains(respuesta, 'Parametrización')
-        self.assertContains(respuesta, 'Filtros de consulta')
+        self.assertContains(respuesta, 'Filtrar')
+        self.assertContains(respuesta, 'dashboard/css/inicio.css')
         self.assertContains(respuesta, 'Panorama por carrera')
+        self.assertContains(respuesta, 'Usuarios del sistema')
         self.assertTrue(
             Auditoria.objects.filter(
                 usuario=self.admin, accion='CONSULTA_DASHBOARD'
@@ -124,19 +128,70 @@ class DashboardVistasTests(TestCase):
         self.assertContains(respuesta, 'Subido en UP por verificar')
         self.assertContains(respuesta, 'Aprobación de propuestas')
         self.assertContains(respuesta, 'Registrar estudiantes')
-        self.assertContains(respuesta, 'Filtros de consulta')
+        self.assertContains(respuesta, 'Buscar estudiante o código')
+        self.assertContains(respuesta, 'Etapa actual')
+        self.assertContains(respuesta, 'Último envío')
+        self.assertContains(respuesta, 'C.C. 900000002')
+        self.assertContains(respuesta, 'Notificaciones')
         self.assertContains(respuesta, 'Estudiante Test')
 
-    def test_panel_estudiante_muestra_avance_y_accesos_rapidos(self):
+    def test_panel_estudiante_muestra_tu_camino_y_sus_tarjetas(self):
         self.client.force_login(self.estudiante_user)
         respuesta = self.client.get(reverse('dashboard:inicio'), follow=True)
         self.assertEqual(respuesta.status_code, 200)
         self.assertContains(respuesta, 'Mi Trabajo Social')
-        self.assertContains(respuesta, 'Mi propuesta')
-        self.assertContains(respuesta, 'Mi informe')
-        self.assertContains(respuesta, 'Cargue en UP')
-        self.assertContains(respuesta, 'Avance general del proceso')
+        self.assertContains(respuesta, 'Tu camino')
+        self.assertContains(respuesta, 'Propuesta de Trabajo Social')
+        self.assertContains(respuesta, 'Informe final')
+        self.assertContains(respuesta, 'Facultad de Ingenierías')
+        self.assertContains(respuesta, 'dashboard/css/inicio.css')
+        self.assertNotContains(respuesta, 'Avance general del proceso')
         self.assertContains(respuesta, 'Ingeniería de Sistemas')
+
+    def test_tu_camino_muestra_etapas_del_proceso(self):
+        hoy = timezone.localdate()
+        periodo = PeriodoAcademico.objects.create(
+            nombre='2026-TC',
+            fecha_inicio=hoy - timedelta(days=10),
+            fecha_fin=hoy + timedelta(days=60),
+            fecha_cierre_propuesta=hoy + timedelta(days=20),
+            fecha_cierre_informe=hoy + timedelta(days=40),
+            estado=EstadoPeriodo.VIGENTE,
+        )
+        inscripcion = EstudianteCarrera.objects.get(
+            estudiante=self.estudiante, carrera=self.carrera
+        )
+        proceso = ProcesoTrabajoSocial.objects.create(
+            estudiante_carrera=inscripcion,
+            fecha_inicio=timezone.now(),
+            estado=EstadoAvance.EN_CURSO,
+        )
+        Propuesta.objects.create(
+            proceso=proceso,
+            periodo_academico=periodo,
+            codigo='PROP-TC-01',
+            titulo='Propuesta Tu Camino',
+            estado=EstadoTramite.EN_REVISION,
+        )
+        actividad = Actividad.objects.create(
+            nombre='Etapa de prueba',
+            descripcion='',
+            orden=99,
+            obligatoria=True,
+            estado=Estado.ACTIVO,
+        )
+        ProcesoActividad.objects.create(
+            proceso=proceso,
+            actividad=actividad,
+            estado=EstadoAvance.PENDIENTE,
+        )
+
+        self.client.force_login(self.estudiante_user)
+        respuesta = self.client.get(reverse('dashboard:inicio'), follow=True)
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, 'Etapa de prueba')
+        self.assertContains(respuesta, 'Proceso: En curso')
 
     def test_estudiante_no_puede_abrir_panel_administrador(self):
         self.client.force_login(self.estudiante_user)
@@ -295,6 +350,9 @@ class DashboardIntegracionTests(TestCase):
         respuesta = self.client.get(reverse('dashboard:director'))
         self.assertEqual(respuesta.status_code, 200)
         self.assertContains(respuesta, '3 d · Por vencer')
+        self.assertContains(respuesta, 'verde hasta 2 días')
+        self.assertContains(respuesta, 'amarillo de 3 a 4')
+        self.assertContains(respuesta, 'rojo desde 5')
 
     def test_la_auditoria_usa_el_vocabulario_estandar(self):
         self.client.force_login(self.admin)
@@ -346,6 +404,77 @@ class DashboardIntegracionTests(TestCase):
             respuesta.context['inscripcion_actual'].carrera,
             segunda_carrera,
         )
+
+    def test_tabla_director_muestra_la_etapa_actual_del_proceso(self):
+        proceso = ProcesoTrabajoSocial.objects.create(
+            estudiante_carrera=self.inscripcion,
+            fecha_inicio=timezone.now(),
+            estado=EstadoAvance.EN_CURSO,
+        )
+        etapa = Actividad.objects.create(
+            nombre='Ejecución del proyecto',
+            orden=1,
+            obligatoria=True,
+            estado=Estado.ACTIVO,
+        )
+        ProcesoActividad.objects.create(
+            proceso=proceso,
+            actividad=etapa,
+            estado=EstadoAvance.EN_CURSO,
+        )
+        self.client.force_login(self.director_user)
+
+        respuesta = self.client.get(reverse('dashboard:director'))
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, 'Ejecución del proyecto')
+        fila = next(
+            fila
+            for fila in respuesta.context['filas_estudiantes']
+            if fila['estudiante'].pk == self.estudiante_user.pk
+        )
+        self.assertEqual(fila['etapa_actual'], 'Ejecución del proyecto')
+
+    def test_tabla_director_muestra_fecha_del_ultimo_envio_del_informe(self):
+        propuesta = self._crear_propuesta_en_revision(dias_atras=10)
+        fecha_envio_informe = timezone.now() - timedelta(days=2)
+        Informe.objects.create(
+            propuesta=propuesta,
+            periodo_academico=self.periodo,
+            codigo='INF-ULTIMO-ENVIO',
+            estado=EstadoTramite.EN_REVISION,
+            fecha_envio=fecha_envio_informe,
+        )
+        self.client.force_login(self.director_user)
+
+        respuesta = self.client.get(reverse('dashboard:director'))
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(
+            respuesta,
+            timezone.localtime(fecha_envio_informe).strftime('%d/%m/%Y %H:%M'),
+        )
+        fila = next(
+            fila
+            for fila in respuesta.context['filas_estudiantes']
+            if fila['estudiante'].pk == self.estudiante_user.pk
+        )
+        self.assertEqual(fila['ultimo_envio'], fecha_envio_informe)
+
+    def test_tabla_director_muestra_guion_si_no_hay_envios(self):
+        self.client.force_login(self.director_user)
+
+        respuesta = self.client.get(reverse('dashboard:director'))
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, '—')
+        fila = next(
+            fila
+            for fila in respuesta.context['filas_estudiantes']
+            if fila['estudiante'].pk == self.estudiante_user.pk
+        )
+        self.assertIn('ultimo_envio', fila)
+        self.assertIsNone(fila['ultimo_envio'])
 
 
 class AvisosDashboardTests(DashboardVistasTests):
