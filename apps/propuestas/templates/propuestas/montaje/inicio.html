@@ -84,8 +84,11 @@
         <!-- Carga opcional de plantilla Word (.docx) -->
         {% if not bloqueado %}
             <div class="card shadow-sm mb-4 border-secondary-subtle">
-                <div class="card-header bg-light py-2">
+                <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <span class="fw-bold text-secondary">¿Diligenciaste tu propuesta en la plantilla de Word?</span>
+                    <a href="{% url 'parametrizacion:plantilla_propuesta_estudiante' %}" class="btn btn-sm btn-outline-secondary">
+                        Descargar plantilla
+                    </a>
                 </div>
                 <div class="card-body py-3">
                     <form method="post" enctype="multipart/form-data" class="row g-2 align-items-center">
