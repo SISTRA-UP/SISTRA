@@ -620,7 +620,14 @@ def construir_contexto_administrador(usuario, filtros):
             }
         )
 
-    usuarios_qs = Usuario.objects.select_related('rol').order_by('nombre')
+    usuarios_qs = (
+        Usuario.objects.select_related('rol', 'estudiante', 'director')
+        .prefetch_related(
+            'estudiante__inscripciones__carrera',
+            'director__asignaciones__carrera',
+        )
+        .order_by('nombre')
+    )
     if rol:
         usuarios_qs = usuarios_qs.filter(rol=rol)
     if busqueda:
@@ -629,6 +636,31 @@ def construir_contexto_administrador(usuario, filtros):
             | Q(cedula__icontains=busqueda)
             | Q(correo_institucional__icontains=busqueda)
             | Q(nombre_usuario__icontains=busqueda)
+        )
+
+    usuarios_listado = list(usuarios_qs[:25])
+    for listado_usuario in usuarios_listado:
+        estudiante = getattr(listado_usuario, 'estudiante', None)
+        if estudiante is not None:
+            listado_usuario.carreras = sorted(
+                {
+                    inscripcion.carrera.nombre
+                    for inscripcion in estudiante.inscripciones.all()
+                }
+            )
+            continue
+
+        director = getattr(listado_usuario, 'director', None)
+        listado_usuario.carreras = (
+            sorted(
+                {
+                    asignacion.carrera.nombre
+                    for asignacion in director.asignaciones.all()
+                    if asignacion.activo
+                }
+            )
+            if director is not None
+            else []
         )
 
     notificaciones = _notificaciones_no_leidas(usuario)
@@ -666,7 +698,7 @@ def construir_contexto_administrador(usuario, filtros):
         'periodo_vigente': _periodo_vigente(),
         'tarjetas': tarjetas,
         'resumen_carreras': resumen_carreras,
-        'usuarios_listado': list(usuarios_qs[:25]),
+        'usuarios_listado': usuarios_listado,
         'total_usuarios_filtrados': usuarios_qs.count(),
         'notificaciones': notificaciones,
         'total_notificaciones': len(notificaciones),
