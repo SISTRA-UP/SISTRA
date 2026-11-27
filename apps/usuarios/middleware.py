@@ -23,6 +23,7 @@ class CambioObligatorioContrasenaMiddleware:
             rutas_permitidas = {
                 reverse('usuarios:cambiar_contrasena'),
                 reverse('usuarios:logout'),
+                reverse('usuarios:actividad_sesion'),
             }
             ruta_static = urlsplit(settings.STATIC_URL).path.strip('/')
             prefijo_static = f'/{ruta_static}/' if ruta_static else ''

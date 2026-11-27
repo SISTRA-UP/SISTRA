@@ -172,6 +172,13 @@ class Auditoria(models.Model):
         db_table = 'auditoria'
         verbose_name = 'registro de auditoría'
         verbose_name_plural = 'auditoría'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['detalle'],
+                condition=Q(accion='Sesión vencida'),
+                name='auditoria_sesion_vencida_unica',
+            ),
+        ]
         indexes = [
             models.Index(fields=['fecha_hora'], name='auditoria_fecha_hora_idx'),
         ]

@@ -27,6 +27,7 @@ from apps.personas.models import Director, Estudiante
 from apps.seguimiento.models import Notificacion
 from apps.usuarios.models import Estado, ROL_ADMINISTRADOR
 from apps.usuarios.permisos import requiere_permiso
+from apps.usuarios.views.logueo import eliminar_marcador_sesion
 
 logger = logging.getLogger(__name__)
 MSG_14_02 = 'Ocurrió un problema al cargar tu información. Intenta de nuevo.'
@@ -56,7 +57,7 @@ def _validar_estado_sesion(request):
     usuario = request.user
     if not usuario.is_active or usuario.rol.estado != Estado.ACTIVO:
         auth_logout(request)
-        return redirect('usuarios:login')
+        return eliminar_marcador_sesion(redirect('usuarios:login'))
     if usuario.requiere_cambio_contrasena:
         return redirect('usuarios:cambiar_contrasena')
     return None

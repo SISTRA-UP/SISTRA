@@ -36,4 +36,5 @@ urlpatterns = [
     path('cambiar-contrasena/', logueo.cambiar_contrasena, name='cambiar_contrasena'),
     path('recuperar-contrasena/', logueo.recuperar_contrasena, name='recuperar_contrasena'),
     path('logout/', logueo.logout, name='logout'),
+    path('sesion/actividad/', logueo.actividad_sesion, name='actividad_sesion'),
 ]
