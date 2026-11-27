@@ -463,10 +463,11 @@
         });
     }
 
-    // Modal de confirmación de envío: al confirmar, envía el formulario
+    // Modal de confirmación de envío: al confirmar, deshabilita el botón y envía el formulario
     const btnConfirmarEnvio = document.getElementById('btn-confirmar-envio');
     if (btnConfirmarEnvio) {
         btnConfirmarEnvio.addEventListener('click', () => {
+            btnConfirmarEnvio.disabled = true;
             formModificado = false; // Evitar el beforeunload
             // Crear input oculto con la acción y enviar
             const input = document.createElement('input');
