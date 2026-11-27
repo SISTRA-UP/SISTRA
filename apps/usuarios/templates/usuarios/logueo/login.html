@@ -6,7 +6,7 @@
 {% block css %}
 <link rel="stylesheet" href="{% static 'usuarios/css/logueo.css' %}">
 {% endblock %}
-
+{% block mensajes %}{% endblock %}
 {% block contenido %}
 <main class="container-fluid px-0 login-page">
     <div class="row g-0 min-vh-100">
@@ -51,6 +51,16 @@
                 <p class="eyebrow">PORTAL ACADÉMICO · TRABAJO SOCIAL</p>
                 <h2>Continúa tu proceso académico</h2>
                 <p class="muted">Ingresa con el correo y la contraseña de tu cuenta institucional.</p>
+                
+                {% if messages %}
+                <section aria-label="Mensajes del sistema" class="mb-3">
+                    {% for message in messages %}
+                        <div class="alert alert-{% if 'error' in message.tags %}danger{% elif 'warning' in message.tags %}warning{% elif 'success' in message.tags %}success{% else %}info{% endif %} mb-2" role="alert">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </section>
+                {% endif %}
 
                 {% if form.non_field_errors %}
                     <div class="alert alert-danger login-alert" role="alert" aria-live="polite">

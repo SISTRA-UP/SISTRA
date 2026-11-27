@@ -160,6 +160,7 @@
         <div class="{% if user.is_authenticated %}container-fluid px-0 sistra-stack{% endif %}">
 
             <!-- Gestión centralizada de mensajes del sistema -->
+            {% block mensajes %}
             {% if messages %}
             <section aria-label="Mensajes del sistema" class="d-flex flex-column gap-2 {% if not user.is_authenticated %}container pt-3{% endif %}">
                 {% for message in messages %}
@@ -172,6 +173,7 @@
                 {% endfor %}
             </section>
             {% endif %}
+            {% endblock %}
 
             {% block contenido %}{% endblock %}
         </div>

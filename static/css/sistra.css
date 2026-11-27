@@ -279,7 +279,13 @@ body {
   flex-direction: column;
   gap: 24px;
 }
-
+/* En una columna flex, una pantalla con margin: 0 auto se encoge a su contenido y
+   empuja las tablas anchas fuera de la vista. Con width: 100% toma el ancho disponible
+   y la tabla se desplaza dentro de su tarjeta. */
+.sistra-stack > * {
+  width: 100%;
+  min-width: 0;
+}
 /* Tarjetas estándar */
 .sistra-card {
   background-color: var(--sistra-superficie, #FFFFFF);
