@@ -13,9 +13,11 @@ from django.contrib.auth import (
 )
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.hashers import check_password, make_password
+from django.core import signing
 from django.core.cache import cache
 from django.core.mail import send_mail
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.crypto import get_random_string, salted_hmac
@@ -55,10 +57,12 @@ MENSAJE_RECUPERACION = (
 )
 MENSAJE_CAMBIO_OK = 'Tu contraseña se cambió correctamente.'
 MENSAJE_INGRESO_OK = 'Bienvenido a SISTRA.'
+MENSAJE_SESION_VENCIDA = 'Tu sesión terminó por inactividad'
 MAX_INTENTOS_FALLIDOS = 5
 DURACION_BLOQUEO = timedelta(minutes=15)
 DURACION_LIMITE_RECUPERACION = 5 * 60
 CLAVE_NEXT_SESION = 'sistra13_next_seguro'
+SAL_MARCADOR_SESION = 'sistra.session_activity'
 # Se verifica este hash PBKDF2 cuando el correo no corresponde a una cuenta
 # compatible, para no responder más rápido a correos inexistentes o de otros roles.
 _HASH_CONTRASENA_RELLENO = make_password(get_random_string(64))
@@ -96,6 +100,64 @@ def _auditar(usuario, accion, resultado, detalle=''):
     )
 
 
+def _marcar_sesion(response):
+    response.set_cookie(
+        settings.SESSION_ACTIVITY_COOKIE_NAME,
+        signing.dumps(get_random_string(32), salt=SAL_MARCADOR_SESION),
+        max_age=settings.SESSION_ACTIVITY_COOKIE_AGE,
+        path=getattr(settings, 'SESSION_COOKIE_PATH', '/'),
+        domain=getattr(settings, 'SESSION_COOKIE_DOMAIN', None),
+        secure=getattr(settings, 'SESSION_COOKIE_SECURE', False),
+        httponly=True,
+        samesite=getattr(settings, 'SESSION_COOKIE_SAMESITE', 'Lax'),
+    )
+    return response
+
+
+def _consumir_marcador_sesion(request):
+    valor = request.COOKIES.get(settings.SESSION_ACTIVITY_COOKIE_NAME)
+    if not valor:
+        return False
+    try:
+        identificador_marcador = signing.loads(
+            valor,
+            salt=SAL_MARCADOR_SESION,
+            max_age=settings.SESSION_ACTIVITY_COOKIE_AGE,
+        )
+    except signing.BadSignature:
+        return False
+    if not identificador_marcador:
+        return False
+
+    identificador_auditoria = salted_hmac(
+        'sistra13.sesion_vencida', identificador_marcador
+    ).hexdigest()
+    detalle = (
+        'La sesión terminó por inactividad. '
+        f'Referencia: {identificador_auditoria}'
+    )
+    try:
+        with transaction.atomic():
+            _auditar(None, 'Sesión vencida', 'Éxito', detalle)
+    except IntegrityError:
+        if Auditoria.objects.filter(
+            accion='Sesión vencida', detalle=detalle
+        ).exists():
+            return False
+        raise
+    return True
+
+
+def eliminar_marcador_sesion(response):
+    response.delete_cookie(
+        settings.SESSION_ACTIVITY_COOKIE_NAME,
+        path=getattr(settings, 'SESSION_COOKIE_PATH', '/'),
+        domain=getattr(settings, 'SESSION_COOKIE_DOMAIN', None),
+        samesite=getattr(settings, 'SESSION_COOKIE_SAMESITE', 'Lax'),
+    )
+    return response
+
+
 def _next_seguro(request, destino):
     if destino and url_has_allowed_host_and_scheme(
         url=destino,
@@ -122,7 +184,7 @@ def _redirigir_al_inicio(request, usuario, destino=None):
     if nombre_ruta:
         return redirect(nombre_ruta)
     auth_logout(request)
-    return redirect('usuarios:login')
+    return eliminar_marcador_sesion(redirect('usuarios:login'))
 
 
 def _destino_despues_de_login(request, usuario, destino):
@@ -147,6 +209,15 @@ def login(request):
                 request.session[CLAVE_NEXT_SESION] = destino_seguro
             return redirect('usuarios:cambiar_contrasena')
         return _redirigir_al_inicio(request, request.user, destino_solicitado)
+
+    marcador_presente = bool(request.COOKIES.get(settings.SESSION_ACTIVITY_COOKIE_NAME))
+    sesion_vencida = (
+        request.method == 'GET'
+        and marcador_presente
+        and _consumir_marcador_sesion(request)
+    )
+    if sesion_vencida:
+        messages.info(request, MENSAJE_SESION_VENCIDA)
 
     form = LoginForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
@@ -222,7 +293,8 @@ def login(request):
             )
             messages.success(request, MENSAJE_INGRESO_OK)
             _auditar(usuario, 'Iniciar sesión', 'Éxito', 'Autenticación correcta.')
-            return _destino_despues_de_login(request, usuario, destino_solicitado)
+            respuesta = _destino_despues_de_login(request, usuario, destino_solicitado)
+            return _marcar_sesion(respuesta)
 
         _auditar(usuario, 'Iniciar sesión', 'Fallo', 'Credenciales o estado no válidos.')
         if bloqueo_nuevo:
@@ -237,11 +309,14 @@ def login(request):
             mensaje = ERROR_CREDENCIALES
         form.add_error(None, mensaje)
 
-    return render(
+    respuesta = render(
         request,
         'usuarios/logueo/login.html',
         {'form': form, 'next': _next_seguro(request, destino_solicitado) or ''},
     )
+    if request.method == 'GET' and marcador_presente:
+        eliminar_marcador_sesion(respuesta)
+    return respuesta
 
 
 @never_cache
@@ -270,7 +345,7 @@ def _inicio_por_rol(request, rol_esperado):
         or not usuario.is_active
     ):
         auth_logout(request)
-        return redirect('usuarios:login')
+        return eliminar_marcador_sesion(redirect('usuarios:login'))
     if usuario.requiere_cambio_contrasena:
         return redirect('usuarios:cambiar_contrasena')
     if usuario.rol.nombre != rol_esperado:
@@ -432,9 +507,21 @@ def recuperar_contrasena(request):
 
 @never_cache
 @require_POST
+def actividad_sesion(request):
+    """Renueva la sesión autenticada y responde solo con el acuse mínimo."""
+    if not request.user.is_authenticated:
+        return HttpResponse(status=401)
+
+    request.session.modified = True
+    respuesta = HttpResponse('ok', content_type='text/plain')
+    return _marcar_sesion(respuesta)
+
+
+@never_cache
+@require_POST
 @login_required
 def logout(request):
     usuario = request.user
     _auditar(usuario, 'Cerrar sesión', 'Éxito', 'Sesión cerrada por el usuario.')
     auth_logout(request)
-    return redirect('usuarios:login')
+    return eliminar_marcador_sesion(redirect('usuarios:login'))

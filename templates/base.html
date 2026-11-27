@@ -15,7 +15,159 @@
 
 {% block contenido %}{% endblock %}
 
+{% if request.user.is_authenticated %}
+    <form id="sistra-session-csrf" class="d-none">{% csrf_token %}</form>
+    <div
+        id="sistra-session-config"
+        data-timeout-seconds="{{ request.session.get_expiry_age|default:600 }}"
+        data-warning-seconds="60"
+        data-activity-url="{% url 'usuarios:actividad_sesion' %}"
+        data-login-url="{% url 'usuarios:login' %}"
+        hidden
+    ></div>
+    <div
+        class="modal fade"
+        id="sistra-session-warning"
+        tabindex="-1"
+        aria-labelledby="sistra-session-warning-title"
+        aria-hidden="true"
+        data-bs-backdrop="static"
+        data-bs-keyboard="false"
+    >
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title fs-5" id="sistra-session-warning-title">Tu sesión está por cerrarse</h2>
+                </div>
+                <div class="modal-body">
+                    Por inactividad, tu sesión terminará en un minuto.
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" id="sistra-session-continue">
+                        Seguir conectado
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+{% if request.user.is_authenticated %}
+<script>
+    (() => {
+        const configuracion = document.getElementById('sistra-session-config');
+        const elementoAviso = document.getElementById('sistra-session-warning');
+        const botonContinuar = document.getElementById('sistra-session-continue');
+        const tokenCsrf = document.querySelector(
+            '#sistra-session-csrf [name="csrfmiddlewaretoken"]'
+        )?.value;
+        const tiempoInactividadMs = Number(configuracion.dataset.timeoutSeconds) * 1000;
+        const avisoAntesMs = Number(configuracion.dataset.warningSeconds) * 1000;
+        const intervaloHeartbeatMs = 60 * 1000;
+        const modalAviso = bootstrap.Modal.getOrCreateInstance(elementoAviso, {
+            backdrop: 'static',
+            keyboard: false,
+        });
+
+        let ultimaRenovacionConfirmada = Date.now();
+        let ultimoHeartbeatEnviado = Date.now();
+        let promesaHeartbeat = null;
+        let avisoVisible = false;
+
+        const redirigirAlLogin = () => {
+            const urlLogin = new URL(configuracion.dataset.loginUrl, window.location.origin);
+            urlLogin.searchParams.set(
+                'next',
+                `${window.location.pathname}${window.location.search}`
+            );
+            window.location.replace(urlLogin.toString());
+        };
+
+        const ocultarAviso = () => {
+            if (avisoVisible) {
+                modalAviso.hide();
+                avisoVisible = false;
+            }
+        };
+
+        const renovarSesion = () => {
+            const ahora = Date.now();
+            if (promesaHeartbeat) {
+                return promesaHeartbeat;
+            }
+            if (ahora - ultimoHeartbeatEnviado < intervaloHeartbeatMs) {
+                return Promise.resolve(
+                    ahora - ultimaRenovacionConfirmada < tiempoInactividadMs - avisoAntesMs
+                );
+            }
+
+            ultimoHeartbeatEnviado = ahora;
+            promesaHeartbeat = fetch(configuracion.dataset.activityUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'text/plain',
+                    'X-CSRFToken': tokenCsrf,
+                },
+            })
+                .then(async (respuesta) => {
+                    const contenido = (await respuesta.text()).trim();
+                    if (respuesta.status === 401 || (respuesta.ok && contenido !== 'ok')) {
+                        redirigirAlLogin();
+                        return false;
+                    }
+                    const renovada = respuesta.ok && contenido === 'ok';
+                    if (renovada) {
+                        ultimaRenovacionConfirmada = Date.now();
+                    }
+                    return renovada;
+                })
+                .catch(() => false)
+                .finally(() => {
+                    promesaHeartbeat = null;
+                });
+            return promesaHeartbeat;
+        };
+
+        const registrarActividad = async () => {
+            const renovada = await renovarSesion();
+            if (renovada) {
+                ocultarAviso();
+            }
+        };
+
+        ['keydown', 'mousedown', 'mousemove', 'touchstart', 'scroll'].forEach((evento) => {
+            document.addEventListener(evento, () => {
+                void registrarActividad();
+            }, { passive: true });
+        });
+
+        botonContinuar.addEventListener('click', async () => {
+            const renovada = await renovarSesion();
+            if (renovada) {
+                ocultarAviso();
+            }
+        });
+
+        window.setInterval(() => {
+            const inactividadMs = Date.now() - ultimaRenovacionConfirmada;
+            if (inactividadMs >= tiempoInactividadMs) {
+                if (promesaHeartbeat) {
+                    return;
+                }
+                redirigirAlLogin();
+                return;
+            }
+            if (inactividadMs >= tiempoInactividadMs - avisoAntesMs && !avisoVisible) {
+                modalAviso.show();
+                avisoVisible = true;
+            }
+        }, 1000);
+    })();
+</script>
+{% endif %}
 
 {% block js %}{% endblock %}
 </body>

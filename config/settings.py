@@ -189,6 +189,8 @@ MEDIA_ROOT = BASE_DIR / 'documentos'
 # Cada petición del usuario vuelve a contar los 10 minutos desde cero.
 
 SESSION_COOKIE_AGE = 10 * 60  # segundos
+SESSION_ACTIVITY_COOKIE_NAME = 'sistra_hubo_sesion'
+SESSION_ACTIVITY_COOKIE_AGE = SESSION_COOKIE_AGE * 2
 
 SESSION_SAVE_EVERY_REQUEST = True
 LOGIN_URL = 'usuarios:login'

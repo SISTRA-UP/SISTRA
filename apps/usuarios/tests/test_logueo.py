@@ -6,6 +6,7 @@ from unittest.mock import patch
 from django.contrib.auth import SESSION_KEY, get_user_model
 from django.core import mail
 from django.core.cache import cache
+from django.contrib.sessions.models import Session
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -513,6 +514,113 @@ class LoginTests(TestCase):
             'Fallo',
         )
 
+    def test_sesion_vencida_muestra_aviso_y_audita_una_sola_vez(self):
+        self.enviar_login()
+        marcador = self.client.cookies['sistra_hubo_sesion'].value
+        session_key = self.client.session.session_key
+        Session.objects.filter(session_key=session_key).update(
+            expire_date=timezone.now() - timedelta(seconds=1)
+        )
+
+        respuesta = self.client.get(self.url_inicio_estudiante, follow=True)
+
+        self.assertContains(respuesta, 'Tu sesión terminó por inactividad')
+        auditorias = Auditoria.objects.filter(accion='Sesión vencida')
+        self.assertEqual(auditorias.count(), 1)
+        auditoria = auditorias.get()
+        self.assertIsNone(auditoria.usuario)
+        self.assertEqual(auditoria.resultado, 'Éxito')
+
+        self.client.cookies['sistra_hubo_sesion'] = marcador
+        respuesta_repetida = self.client.get(self.url_login)
+        self.assertNotContains(respuesta_repetida, 'Tu sesión terminó por inactividad')
+        self.assertEqual(auditorias.count(), 1)
+
+    def test_endpoint_actividad_requiere_sesion_autenticada(self):
+        respuesta = self.client.post('/usuarios/sesion/actividad/')
+
+        self.assertEqual(respuesta.status_code, 401)
+        self.assertEqual(respuesta.content, b'')
+
+    def test_usuario_sin_sesion_previa_no_ve_aviso_de_expiracion(self):
+        respuesta = self.client.get(self.url_login)
+
+        self.assertNotContains(respuesta, 'Tu sesión terminó por inactividad')
+        self.assertFalse(Auditoria.objects.filter(accion='Sesión vencida').exists())
+
+    def test_endpoint_actividad_responde_ok_y_extiende_sesion(self):
+        self.enviar_login()
+        session_key = self.client.session.session_key
+        Session.objects.filter(session_key=session_key).update(
+            expire_date=timezone.now() + timedelta(seconds=30)
+        )
+        expiracion_anterior = Session.objects.get(session_key=session_key).expire_date
+
+        respuesta = self.client.post('/usuarios/sesion/actividad/')
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.content, b'ok')
+        expiracion_nueva = Session.objects.get(session_key=session_key).expire_date
+        self.assertGreater(expiracion_nueva, expiracion_anterior)
+
+    def test_endpoint_actividad_permite_cambio_obligatorio_de_contrasena(self):
+        self.usuario.requiere_cambio_contrasena = True
+        self.usuario.save(update_fields=['requiere_cambio_contrasena'])
+        self.client.force_login(self.usuario)
+
+        respuesta = self.client.post('/usuarios/sesion/actividad/')
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.content, b'ok')
+
+    def test_endpoint_actividad_requiere_csrf_y_acepta_token_valido(self):
+        cliente_seguro = Client(enforce_csrf_checks=True)
+        cliente_seguro.force_login(self.usuario)
+
+        respuesta_sin_token = cliente_seguro.post('/usuarios/sesion/actividad/')
+
+        self.assertEqual(respuesta_sin_token.status_code, 403)
+        cliente_seguro.get(self.url_cambio)
+        token_csrf = cliente_seguro.cookies['csrftoken'].value
+        respuesta_con_token = cliente_seguro.post(
+            '/usuarios/sesion/actividad/',
+            HTTP_X_CSRFTOKEN=token_csrf,
+        )
+        self.assertEqual(respuesta_con_token.status_code, 200)
+        self.assertEqual(respuesta_con_token.content, b'ok')
+
+    def test_base_muestra_aviso_de_sesion_a_usuario_autenticado(self):
+        self.usuario.requiere_cambio_contrasena = True
+        self.usuario.save(update_fields=['requiere_cambio_contrasena'])
+        self.client.force_login(self.usuario)
+
+        respuesta = self.client.get(self.url_cambio)
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, 'Tu sesión está por cerrarse')
+        self.assertContains(respuesta, 'Seguir conectado')
+        self.assertContains(respuesta, 'data-warning-seconds="60"')
+        self.assertContains(respuesta, 'data-timeout-seconds="600"')
+        self.assertContains(
+            respuesta,
+            'ahora - ultimaRenovacionConfirmada < tiempoInactividadMs - avisoAntesMs',
+        )
+        self.assertContains(respuesta, '/usuarios/sesion/actividad/')
+        self.assertContains(respuesta, 'Date.now() - ultimaRenovacionConfirmada')
+        self.assertContains(respuesta, "['keydown', 'mousedown', 'mousemove'")
+        self.assertContains(respuesta, 'intervaloHeartbeatMs = 60 * 1000')
+
+    def test_cierre_forzado_por_rol_no_se_registra_como_sesion_vencida(self):
+        self.enviar_login()
+        self.rol_estudiante.estado = Estado.INACTIVO
+        self.rol_estudiante.save(update_fields=['estado'])
+
+        respuesta = self.client.get(self.url_inicio_estudiante, follow=True)
+
+        self.assertNotContains(respuesta, 'Tu sesión terminó por inactividad')
+        self.assertFalse(Auditoria.objects.filter(accion='Sesión vencida').exists())
+        self.assertEqual(self.client.cookies['sistra_hubo_sesion'].value, '')
+
     def test_login_required_usa_login_url_global(self):
         respuesta = self.client.get(self.url_inicio_estudiante)
         self.assertEqual(respuesta.status_code, 302)
@@ -539,9 +647,11 @@ class LoginTests(TestCase):
     def test_logout_audita_cierre_y_finaliza_sesion(self):
         self.enviar_login()
         self.assertIn(SESSION_KEY, self.client.session)
+        self.assertIn('sistra_hubo_sesion', self.client.cookies)
         respuesta = self.client.post(self.url_logout)
         self.assertRedirects(respuesta, self.url_login)
         self.assertNotIn(SESSION_KEY, self.client.session)
+        self.assertEqual(self.client.cookies['sistra_hubo_sesion'].value, '')
         auditoria = Auditoria.objects.get(accion='Cerrar sesión')
         self.assertEqual(auditoria.usuario_id, self.usuario.pk)
         self.assertEqual(auditoria.resultado, 'Éxito')

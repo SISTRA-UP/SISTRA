@@ -4,11 +4,11 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.db import models
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.dashboard.views.dashboard import MSG_14_02
+from apps.dashboard.views.dashboard import MSG_14_02, _validar_estado_sesion
 from apps.parametrizacion.models import (
     Carrera,
     EstadoPeriodo,
@@ -27,7 +27,7 @@ from apps.procesos.models import EstadoAvance, ProcesoTrabajoSocial
 from apps.propuestas.forms.aprobacion import RESULTADO_EXITO
 from apps.propuestas.models import EstadoTramite, Propuesta
 from apps.seguimiento.models import Auditoria, Notificacion
-from apps.usuarios.models import Permiso, Rol, RolPermiso
+from apps.usuarios.models import Estado, Permiso, Rol, RolPermiso
 
 Usuario = get_user_model()
 
@@ -92,6 +92,29 @@ class DashboardVistasTests(TestCase):
         respuesta = self.client.get(reverse('dashboard:inicio'))
         self.assertEqual(respuesta.status_code, 302)
         self.assertIn(reverse('usuarios:login'), respuesta.url)
+
+    def test_cierre_forzado_por_rol_inactivo_no_se_audita_como_expiracion(self):
+        respuesta_login = self.client.post(
+            reverse('usuarios:login'),
+            {
+                'correo': self.admin.correo_institucional,
+                'contrasena': 'ClaveSegura123!',
+            },
+        )
+        self.assertEqual(respuesta_login.status_code, 302)
+        self.assertIn('sistra_hubo_sesion', self.client.cookies)
+
+        self.rol_admin.estado = Estado.INACTIVO
+        self.rol_admin.save(update_fields=['estado'])
+        request = RequestFactory().get(reverse('dashboard:inicio'))
+        request.user = self.admin
+        request.session = self.client.session
+        respuesta = _validar_estado_sesion(request)
+
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertEqual(respuesta.url, reverse('usuarios:login'))
+        self.assertFalse(Auditoria.objects.filter(accion='Sesión vencida').exists())
+        self.assertEqual(respuesta.cookies['sistra_hubo_sesion'].value, '')
 
     def test_usuario_sin_permiso_recibe_403(self):
         RolPermiso.objects.filter(rol=self.rol_estudiante, permiso=self.permiso).delete()
