@@ -1,127 +1,106 @@
-"""Servicio de generación de PDF para Informes de Trabajo Social (B1b).
+"""SISTRA-06 · Generación de documento PDF oficial del informe de Trabajo Social.
 
-Reutiliza las funciones comunes de estilo y escape del módulo de reportes.
+Genera en memoria (sin persistir en disco ni base de datos, decisión M4)
+el PDF oficial del informe reutilizando las partes comunes de B1a (RG-10).
 """
-import io
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.enums import TA_LEFT
 
-# Importamos las funciones comunes ya validadas en el sistema
-from apps.reportes.services.report_pdf_service import (
-    _texto_seguro,
-    _fecha_formato,
-    _parrafo,
-    _crear_estilos,
+from typing import Any
+
+from apps.propuestas.services.documento_pdf import (
+    construir_documento_pdf,
+    construir_encabezado_pdf,
+    construir_tabla_campos,
+    obtener_estilos_pdf,
+    _obtener_nombre_periodo,
+    _formatear_fecha,
 )
 
 
-def generar_pdf_informe(informe):
+def generar_pdf_informe(informe: Any) -> bytes:
     """
-    Genera el PDF del informe de trabajo social al momento, sin guardarlo en disco.
-    
+    Genera los bytes del documento PDF oficial para un informe de Trabajo Social.
+
+    Incluye:
+    - Código y versión del informe.
+    - Datos del estudiante (nombre y cédula), carrera y periodo académico.
+    - Título de la propuesta y entidad.
+    - Fecha de envío.
+    - Los 3 campos principales: Resultados, Conclusiones y Recomendaciones.
+
+    El PDF se genera en memoria al vuelo y nunca se guarda en disco ni en base
+    de datos (decisión arquitectónica M4).
+
     Args:
-        informe: Instancia del modelo Informe.
-    
+        informe: Instancia del modelo Informe con sus relaciones cargadas.
+
     Returns:
-        io.BytesIO: Buffer con el contenido del PDF listo para ser servido.
+        bytes: Contenido binario del documento PDF generado en memoria.
     """
-    buffer = io.BytesIO()
+    estilos = obtener_estilos_pdf()
+    historia: list[Any] = []
 
-    # Usamos carta vertical (portrait) para documentos individuales
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=letter,
-        rightMargin=20 * mm,
-        leftMargin=20 * mm,
-        topMargin=20 * mm,
-        bottomMargin=20 * mm,
-        title=f'Informe {informe.codigo}',
-        author='Universidad de Pamplona - SISTRA',
-    )
-
-    estilos = _crear_estilos()
-    elementos = []
-
-    # Estilos específicos para el cuerpo del texto del informe
-    estilo_cuerpo = estilos['Normal'].clone(
-        'CuerpoInforme',
-        fontName='Helvetica',
-        fontSize=10,
-        leading=14,
-        alignment=TA_LEFT,
-        spaceAfter=10,
-    )
-
-    estilo_label = estilos['Normal'].clone(
-        'LabelInforme',
-        fontName='Helvetica-Bold',
-        fontSize=9,
-        leading=12,
-        alignment=TA_LEFT,
-    )
-
-    # 1. Encabezado
-    elementos.append(Paragraph('UNIVERSIDAD DE PAMPLONA', estilos['TituloReporte']))
-    elementos.append(Paragraph('INFORME DE TRABAJO SOCIAL', estilos['TituloReporte']))
-    elementos.append(Paragraph(
-        f'Código: {_texto_seguro(informe.codigo)} | Versión: {_texto_seguro(informe.version_entrega)}',
-        estilos['SubtituloReporte']
-    ))
-    elementos.append(Spacer(1, 10 * mm))
-
-    # 2. Información General
-    elementos.append(Paragraph('1. Información General', estilos['TituloSeccion']))
-
-    # Extraer datos del estudiante de forma segura
+    # 1. Extraer metadatos de forma segura
+    codigo = getattr(informe, "codigo", "") or "Sin código"
+    version = getattr(informe, "version_entrega", 1)
+    
+    cedula = "No asignada"
+    estudiante_nombre = "No asignado"
+    carrera_nombre = "No asignada"
+    
     try:
-        estudiante = informe.propuesta.proceso.estudiante_carrera.estudiante
-        usuario = estudiante.usuario
-        carrera = informe.propuesta.proceso.estudiante_carrera.carrera.nombre
+        proceso = getattr(informe.propuesta, "proceso", None)
+        if proceso:
+            ec = getattr(proceso, "estudiante_carrera", None)
+            if ec:
+                estudiante = getattr(ec, "estudiante", None)
+                if estudiante:
+                    usuario = getattr(estudiante, "usuario", None)
+                    if usuario:
+                        estudiante_nombre = getattr(usuario, "nombre", "No asignado") or "No asignado"
+                        cedula = getattr(usuario, "cedula", "No asignada") or "No asignada"
+                carrera = getattr(ec, "carrera", None)
+                if carrera:
+                    carrera_nombre = getattr(carrera, "nombre", "No asignada") or "No asignada"
     except Exception:
-        usuario = None
-        carrera = 'No disponible'
+        pass
 
-    info_data = [
-        ['Estudiante:', _texto_seguro(usuario.nombre if usuario else 'N/A')],
-        ['Cédula:', _texto_seguro(usuario.cedula if usuario else 'N/A')],
-        ['Carrera:', _texto_seguro(carrera)],
-        ['Título de la Propuesta:', _texto_seguro(informe.propuesta.titulo)],
-        ['Entidad:', _texto_seguro(informe.propuesta.entidad)],
-        ['Periodo Académico:', _texto_seguro(informe.periodo_academico.nombre)],
-        ['Fecha de Envío:', _fecha_formato(informe.fecha_envio)],
+    periodo = _obtener_nombre_periodo(informe.propuesta)
+    fecha_envio = _formatear_fecha(getattr(informe, "fecha_envio", None))
+    titulo_propuesta = getattr(informe.propuesta, "titulo", "") or "Sin título"
+    entidad = getattr(informe.propuesta, "entidad", "") or "Sin entidad"
+
+    metadatos = [
+        ("Código", f"{codigo} (v{version})"),
+        ("Estudiante", estudiante_nombre),
+        ("Cédula", cedula),
+        ("Carrera", carrera_nombre),
+        ("Periodo académico", periodo),
+        ("Título de la propuesta", titulo_propuesta),
+        ("Entidad", entidad),
+        ("Fecha de envío", fecha_envio),
     ]
 
-    info_tabla_data = [
-        [_parrafo(label, estilo_label), _parrafo(valor, estilo_cuerpo)]
-        for label, valor in info_data
+    # 2. Construir encabezado (aplica _texto_seguro internamente una sola vez)
+    historia.extend(
+        construir_encabezado_pdf(
+            titulo="UNIVERSIDAD DE PAMPLONA",
+            subtitulo="INFORME DE TRABAJO SOCIAL",
+            metadatos=metadatos,
+            estilos=estilos,
+        )
+    )
+
+    # 3. Campos del informe (aplica _texto_seguro internamente, preservando saltos de línea)
+    campos_informe = [
+        ("Resultados", getattr(informe, "resultados", "") or "Sin resultados registrados."),
+        ("Conclusiones", getattr(informe, "conclusiones", "") or "Sin conclusiones registradas."),
+        ("Recomendaciones", getattr(informe, "recomendaciones", "") or "Sin recomendaciones registradas."),
     ]
 
-    tabla_info = Table(info_tabla_data, colWidths=[60 * mm, 120 * mm], hAlign='LEFT')
-    tabla_info.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-    ]))
-    elementos.append(tabla_info)
-    elementos.append(Spacer(1, 8 * mm))
+    historia.extend(construir_tabla_campos(campos_informe, estilos=estilos))
 
-    # 3. Resultados
-    elementos.append(Paragraph('2. Resultados', estilos['TituloSeccion']))
-    elementos.append(_parrafo(informe.resultados or 'Sin resultados registrados.', estilo_cuerpo))
-    elementos.append(Spacer(1, 8 * mm))
-
-    # 4. Conclusiones
-    elementos.append(Paragraph('3. Conclusiones', estilos['TituloSeccion']))
-    elementos.append(_parrafo(informe.conclusiones or 'Sin conclusiones registradas.', estilo_cuerpo))
-    elementos.append(Spacer(1, 8 * mm))
-
-    # 5. Recomendaciones
-    elementos.append(Paragraph('4. Recomendaciones', estilos['TituloSeccion']))
-    elementos.append(_parrafo(informe.recomendaciones or 'Sin recomendaciones registradas.', estilo_cuerpo))
-
-    # Construir el documento
-    doc.build(elementos)
-    buffer.seek(0)
-    return buffer.getvalue()
+    # 4. Compilar documento en memoria (incluye pie de página y numeración)
+    return construir_documento_pdf(
+        historia,
+        pie_texto="SISTRA · Universidad de Pamplona — Informe de Trabajo Social",
+    )

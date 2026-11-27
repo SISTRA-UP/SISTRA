@@ -49,7 +49,4 @@ urlpatterns = [
         aprobacion_reactivacion_masiva.reactivar_masivo,
         name="reactivar_masivo",
     ),
-    # SISTRA-06 · Montaje de informe – Trabajo Social
-    path('montaje/', montaje.inicio, name='montaje'),
-    path('montaje/descargar/<int:informe_id>/', montaje.descargar_pdf_informe, name='descargar_pdf_informe'), # <-- NUEVA LÍNEA
 ]

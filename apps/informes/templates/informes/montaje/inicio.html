@@ -88,19 +88,6 @@
                 <div class="d-flex align-items-center flex-wrap gap-2">
                     <span class="fw-semibold text-secondary">Estado del Informe:</span>
                     <span class="badge {{ clase_estado }} fs-6">{{ informe.estado }}</span>
-                    
-
-                    {% if avance == 100 or informe.estado != 'Borrador' %}
-                    <a href="{% url 'informes:descargar_pdf_informe' informe.id_informe %}" 
-                       class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" 
-                       target="_blank" 
-                       rel="noopener noreferrer"
-                       title="Descargar el informe en formato PDF">
-                        📄 Descargar PDF
-                    </a>
-                    {% endif %}
-
-
                 </div>
                 {% if informe.version_entrega > 1 %}
                 <div>
