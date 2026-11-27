@@ -3,30 +3,30 @@
 {% block titulo %}Montaje de Informe - SISTRA-UP{% endblock %}
 
 {% block contenido %}
-<div class="container py-4" style="max-width: 1200px;">
+<div class="container py-3 py-md-4">
 
     {% if sin_acceso %}
-    <div class="alert alert-dismissible fade show mt-3" role="alert" style="background-color: var(--sistra-rojo-suave, #FBE3E0); color: var(--sistra-rojo, #8E1C12); border: 1px solid var(--sistra-rojo, #8E1C12); border-radius: 12px;">
-        <h5 class="alert-heading fw-bold mb-2" style="font-size: 19px;">Acceso no habilitado</h5>
-        <p class="mb-0" style="font-size: 15px;">{{ mensaje_error }}</p>
+    <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+        <h5 class="alert-heading">Acceso no habilitado</h5>
+        <p class="mb-0">{{ mensaje_error }}</p>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
     </div>
     {% else %}
 
         {% if mostrar_boton_crear %}
-        <div class="card mb-4" style="border: 1px solid var(--sistra-borde, #E3E6EC); border-radius: 12px; background-color: var(--sistra-superficie, #FFFFFF);">
-            <div class="card-header fw-bold text-uppercase" style="font-size: 13px; letter-spacing: 0.06em; color: var(--sistra-texto-suave, #4B5263); background-color: var(--sistra-gris, #E8EAF0); border-bottom: 1px solid var(--sistra-borde, #E3E6EC); border-radius: 12px 12px 0 0; padding: 16px 24px;">
-                Crear Informe
+        <div class="card border-primary mb-4">
+            <div class="card-header bg-primary-subtle text-primary-emphasis fw-semibold">
+                Crear Informe de Trabajo Social
             </div>
-            <div class="card-body text-center py-5" style="padding: 24px;">
-                <h5 class="card-title mb-3 fw-bold" style="font-size: 19px; color: var(--sistra-texto, #1F2430);">Aún no has creado tu informe</h5>
-                <p class="card-text mb-4" style="color: var(--sistra-texto-suave, #4B5263); font-size: 15px;">
+            <div class="card-body text-center py-5">
+                <h5 class="card-title mb-3">Aún no has creado tu informe</h5>
+                <p class="card-text text-muted mb-4">
                     Haz clic en el botón para crear tu informe y comenzar a diligenciarlo.
                 </p>
                 <form method="post">
                     {% csrf_token %}
                     <input type="hidden" name="accion" value="crear_informe">
-                    <button type="submit" class="btn btn-lg px-5" style="background-color: var(--sistra-rojo, #AD3333); color: #FFFFFF; border-radius: 8px; min-height: 44px; font-weight: 600; border: none;">
+                    <button type="submit" class="btn btn-primary btn-lg px-5">
                         Crear Informe
                     </button>
                 </form>
@@ -35,47 +35,47 @@
         {% else %}
 
         <!-- Encabezado -->
-        <div class="row mb-4">
+        <div class="row mb-3 mb-md-4">
             <div class="col-12">
-                <h1 class="fw-bold mb-2" style="font-size: 28px; color: var(--sistra-texto, #1F2430);">
+                <h1 class="h2 h-md-1 fw-bold text-primary">
                     Montaje de Informe de Trabajo Social
                 </h1>
-                <p class="lead mb-0" style="font-size: 15px; color: var(--sistra-texto-suave, #4B5263);">
+                <p class="text-muted lead fs-6">
                     Completa el formulario con los resultados de tu Trabajo Social.
                 </p>
             </div>
         </div>
 
         <!-- Datos de la Propuesta -->
-        <div class="card mb-4" style="border: 1px solid var(--sistra-borde, #E3E6EC); border-radius: 12px; background-color: var(--sistra-superficie, #FFFFFF);">
-            <div class="card-header fw-bold text-uppercase" style="font-size: 13px; letter-spacing: 0.06em; color: var(--sistra-texto-suave, #4B5263); background-color: var(--sistra-gris, #E8EAF0); border-bottom: 1px solid var(--sistra-borde, #E3E6EC); border-radius: 12px 12px 0 0; padding: 16px 24px;">
+        <div class="card mb-3 mb-md-4 border-primary-subtle">
+            <div class="card-header bg-primary-subtle text-primary-emphasis fw-semibold">
                 Datos de la Propuesta Aprobada
             </div>
-            <div class="card-body" style="padding: 24px;">
+            <div class="card-body">
                 <div class="row g-3">
                     <div class="col-12 col-md-6">
-                        <small class="d-block text-uppercase fw-bold mb-1" style="font-size: 13px; letter-spacing: 0.06em; color: var(--sistra-texto-suave, #4B5263);">Código</small>
-                        <p class="mb-0 fw-bold" style="font-size: 18px; color: var(--sistra-texto, #1F2430);">{{ propuesta.codigo }}</p>
+                        <small class="text-muted text-uppercase fw-bold">Código</small>
+                        <p class="mb-0 fw-medium">{{ propuesta.codigo }}</p>
                     </div>
                     <div class="col-12 col-md-6">
-                        <small class="d-block text-uppercase fw-bold mb-1" style="font-size: 13px; letter-spacing: 0.06em; color: var(--sistra-texto-suave, #4B5263);">Título</small>
-                        <p class="mb-0 fw-bold" style="font-size: 18px; color: var(--sistra-texto, #1F2430);">{{ propuesta.titulo }}</p>
+                        <small class="text-muted text-uppercase fw-bold">Título</small>
+                        <p class="mb-0 fw-medium">{{ propuesta.titulo }}</p>
                     </div>
                     <div class="col-12 col-md-6">
-                        <small class="d-block text-uppercase fw-bold mb-1" style="font-size: 13px; letter-spacing: 0.06em; color: var(--sistra-texto-suave, #4B5263);">Entidad</small>
-                        <p class="mb-0 fw-bold" style="font-size: 18px; color: var(--sistra-texto, #1F2430);">{{ propuesta.entidad }}</p>
+                        <small class="text-muted text-uppercase fw-bold">Entidad</small>
+                        <p class="mb-0 fw-medium">{{ propuesta.entidad }}</p>
                     </div>
                     <div class="col-12 col-md-6">
-                        <small class="d-block text-uppercase fw-bold mb-1" style="font-size: 13px; letter-spacing: 0.06em; color: var(--sistra-texto-suave, #4B5263);">Población Beneficiada</small>
-                        <p class="mb-0 fw-bold" style="font-size: 18px; color: var(--sistra-texto, #1F2430);">{{ propuesta.poblacion_beneficiada }}</p>
+                        <small class="text-muted text-uppercase fw-bold">Población Beneficiada</small>
+                        <p class="mb-0 fw-medium">{{ propuesta.poblacion_beneficiada }}</p>
                     </div>
                     <div class="col-12 col-md-6">
-                        <small class="d-block text-uppercase fw-bold mb-1" style="font-size: 13px; letter-spacing: 0.06em; color: var(--sistra-texto-suave, #4B5263);">Zona</small>
-                        <p class="mb-0 fw-bold" style="font-size: 18px; color: var(--sistra-texto, #1F2430);">{{ propuesta.zona }}</p>
+                        <small class="text-muted text-uppercase fw-bold">Zona</small>
+                        <p class="mb-0 fw-medium">{{ propuesta.zona }}</p>
                     </div>
                     <div class="col-12 col-md-6">
-                        <small class="d-block text-uppercase fw-bold mb-1" style="font-size: 13px; letter-spacing: 0.06em; color: var(--sistra-texto-suave, #4B5263);">Periodo Académico</small>
-                        <p class="mb-0 fw-bold" style="font-size: 18px; color: var(--sistra-texto, #1F2430);">{{ propuesta.periodo_academico.nombre }}</p>
+                        <small class="text-muted text-uppercase fw-bold">Periodo Académico</small>
+                        <p class="mb-0 fw-medium">{{ propuesta.periodo_academico.nombre }}</p>
                     </div>
                 </div>
             </div>
@@ -83,37 +83,29 @@
 
         <!-- Estado del Informe -->
         {% if informe %}
-        <div class="card mb-4" style="border: 1px solid var(--sistra-borde, #E3E6EC); border-radius: 12px; background-color: var(--sistra-superficie, #FFFFFF);">
-            <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-3" style="padding: 24px;">
-                <div class="d-flex align-items-center flex-wrap gap-3">
-                    <span class="fw-bold text-uppercase" style="font-size: 13px; letter-spacing: 0.06em; color: var(--sistra-texto-suave, #4B5263);">Estado del Informe:</span>
+        <div class="card mb-3 mb-md-4 border-secondary-subtle">
+            <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center flex-wrap gap-2">
+                    <span class="fw-semibold text-secondary">Estado del Informe:</span>
+                    <span class="badge {{ clase_estado }} fs-6">{{ informe.estado }}</span>
                     
-                    <!-- Pastilla de estado con colores exactos de la guía -->
-                    <span class="badge rounded-pill fw-bold" style="font-size: 13px; padding: 6px 12px; 
-                        {% if informe.estado == 'En revisión' %}background-color: #FFF1C2; color: #6B4A00;
-                        {% elif informe.estado == 'Requiere modificación' %}background-color: #FFE8D6; color: #8F3E00;
-                        {% elif informe.estado == 'Aprobado' or informe.estado == 'Aprobado en UP' %}background-color: #DDF3E4; color: #14612F;
-                        {% elif informe.estado == 'Rechazado' %}background-color: #FBE3E0; color: #8E1C12;
-                        {% else %}background-color: #E8EAF0; color: #2A3040;{% endif %}">
-                        {{ informe.estado }}
-                    </span>
-                    
+
                     {% if avance == 100 or informe.estado != 'Borrador' %}
                     <a href="{% url 'informes:descargar_pdf_informe' informe.id_informe %}" 
-                       class="btn btn-sm d-inline-flex align-items-center gap-2" 
+                       class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" 
                        target="_blank" 
                        rel="noopener noreferrer"
-                       title="Descargar el informe en formato PDF"
-                       style="background-color: var(--sistra-azul, #003366); color: #FFFFFF; border-radius: 8px; min-height: 44px; font-weight: 600; border: none; text-decoration: none;">
-                        Descargar PDF
+                       title="Descargar el informe en formato PDF">
+                        📄 Descargar PDF
                     </a>
                     {% endif %}
+
+
                 </div>
-                
                 {% if informe.version_entrega > 1 %}
-                <div class="d-flex align-items-center gap-2">
-                    <span class="fw-bold text-uppercase" style="font-size: 13px; letter-spacing: 0.06em; color: var(--sistra-texto-suave, #4B5263);">Versión:</span>
-                    <span class="badge rounded-pill fw-bold" style="background-color: var(--sistra-texto, #1F2430); color: #FFFFFF; font-size: 13px; padding: 6px 12px;">{{ informe.version_entrega }}</span>
+                <div>
+                    <span class="fw-semibold text-secondary">Versión:</span>
+                    <span class="badge bg-dark fs-6">{{ informe.version_entrega }}</span>
                 </div>
                 {% endif %}
             </div>
@@ -122,48 +114,43 @@
 
         <!-- Observación del Director -->
         {% if ultima_observacion and ultima_observacion.observacion %}
-        <div class="alert alert-dismissible fade show mb-4" role="alert" style="background-color: #FFF1C2; color: #6B4A00; border: 1px solid #FFF1C2; border-radius: 12px; padding: 24px;">
-            <strong class="d-block mb-2 fw-bold" style="font-size: 15px;">Observación del Director:</strong>
-            <p class="mb-2" style="font-size: 15px;">{{ ultima_observacion.observacion }}</p>
-            <small style="color: #6B4A00; opacity: 0.8;">Recibida el {{ ultima_observacion.fecha_hora|date:"d/m/Y H:i" }}</small>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+        <div class="alert alert-warning border-warning text-warning-emphasis mb-3 mb-md-4" role="alert">
+            <strong class="d-block mb-1">Observación del Director:</strong>
+            <p class="mb-1">{{ ultima_observacion.observacion }}</p>
+            <small class="text-muted">Recibida el {{ ultima_observacion.fecha_hora|date:"d/m/Y H:i" }}</small>
         </div>
         {% endif %}
 
         <!-- Barra de Avance -->
-        <div class="card mb-4" style="border: 1px solid var(--sistra-borde, #E3E6EC); border-radius: 12px; background-color: var(--sistra-superficie, #FFFFFF);">
-            <div class="card-body" style="padding: 24px;">
+        <div class="card mb-3 mb-md-4 border-secondary-subtle">
+            <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h6 class="mb-0 fw-bold text-uppercase" style="font-size: 13px; letter-spacing: 0.06em; color: var(--sistra-texto-suave, #4B5263);">Progreso del Informe</h6>
-                    <span id="badge-avance" class="badge rounded-pill fw-bold" style="font-size: 13px; padding: 6px 12px;">
-                        {{ avance }}%
-                    </span>
+                    <h6 class="mb-0 fw-semibold text-primary">Progreso del Informe</h6>
+                    <span id="badge-avance" class="badge {{ clase_progreso }}">{{ avance }}%</span>
                 </div>
-                <div class="progress" style="height: 12px; background-color: var(--sistra-gris, #E8EAF0); border-radius: 999px; overflow: hidden;">
+                <div class="progress" style="height: 25px;">
                     <div id="barra-progreso"
-                         class="progress-bar"
+                         class="progress-bar {{ clase_progreso }}"
                          role="progressbar"
-                         style="width: {{ avance }}%; border-radius: 999px;"
+                         style="width: {{ avance }}%"
                          aria-valuenow="{{ avance }}"
                          aria-valuemin="0"
                          aria-valuemax="100">
+                        {{ avance }}%
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Formulario del Informe -->
-        <div class="card mb-4" style="border: 1px solid var(--sistra-borde, #E3E6EC); border-radius: 12px; background-color: var(--sistra-superficie, #FFFFFF);">
-            <div class="card-header fw-bold text-uppercase" style="font-size: 13px; letter-spacing: 0.06em; color: var(--sistra-texto-suave, #4B5263); background-color: var(--sistra-gris, #E8EAF0); border-bottom: 1px solid var(--sistra-borde, #E3E6EC); border-radius: 12px 12px 0 0; padding: 16px 24px;">
+        <div class="card border-primary-subtle">
+            <div class="card-header bg-primary-subtle text-primary-emphasis fw-semibold">
                 Formulario de Informe
             </div>
-            <div class="card-body" style="padding: 24px;">
+            <div class="card-body">
                 {% if messages %}
                     {% for message in messages %}
-                        <div class="alert alert-dismissible fade show mb-3" role="alert" style="border-radius: 12px; 
-                            {% if message.tags == 'error' %}background-color: #FBE3E0; color: #8E1C12; border: 1px solid #FBE3E0;
-                            {% elif message.tags == 'warning' %}background-color: #FFF1C2; color: #6B4A00; border: 1px solid #FFF1C2;
-                            {% else %}background-color: #DDF3E4; color: #14612F; border: 1px solid #DDF3E4;{% endif %}">
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
                             {{ message }}
                             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
                         </div>
@@ -171,9 +158,9 @@
                 {% endif %}
 
                 {% if bloqueado %}
-                    <div class="alert mb-4" role="alert" style="background-color: #E3EDFC; color: #174FA3; border: 1px solid #E3EDFC; border-radius: 12px; padding: 24px;">
-                        <strong class="d-block mb-1 fw-bold" style="font-size: 15px;">Informe bloqueado:</strong>
-                        <span style="font-size: 15px;">Este informe ya fue enviado y se encuentra en estado <strong>"{{ informe.estado }}"</strong>. No puedes modificarlo hasta que el Director tome una decisión.</span>
+                    <div class="alert alert-info border-info text-info-emphasis mb-3 mb-md-4" role="alert">
+                        <strong>Informe bloqueado:</strong> Este informe ya fue enviado y se encuentra en estado
+                        <strong>"{{ informe.estado }}"</strong>. No puedes modificarlo hasta que el Director tome una decisión.
                     </div>
                 {% endif %}
 
@@ -182,29 +169,28 @@
 
                     {% for field in form %}
                         <div class="mb-4">
-                            <label for="{{ field.id_for_label }}" class="form-label fw-bold d-block mb-1" style="font-size: 15px; color: var(--sistra-texto, #1F2430);">
+                            <label for="{{ field.id_for_label }}" class="form-label fw-semibold text-primary">
                                 {{ field.label|title }}
                             </label>
-                            <small class="d-block mb-2" style="font-size: 13px; color: var(--sistra-texto-suave, #4B5263);">Obligatorio al enviar (mínimo 50 caracteres). Puedes guardar borrador con campos vacíos.</small>
+                            <small class="text-muted d-block mb-2">Obligatorio al enviar (mínimo 50 caracteres). Puedes guardar borrador con campos vacíos.</small>
                             
                             {% if bloqueado %}
                                 {{ field }}
                                 <script>
                                     document.getElementById('{{ field.id_for_label }}').setAttribute('readonly', true);
-                                    document.getElementById('{{ field.id_for_label }}').style.backgroundColor = 'var(--sistra-gris, #E8EAF0)';
+                                    document.getElementById('{{ field.id_for_label }}').style.backgroundColor = '#f8f9fa';
                                     document.getElementById('{{ field.id_for_label }}').style.cursor = 'not-allowed';
-                                    document.getElementById('{{ field.id_for_label }}').style.borderColor = 'var(--sistra-borde-campo, #B9BFCC)';
                                 </script>
                             {% else %}
                                 {{ field }}
                             {% endif %}
 
-                            <div id="error-{{ field.id_for_label }}" class="invalid-feedback" style="display: none; color: #B42318; font-size: 13px;">
+                            <div id="error-{{ field.id_for_label }}" class="invalid-feedback" style="display: none;">
                                 Completa este campo (mínimo {{ minimo_caracteres }} caracteres).
                             </div>
 
                             {% if field.errors %}
-                                <div class="invalid-feedback d-block" style="color: #B42318; font-size: 13px;">
+                                <div class="invalid-feedback d-block">
                                     {% for error in field.errors %}
                                         {{ error }}
                                     {% endfor %}
@@ -214,35 +200,32 @@
                     {% endfor %}
 
                     <!-- Botones de Acción -->
-                    <div class="d-flex flex-column flex-md-row gap-3 mt-4 pt-3" style="border-top: 1px solid var(--sistra-borde, #E3E6EC);">
+                    <div class="d-flex flex-column flex-md-row gap-2 gap-md-3 mt-4 pt-3 border-top">
                         {% if not bloqueado %}
                             <button type="submit"
                                     name="accion"
                                     value="guardar_borrador"
                                     id="btn-guardar"
-                                    class="btn px-4"
-                                    style="background-color: var(--sistra-gris, #E8EAF0); color: var(--sistra-gris-texto, #2A3040); border-radius: 8px; min-height: 44px; font-weight: 600; border: none;">
+                                    class="btn btn-outline-secondary px-4">
                                 Guardar Borrador
                             </button>
 
                             <button type="button"
                                     id="btn-enviar"
-                                    class="btn px-4"
+                                    class="btn btn-primary px-4"
                                     data-bs-toggle="modal"
                                     data-bs-target="#modalConfirmarEnvio"
-                                    {% if avance != 100 %}disabled{% endif %}
-                                    style="background-color: var(--sistra-rojo, #AD3333); color: #FFFFFF; border-radius: 8px; min-height: 44px; font-weight: 600; border: none;">
+                                    {% if avance != 100 %}disabled{% endif %}>
                                 Enviar Informe
                             </button>
 
                             <button type="button"
                                     id="btn-cancelar"
-                                    class="btn px-4"
-                                    style="background-color: var(--sistra-gris, #E8EAF0); color: var(--sistra-gris-texto, #2A3040); border-radius: 8px; min-height: 44px; font-weight: 600; border: none;">
+                                    class="btn btn-outline-danger px-4">
                                 Cancelar
                             </button>
                         {% else %}
-                            <a href="{% url 'dashboard:estudiante' %}" class="btn px-4 w-100 w-md-auto" style="background-color: var(--sistra-gris, #E8EAF0); color: var(--sistra-gris-texto, #2A3040); border-radius: 8px; min-height: 44px; font-weight: 600; border: none; text-decoration: none;">
+                            <a href="{% url 'dashboard:estudiante' %}" class="btn btn-secondary px-4 w-100 w-md-auto">
                                 Regresar al inicio
                             </a>
                         {% endif %}
@@ -262,18 +245,18 @@
 <!-- Modal de confirmación antes de enviar -->
 <div class="modal fade" id="modalConfirmarEnvio" tabindex="-1" aria-labelledby="modalConfirmarEnvioLabel" aria-hidden="true">
     <div class="modal-dialog">
-        <div class="modal-content" style="border-radius: 12px; border: 1px solid var(--sistra-borde, #E3E6EC);">
-            <div class="modal-header" style="border-bottom: 1px solid var(--sistra-borde, #E3E6EC); padding: 24px;">
-                <h5 class="modal-title fw-bold" id="modalConfirmarEnvioLabel" style="font-size: 19px; color: var(--sistra-texto, #1F2430);">Confirmar envío</h5>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalConfirmarEnvioLabel">Confirmar envío</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
-            <div class="modal-body" style="padding: 24px;">
-                <p style="font-size: 15px; color: var(--sistra-texto, #1F2430);">¿Estás seguro de que deseas enviar el informe a revisión?</p>
-                <p class="text-muted small" style="font-size: 13px; color: var(--sistra-texto-suave, #4B5263);">Una vez enviado, no podrás modificarlo hasta que el Director tome una decisión.</p>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas enviar el informe a revisión?</p>
+                <p class="text-muted small">Una vez enviado, no podrás modificarlo hasta que el Director tome una decisión.</p>
             </div>
-            <div class="modal-footer" style="border-top: 1px solid var(--sistra-borde, #E3E6EC); padding: 24px;">
-                <button type="button" class="btn px-4" data-bs-dismiss="modal" style="background-color: var(--sistra-gris, #E8EAF0); color: var(--sistra-gris-texto, #2A3040); border-radius: 8px; min-height: 44px; font-weight: 600; border: none;">No, revisar</button>
-                <button type="button" class="btn px-4" id="btn-confirmar-envio" style="background-color: var(--sistra-rojo, #AD3333); color: #FFFFFF; border-radius: 8px; min-height: 44px; font-weight: 600; border: none;">Sí, enviar</button>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No, revisar</button>
+                <button type="button" class="btn btn-primary" id="btn-confirmar-envio">Sí, enviar</button>
             </div>
         </div>
     </div>
@@ -282,18 +265,18 @@
 <!-- Modal de confirmación para cancelar -->
 <div class="modal fade" id="modalConfirmarCancelar" tabindex="-1" aria-labelledby="modalConfirmarCancelarLabel" aria-hidden="true">
     <div class="modal-dialog">
-        <div class="modal-content" style="border-radius: 12px; border: 1px solid var(--sistra-borde, #E3E6EC);">
-            <div class="modal-header" style="border-bottom: 1px solid var(--sistra-borde, #E3E6EC); padding: 24px;">
-                <h5 class="modal-title fw-bold" id="modalConfirmarCancelarLabel" style="font-size: 19px; color: var(--sistra-texto, #1F2430);">Cancelar</h5>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalConfirmarCancelarLabel">Cancelar</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
-            <div class="modal-body" style="padding: 24px;">
-                <p style="font-size: 15px; color: var(--sistra-texto, #1F2430);">Tienes cambios sin guardar. ¿Seguro que deseas cancelar?</p>
-                <p class="text-muted small" style="font-size: 13px; color: var(--sistra-texto-suave, #4B5263);">Perderás los cambios no guardados.</p>
+            <div class="modal-body">
+                <p>Tienes cambios sin guardar. ¿Seguro que deseas cancelar?</p>
+                <p class="text-muted small">Perderás los cambios no guardados.</p>
             </div>
-            <div class="modal-footer" style="border-top: 1px solid var(--sistra-borde, #E3E6EC); padding: 24px;">
-                <button type="button" class="btn px-4" data-bs-dismiss="modal" style="background-color: var(--sistra-gris, #E8EAF0); color: var(--sistra-gris-texto, #2A3040); border-radius: 8px; min-height: 44px; font-weight: 600; border: none;">Volver</button>
-                <button type="button" class="btn px-4" id="btn-confirmar-cancelar" style="background-color: var(--sistra-rojo, #AD3333); color: #FFFFFF; border-radius: 8px; min-height: 44px; font-weight: 600; border: none;">Sí, cancelar</button>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Volver</button>
+                <button type="button" class="btn btn-danger" id="btn-confirmar-cancelar">Sí, cancelar</button>
             </div>
         </div>
     </div>
@@ -347,7 +330,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (errorDiv) errorDiv.style.display = 'none';
                     el.classList.remove('is-invalid');
                     el.classList.add('is-valid');
-                    el.style.borderColor = '#14612F'; // Verde de la guía
                 } else {
                     if (errorDiv) {
                         errorDiv.style.display = 'block';
@@ -359,53 +341,41 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     el.classList.remove('is-valid');
                     el.classList.add('is-invalid');
-                    el.style.borderColor = '#B42318'; // Rojo de error de la guía
                 }
             } else {
                 if (errorDiv) errorDiv.style.display = 'none';
                 if (valor.length >= MINIMO && valor.length <= MAXIMO) {
                     el.classList.add('is-valid');
                     el.classList.remove('is-invalid');
-                    el.style.borderColor = '#14612F';
                 } else {
                     el.classList.remove('is-valid', 'is-invalid');
-                    el.style.borderColor = 'var(--sistra-borde-campo, #B9BFCC)';
                 }
             }
         });
 
         const avance = Math.round((llenos / campos.length) * 100);
         barra.style.width = avance + '%';
+        barra.textContent = avance + '%';
+        barra.setAttribute('aria-valuenow', avance);
         badge.textContent = avance + '%';
-        badge.setAttribute('aria-valuenow', avance);
 
-        // Limpiar clases de color anteriores y aplicar las de la guía
-        badge.style.backgroundColor = '';
-        badge.style.color = '';
-        barra.style.backgroundColor = '';
-
+        barra.classList.remove('bg-success', 'bg-warning', 'bg-danger');
+        badge.classList.remove('bg-success', 'bg-warning', 'text-dark', 'bg-danger');
         if (avance === 100) {
-            badge.style.backgroundColor = '#DDF3E4';
-            badge.style.color = '#14612F';
-            barra.style.backgroundColor = '#14612F';
+            barra.classList.add('bg-success');
+            badge.classList.add('bg-success');
         } else if (avance >= 50) {
-            badge.style.backgroundColor = '#FFF1C2';
-            badge.style.color = '#6B4A00';
-            barra.style.backgroundColor = '#F2B01E';
+            barra.classList.add('bg-warning');
+            badge.classList.add('bg-warning', 'text-dark');
         } else {
-            badge.style.backgroundColor = '#FBE3E0';
-            badge.style.color = '#8E1C12';
-            barra.style.backgroundColor = '#B42318';
+            barra.classList.add('bg-danger');
+            badge.classList.add('bg-danger');
         }
 
         if (avance === 100) {
             btnEnviar.removeAttribute('disabled');
-            btnEnviar.style.opacity = '1';
-            btnEnviar.style.cursor = 'pointer';
         } else {
             btnEnviar.setAttribute('disabled', 'disabled');
-            btnEnviar.style.opacity = '0.6';
-            btnEnviar.style.cursor = 'not-allowed';
         }
     }
 
@@ -426,8 +396,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnConfirmarEnvio = document.getElementById('btn-confirmar-envio');
     if (btnConfirmarEnvio) {
         btnConfirmarEnvio.addEventListener('click', function() {
+            // MODIFICACIÓN E4: Deshabilitar botón inmediatamente y mostrar spinner para evitar doble envío
             this.disabled = true;
-            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="width: 1rem; height: 1rem; border-width: 2px;"></span> Enviando...';
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Enviando...';
             
             inputAccion.value = 'enviar';
             form.submit();
