@@ -4,37 +4,34 @@
 {% block titulo %}{{ titulo_panel }} · SISTRA-UP{% endblock %}
 
 {% block css %}
-  <link rel="stylesheet" href="{% static 'dashboard/css/inicio.css' %}">
+<link rel="stylesheet" href="{% static 'dashboard/css/inicio.css' %}">
 {% endblock %}
 
 {% block contenido %}
 <div class="sistra14-page">
   <div class="sistra14-layout">
-    <!-- Menú lateral dinámico según permisos (SIS-40) -->
+
     <aside class="sistra14-sidebar">
       <div class="sistra14-sidebar-panel">
-        <div class="sistra14-sidebar-menu">
-          {% include 'usuarios/roles/_menu.html' %}
-        </div>
-
+        {% include 'usuarios/roles/_menu.html' %}
         <div class="sistra14-period-card">
-          <div class="sistra14-period-label">Periodo académico vigente</div>
+          <p class="sistra14-period-label">Periodo académico vigente</p>
           {% if periodo_vigente %}
-            <div class="sistra14-period-name">{{ periodo_vigente.nombre }}</div>
+            <p class="sistra14-period-name">{{ periodo_vigente.nombre }}</p>
             <div class="sistra14-period-dates">
-              Cierre propuestas: {{ periodo_vigente.fecha_cierre_propuesta|date:"d/m/Y" }}<br>
-              Cierre informes: {{ periodo_vigente.fecha_cierre_informe|date:"d/m/Y" }}
+              <p>Cierre propuestas: {{ periodo_vigente.fecha_cierre_propuesta|date:"d/m/Y" }}</p>
+              <p>Cierre informes: {{ periodo_vigente.fecha_cierre_informe|date:"d/m/Y" }}</p>
             </div>
           {% else %}
-            <span class="sistra14-pastilla" data-estado="Sin informe">Sin periodo vigente configurado</span>
+            <p class="sistra14-muted">Sin periodo vigente configurado</p>
           {% endif %}
           {% if tipo_panel == 'director' %}
             <div class="sistra14-period-careers">
-              <span>Carrera a cargo:</span>
+              <p class="sistra14-period-label">Carrera a cargo:</p>
               {% for asignacion in asignaciones_director %}
                 <strong>{{ asignacion.carrera.nombre }}</strong>
               {% empty %}
-                <strong>Sin carrera activa</strong>
+                <p class="sistra14-muted">Sin carrera activa</p>
               {% endfor %}
             </div>
           {% endif %}
@@ -42,61 +39,53 @@
       </div>
     </aside>
 
-    <!-- Contenido principal por rol -->
     <main class="sistra14-content">
+
       <header class="sistra14-page-header">
         <div class="sistra14-page-heading">
           {% if tipo_panel == 'director' %}
-            <span class="sistra14-context">Mis pendientes</span>
+            <p class="sistra14-context">Mis pendientes</p>
             <h1>Lo que espera tu respuesta</h1>
           {% elif tipo_panel == 'estudiante' and inscripcion_actual %}
             <h1>{{ inscripcion_actual.carrera.nombre }}</h1>
             <p>{{ inscripcion_actual.carrera.facultad.nombre }}</p>
           {% else %}
-            <span class="sistra14-context">{{ request.user.rol.nombre }}</span>
+            <p class="sistra14-context">{{ request.user.rol.nombre }}</p>
             <h1>{{ titulo_panel }}</h1>
             <p>{{ subtitulo_panel }}</p>
           {% endif %}
         </div>
-
         <div class="sistra14-header-actions">
           {% if tipo_panel == 'estudiante' and proceso %}
-            <span class="sistra14-pastilla" data-estado="{{ proceso.estado }}">
-              Proceso: {{ proceso.estado }}
-            </span>
+            <span class="sistra14-pastilla" data-estado="{{ proceso.estado }}">Proceso: {{ proceso.estado }}</span>
           {% endif %}
-          <button type="button" class="btn sistra14-button-secondary sistra14-button-outline position-relative" data-bs-toggle="modal" data-bs-target="#modalNotificaciones">
+          <button type="button" class="sistra14-button-secondary" data-bs-toggle="modal" data-bs-target="#sistra14-notificaciones">
             Notificaciones
             {% if total_notificaciones > 0 %}
-              <span class="sistra14-notification-count">
-                {{ total_notificaciones }}
-              </span>
+              <span class="sistra14-notification-count">{{ total_notificaciones }}</span>
             {% endif %}
           </button>
-
           <form method="post" action="{% url 'usuarios:logout' %}">
             {% csrf_token %}
-            <button type="submit" class="btn sistra14-button-logout">Cerrar sesión</button>
+            <button type="submit" class="sistra14-button-logout">Cerrar sesión</button>
           </form>
         </div>
       </header>
 
-      <!-- Tarjetas de resumen (Director y Administrador) -->
       {% if tarjetas %}
-        <section class="sistra14-summary-grid" aria-label="Resumen de trámites">
+        <div class="sistra14-summary-grid">
           {% for t in tarjetas %}
-            <article class="sistra14-summary-card">
-              <span class="sistra14-summary-dot" data-color="{{ t.borde }}" aria-hidden="true"></span>
+            <div class="sistra14-summary-card">
+              <span class="sistra14-summary-dot" data-color="{{ t.borde }}"></span>
               <strong>{{ t.valor }}</strong>
               <span>{{ t.titulo }}</span>
-            </article>
+            </div>
           {% endfor %}
-        </section>
+        </div>
       {% endif %}
 
-      <!-- Formulario de filtros (Director y Administrador) -->
       {% if form_filtro %}
-        <section class="card sistra14-card sistra14-filter-card">
+        <div class="sistra14-card sistra14-filter-card">
           <form method="get" class="sistra14-filter-form{% if tipo_panel == 'administrador' %} sistra14-filter-form-admin{% endif %}">
             {% for field in form_filtro %}
               <div class="sistra14-filter-field">
@@ -105,37 +94,35 @@
               </div>
             {% endfor %}
             <div class="sistra14-filter-actions">
-              <button type="submit" class="btn sistra14-button-primary">Filtrar</button>
-              <a href="{{ request.path }}" class="btn sistra14-button-secondary">Limpiar</a>
+              <button type="submit" class="sistra14-button-primary">Filtrar</button>
+              <a href="{{ request.path }}" class="sistra14-button-secondary">Limpiar</a>
             </div>
           </form>
-        </section>
+        </div>
       {% endif %}
 
-      <!-- VISTA ESTUDIANTE -->
       {% if tipo_panel == 'estudiante' %}
         {% if inscripciones|length > 1 %}
-          <form method="get" class="card sistra14-card sistra14-career-selector">
-            <div class="sistra14-career-selector-content">
-              <label for="selectCarrera">Carrera</label>
-              <select id="selectCarrera" name="carrera" class="form-select">
+          <div class="sistra14-card sistra14-career-selector">
+            <form method="get" class="sistra14-career-selector-content">
+              <label for="carrera">Carrera</label>
+              <select name="carrera" id="carrera" class="form-select" onchange="this.form.submit()">
                 {% for ins in inscripciones %}
                   <option value="{{ ins.carrera_id }}" {% if inscripcion_actual and ins.carrera_id == inscripcion_actual.carrera_id %}selected{% endif %}>
                     {{ ins.carrera.nombre }} ({{ ins.estado }})
                   </option>
                 {% endfor %}
               </select>
-              <button type="submit" class="btn sistra14-button-secondary">Cambiar carrera</button>
-            </div>
-          </form>
+            </form>
+          </div>
         {% endif %}
 
         {% if not inscripcion_actual %}
-          <div class="sistra14-message sistra14-message-warning" role="alert">
+          <div class="sistra14-message sistra14-message-warning">
             Aún no tienes una inscripción activa en una carrera registrada en el sistema. Consulta con el Director de tu programa.
           </div>
         {% else %}
-          <section class="card sistra14-card sistra14-roadmap-card">
+          <div class="sistra14-card sistra14-roadmap-card">
             <div class="sistra14-card-heading">
               <h2>Tu camino</h2>
               <strong>{{ avance_porcentaje }} % del proceso</strong>
@@ -144,92 +131,77 @@
               {% for etapa in etapas %}
                 <div class="sistra14-roadmap-stage">
                   <span class="sistra14-roadmap-number">{{ forloop.counter }}</span>
-                  <span class="sistra14-roadmap-label">
-                    {% if etapa.actividad %}{{ etapa.actividad.nombre }}{% else %}{{ etapa.nombre }}{% endif %}
-                  </span>
+                  <span class="sistra14-roadmap-label">{% if etapa.actividad %}{{ etapa.actividad.nombre }}{% else %}{{ etapa.nombre }}{% endif %}</span>
                 </div>
               {% empty %}
                 <p class="sistra14-muted">Aún no hay etapas registradas para este proceso.</p>
               {% endfor %}
             </div>
-          </section>
+          </div>
 
-          <section class="sistra14-student-records" aria-label="Propuesta e informe final">
-            <article class="card sistra14-card sistra14-record-card">
+          <div class="sistra14-student-records">
+            <div class="sistra14-card sistra14-record-card">
               <h2>Propuesta de Trabajo Social</h2>
               {% if propuesta %}
-                <p class="sistra14-record-title">
-                  {{ propuesta.codigo }} · {{ propuesta.titulo|default:"Sin título" }}
-                </p>
-                <span class="sistra14-pastilla" data-estado="{{ propuesta.estado }}">
-                  {{ propuesta.estado }}
-                </span>
+                <p class="sistra14-record-title">{{ propuesta.codigo }} · {{ propuesta.titulo|default:"Sin título" }}</p>
+                <span class="sistra14-pastilla" data-estado="{{ propuesta.estado }}">{{ propuesta.estado }}</span>
               {% else %}
                 <p class="sistra14-muted">No has iniciado una propuesta en esta carrera.</p>
-                <span class="sistra14-pastilla" data-estado="Borrador">Sin propuesta</span>
+                <span class="sistra14-pastilla" data-estado="Sin propuesta">Sin propuesta</span>
               {% endif %}
-            </article>
-
-            <article class="card sistra14-card sistra14-record-card">
+            </div>
+            <div class="sistra14-card sistra14-record-card">
               <h2>Informe final</h2>
               {% if informe %}
-                <p class="sistra14-record-title">
-                  {{ informe.codigo }} · Versión {{ informe.version_entrega }}
-                </p>
-                <span class="sistra14-pastilla" data-estado="{{ informe.estado }}">
-                  {{ informe.estado }}
-                </span>
+                <p class="sistra14-record-title">{{ informe.codigo }} · Versión {{ informe.version_entrega }}</p>
+                <span class="sistra14-pastilla" data-estado="{{ informe.estado }}">{{ informe.estado }}</span>
               {% else %}
                 <p class="sistra14-muted">Aún no registras un informe final.</p>
                 <span class="sistra14-pastilla" data-estado="Sin informe">Sin informe</span>
               {% endif %}
-            </article>
-          </section>
+            </div>
+          </div>
 
           {% if ultimo_cargue %}
-            <section class="card sistra14-card sistra14-cargue-card">
+            <div class="sistra14-card sistra14-cargue-card">
               <h2>Último cargue en Plataforma UP</h2>
-              <p>
-                {{ ultimo_cargue.estado_verificacion }}
-                · {{ ultimo_cargue.fecha_declaracion|date:"d/m/Y H:i" }}
-              </p>
-            </section>
+              <p>{{ ultimo_cargue.estado_verificacion }} · {{ ultimo_cargue.fecha_declaracion|date:"d/m/Y H:i" }}</p>
+            </div>
           {% endif %}
 
           {% if ultima_observacion %}
-            <section class="card sistra14-card sistra14-observation-card">
+            <div class="sistra14-card sistra14-observation-card">
               <h2>Última observación del Director</h2>
               <p>{{ ultima_observacion.observacion }}</p>
-              <div class="sistra14-observation-meta">
+              <p class="sistra14-observation-meta">
                 {{ ultima_observacion.usuario.nombre|default:"Director" }}
                 · {{ ultima_observacion.fecha_hora|date:"d/m/Y H:i" }}
-              </div>
-            </section>
+              </p>
+            </div>
           {% endif %}
         {% endif %}
       {% endif %}
 
-      <!-- VISTA DIRECTOR -->
       {% if tipo_panel == 'director' %}
         {% if not asignaciones_director %}
-          <div class="sistra14-message sistra14-message-warning" role="alert">
+          <div class="sistra14-message sistra14-message-warning">
             No tienes carreras activas asignadas como Director en este momento.
           </div>
         {% endif %}
 
-        <section class="card sistra14-card sistra14-table-card">
-          <h2>Seguimiento de estudiantes y trámites</h2>
+        <div class="sistra14-card sistra14-table-card">
+          <div class="sistra14-table-title"><h2>Seguimiento de estudiantes y trámites</h2></div>
           <div class="sistra14-table-scroll">
             <table class="sistra14-table">
               <thead>
                 <tr>
-                  <th scope="col">Estudiante</th>
-                  <th scope="col">Carrera</th>
-                  <th scope="col">Etapa actual</th>
-                  <th scope="col">Propuesta</th>
-                  <th scope="col">Informe</th>
-                  <th scope="col">Semáforo</th>
-                  <th scope="col">Último envío</th>
+                  <th>Estudiante</th>
+                  <th>Carrera</th>
+                  <th>Etapa actual</th>
+                  <th>Propuesta</th>
+                  <th>Informe</th>
+                  <th>Semáforo</th>
+                  <th>Último envío</th>
                 </tr>
               </thead>
               <tbody>
@@ -244,36 +216,24 @@
                     <td>
                       {% if fila.propuesta %}
                         <strong>{{ fila.propuesta.codigo }}</strong>
-                        <span class="sistra14-pastilla" data-estado="{{ fila.propuesta.estado }}">
-                          {{ fila.propuesta.estado }}
-                        </span>
+                        <span class="sistra14-pastilla" data-estado="{{ fila.propuesta.estado }}">{{ fila.propuesta.estado }}</span>
                       {% else %}
-                        <strong>—</strong>
-                        <span class="sistra14-pastilla" data-estado="Sin propuesta">Sin propuesta</span>
+                        — <span class="sistra14-pastilla" data-estado="Sin propuesta">Sin propuesta</span>
                       {% endif %}
                     </td>
                     <td>
                       {% if fila.informe %}
                         <strong>{{ fila.informe.codigo }}</strong>
-                        <span class="sistra14-pastilla" data-estado="{{ fila.informe.estado }}">
-                          {{ fila.informe.estado }}
-                        </span>
+                        <span class="sistra14-pastilla" data-estado="{{ fila.informe.estado }}">{{ fila.informe.estado }}</span>
                       {% else %}
-                        <strong>—</strong>
-                        <span class="sistra14-pastilla" data-estado="Sin informe">Sin informe</span>
+                        — <span class="sistra14-pastilla" data-estado="Sin informe">Sin informe</span>
                       {% endif %}
                     </td>
                     <td>
-                      <span class="sistra14-pastilla" data-semaforo="{{ fila.semaforo.nivel|default:'none' }}">
-                        {{ fila.semaforo.etiqueta }}
-                      </span>
+                      <span class="sistra14-pastilla" data-semaforo="{{ fila.semaforo.nivel|default:'none' }}">{{ fila.semaforo.etiqueta }}</span>
                     </td>
                     <td>
-                      {% if fila.ultimo_envio %}
-                        {{ fila.ultimo_envio|date:"d/m/Y H:i" }}
-                      {% else %}
-                        —
-                      {% endif %}
+                      {% if fila.ultimo_envio %}{{ fila.ultimo_envio|date:"d/m/Y H:i" }}{% else %}—{% endif %}
                     </td>
                   </tr>
                 {% empty %}
@@ -284,7 +244,7 @@
               </tbody>
             </table>
           </div>
-        </section>
+        </div>
         <p class="sistra14-semaphore-help">
           Semáforo en trámites En revisión: verde hasta {{ umbrales.0 }} días,
           amarillo de {{ umbrales.0|add:"1" }} a {{ umbrales.1 }} y rojo desde {{ umbrales.1|add:"1" }}.
@@ -292,27 +252,26 @@
         </p>
       {% endif %}
 
-      <!-- VISTA ADMINISTRADOR -->
       {% if tipo_panel == 'administrador' %}
-        <section class="card sistra14-card sistra14-table-card">
-          <h2>Panorama por carrera</h2>
+        <div class="sistra14-card sistra14-table-card">
+          <div class="sistra14-table-title"><h2>Panorama por carrera</h2></div>
           <div class="sistra14-table-scroll">
             <table class="sistra14-table">
               <thead>
                 <tr>
-                  <th scope="col">Facultad</th>
-                  <th scope="col">Carrera</th>
-                  <th scope="col">Director activo</th>
-                  <th scope="col">Estudiantes activos</th>
-                  <th scope="col">Propuestas activas</th>
-                  <th scope="col">Informes activos</th>
+                  <th>Facultad</th>
+                  <th>Carrera</th>
+                  <th>Director activo</th>
+                  <th>Estudiantes activos</th>
+                  <th>Propuestas activas</th>
+                  <th>Informes activos</th>
                 </tr>
               </thead>
               <tbody>
                 {% for item in resumen_carreras %}
                   <tr>
                     <td>{{ item.carrera.facultad.nombre }}</td>
-                    <td><strong>{{ item.carrera.nombre }}</strong></td>
+                    <td>{{ item.carrera.nombre }}</td>
                     <td>{{ item.director.nombre|default:"Sin director asignado" }}</td>
                     <td>{{ item.estudiantes_activos }}</td>
                     <td>{{ item.propuestas_activas }}</td>
@@ -326,33 +285,33 @@
               </tbody>
             </table>
           </div>
-        </section>
+        </div>
 
-        <section class="card sistra14-card sistra14-table-card sistra14-user-table-card">
+        <div class="sistra14-card sistra14-table-card">
           <div class="sistra14-table-title">
             <h2>Usuarios del sistema</h2>
-            <span class="sistra14-pastilla">{{ total_usuarios_filtrados }} encontrados</span>
+            <strong>{{ total_usuarios_filtrados }} encontrados</strong>
           </div>
           <div class="sistra14-table-scroll">
             <table class="sistra14-table">
               <thead>
                 <tr>
                   <th>Nombre</th>
+                  <th>Cédula</th>
                   <th>Carrera</th>
                   <th>Correo institucional</th>
                   <th>Rol</th>
                   <th>Estado</th>
-                  <th>Cédula</th>
                 </tr>
               </thead>
               <tbody>
                 {% for u in usuarios_listado %}
                   <tr>
                     <td>{{ u.nombre }}</td>
+                    <td>{{ u.cedula }}</td>
                     <td>{% if u.carreras %}{{ u.carreras|join:", " }}{% else %}—{% endif %}</td>
                     <td>{{ u.correo_institucional }}</td>
                     <td>{{ u.rol.nombre }}</td>
-                    <td>{{ u.cedula }}</td>
                     <td><span class="sistra14-pastilla" data-estado="{{ u.estado }}">{{ u.estado }}</span></td>
                   </tr>
                 {% empty %}
@@ -363,35 +322,33 @@
               </tbody>
             </table>
           </div>
-        </section>
+        </div>
       {% endif %}
+
     </main>
   </div>
 
-  <!-- Modal de avisos sin leer -->
-  <div class="modal fade" id="modalNotificaciones" tabindex="-1" aria-labelledby="modalNotificacionesLabel" aria-hidden="true">
+  <div class="modal fade" id="sistra14-notificaciones" tabindex="-1" aria-labelledby="sistra14-notificaciones-label" aria-hidden="true">
     <div class="modal-dialog">
-      <div class="modal-content">
+      <div class="modal-content sistra14-page">
         <div class="modal-header">
-          <h2 class="modal-title fs-5" id="modalNotificacionesLabel">Notificaciones recientes</h2>
+          <h2 class="modal-title" id="sistra14-notificaciones-label">Notificaciones recientes</h2>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body">
           {% if notificaciones %}
-            <ul class="list-group list-group-flush">
-              {% for n in notificaciones %}
-                <li class="list-group-item">
-                  <div class="small text-muted">{{ n.tipo }} · {{ n.fecha_creacion|date:"d/m/Y H:i" }}</div>
-                  <div>{{ n.mensaje }}</div>
-                  <form method="post" action="{% url 'dashboard:abrir_notificacion' n.id_notificacion %}" class="mt-2">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-sm sistra14-modal-open-btn">Abrir</button>
-                  </form>
-                </li>
-              {% endfor %}
-            </ul>
+            {% for n in notificaciones %}
+              <div class="sistra14-message">
+                <p class="sistra14-secondary-text">{{ n.tipo }} · {{ n.fecha_creacion|date:"d/m/Y H:i" }}</p>
+                <p>{{ n.mensaje }}</p>
+                <form method="post" action="{% url 'dashboard:abrir_notificacion' n.pk %}">
+                  {% csrf_token %}
+                  <button type="submit" class="sistra14-modal-open-btn">Abrir</button>
+                </form>
+              </div>
+            {% endfor %}
           {% else %}
-            <p class="text-muted mb-0">No tienes acciones pendientes.</p>
+            <p class="sistra14-muted">No tienes acciones pendientes.</p>
           {% endif %}
         </div>
       </div>
