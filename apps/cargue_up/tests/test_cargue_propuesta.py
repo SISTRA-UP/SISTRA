@@ -561,7 +561,7 @@ class CargueUpSecurityAndViewsTestCase(TestCase):
         self.assertContains(res, f'action="{url_logout}"')
         self.assertContains(
             res,
-            '<button type="submit" class="btn btn-outline-danger">Cerrar sesión</button>',
+            '<button type="submit" class="sistra-topbar__btn sistra-topbar__btn--logout">Cerrar sesión</button>',
             html=True,
         )
 

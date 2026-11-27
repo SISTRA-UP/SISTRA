@@ -18,11 +18,6 @@
         <h1 id="titulo-recuperacion" class="h2">Recupera tu acceso</h1>
         <p class="muted">Escribe el correo institucional con el que te registraron. Si la cuenta está habilitada, enviaremos una contraseña temporal a ese correo.</p>
 
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-info" role="status">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
         {% if form.non_field_errors %}
             <div class="alert alert-danger" role="alert">{{ form.non_field_errors.0 }}</div>
         {% endif %}

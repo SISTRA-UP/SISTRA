@@ -9,10 +9,6 @@
             </a>
             <div class="d-flex flex-wrap gap-2">
                 <a class="btn btn-sm btn-vi-ghost" href="{% url 'usuarios:inicio_director' %}">Inicio</a>
-                <form method="post" action="{% url 'usuarios:logout' %}">
-                    {% csrf_token %}
-                    <button class="btn btn-sm btn-vi-ghost" type="submit">Cerrar sesión</button>
-                </form>
             </div>
         </div>
         <p class="vi-eyebrow">{{ eyebrow }}</p>

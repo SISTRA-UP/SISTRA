@@ -410,3 +410,37 @@ body {
   font-size: 14.5px;
   padding: 14px 16px;
 }
+
+/* Ajustes de franja superior en dos líneas y utilidades sin estilos inline */
+.sistra-topbar__inner {
+  min-height: var(--sistra-topbar-height, 64px);
+}
+
+.sistra-topbar__institution {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.88);
+  line-height: 1.15;
+}
+
+.sistra-topbar__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #FFFFFF;
+  line-height: 1.2;
+}
+
+.sistra-topbar__user {
+  max-width: 200px;
+}
+
+.sistra-notif-menu__title {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.sistra-period-card__value {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--sistra-azul, #003366);
+}

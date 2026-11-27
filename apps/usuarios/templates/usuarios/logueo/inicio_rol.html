@@ -14,15 +14,8 @@
             <span class="brand-mark" aria-hidden="true"><img src="{% static 'img/escudo-unipamplona.png' %}" alt=""></span>
             <span class="brand-word"><span class="brand-name">SISTRA<span class="brand-period">.</span></span><small>Universidad de Pamplona</small></span>
         </a>
-        <form method="post" action="{% url 'usuarios:logout' %}">
-            {% csrf_token %}
-            <button class="btn btn-outline-secondary" type="submit">Cerrar sesión</button>
-        </form>
     </div>
 
-    {% if messages %}
-        {% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }}" role="status">{{ message }}</div>{% endfor %}
-    {% endif %}
     <section class="private-card p-4 p-md-5" aria-labelledby="titulo-inicio">
         <p class="eyebrow">ACCESO INSTITUCIONAL VERIFICADO · {{ nombre_rol|upper }}</p>
         <h1 id="titulo-inicio">Hola, {{ nombre_usuario }}.</h1>

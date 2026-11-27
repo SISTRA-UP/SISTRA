@@ -5,18 +5,8 @@
 {% block contenido %}
 <div class="container-fluid py-4">
   <div class="row g-4">
-    <!-- Menú lateral dinámico según permisos (SIS-40) -->
     <div class="col-12 col-lg-3">
       <div class="card shadow-sm">
-        <div class="card-header bg-light fw-semibold">
-          Navegación del sistema
-        </div>
-        <div class="card-body">
-          {% include 'usuarios/roles/_menu.html' %}
-        </div>
-      </div>
-
-      <div class="card shadow-sm mt-3">
         <div class="card-body">
           <div class="small text-muted">Periodo académico vigente</div>
           {% if periodo_vigente %}
@@ -51,10 +41,6 @@
             {% endif %}
           </button>
 
-          <form method="post" action="{% url 'usuarios:logout' %}">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-outline-danger">Cerrar sesión</button>
-          </form>
         </div>
       </div>
 

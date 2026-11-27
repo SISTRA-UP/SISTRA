@@ -1,5 +1,1 @@
-{% if messages %}
-    {% for mensaje in messages %}
-    <div class="alert vi-alert alert-{% if mensaje.level_tag == 'error' %}danger{% else %}{{ mensaje.level_tag|default:'info' }}{% endif %}" role="status">{{ mensaje }}</div>
-    {% endfor %}
-{% endif %}
+{# Mensajes centralizados en base.html #}

@@ -52,11 +52,6 @@
                 <h2>Continúa tu proceso académico</h2>
                 <p class="muted">Ingresa con el correo y la contraseña de tu cuenta institucional.</p>
 
-                {% if messages %}
-                    {% for message in messages %}
-                        <div class="alert alert-{{ message.tags|default:'info' }} login-alert" role="status">{{ message }}</div>
-                    {% endfor %}
-                {% endif %}
                 {% if form.non_field_errors %}
                     <div class="alert alert-danger login-alert" role="alert" aria-live="polite">
                         {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
