@@ -39,35 +39,21 @@ def generar_pdf_informe(informe: Any) -> bytes:
     estilos = obtener_estilos_pdf()
     historia: list[Any] = []
 
-    # 1. Extraer metadatos de forma segura
-    codigo = getattr(informe, "codigo", "") or "Sin código"
-    version = getattr(informe, "version_entrega", 1)
-    
-    cedula = "No asignada"
-    estudiante_nombre = "No asignado"
-    carrera_nombre = "No asignada"
-    
-    try:
-        proceso = getattr(informe.propuesta, "proceso", None)
-        if proceso:
-            ec = getattr(proceso, "estudiante_carrera", None)
-            if ec:
-                estudiante = getattr(ec, "estudiante", None)
-                if estudiante:
-                    usuario = getattr(estudiante, "usuario", None)
-                    if usuario:
-                        estudiante_nombre = getattr(usuario, "nombre", "No asignado") or "No asignado"
-                        cedula = getattr(usuario, "cedula", "No asignada") or "No asignada"
-                carrera = getattr(ec, "carrera", None)
-                if carrera:
-                    carrera_nombre = getattr(carrera, "nombre", "No asignada") or "No asignada"
-    except Exception:
-        pass
+    # 1. Metadatos del encabezado. Las relaciones son obligatorias en el modelo,
+    # por eso se accede directamente: si falta alguna, el error debe propagarse.
+    codigo = informe.codigo or "Sin código"
+    version = informe.version_entrega
+
+    estudiante_carrera = informe.propuesta.proceso.estudiante_carrera
+    usuario = estudiante_carrera.estudiante.usuario
+    estudiante_nombre = usuario.nombre or "No asignado"
+    cedula = usuario.cedula or "No asignada"
+    carrera_nombre = estudiante_carrera.carrera.nombre or "No asignada"
 
     periodo = _obtener_nombre_periodo(informe.propuesta)
-    fecha_envio = _formatear_fecha(getattr(informe, "fecha_envio", None))
-    titulo_propuesta = getattr(informe.propuesta, "titulo", "") or "Sin título"
-    entidad = getattr(informe.propuesta, "entidad", "") or "Sin entidad"
+    fecha_envio = _formatear_fecha(informe.fecha_envio)
+    titulo_propuesta = informe.propuesta.titulo or "Sin título"
+    entidad = informe.propuesta.entidad or "Sin entidad"
 
     metadatos = [
         ("Código", f"{codigo} (v{version})"),
@@ -80,7 +66,7 @@ def generar_pdf_informe(informe: Any) -> bytes:
         ("Fecha de envío", fecha_envio),
     ]
 
-    # 2. Construir encabezado (aplica _texto_seguro internamente una sola vez)
+    # 2. Encabezado: construir_encabezado_pdf aplica _texto_seguro una sola vez.
     historia.extend(
         construir_encabezado_pdf(
             titulo="UNIVERSIDAD DE PAMPLONA",
@@ -90,16 +76,17 @@ def generar_pdf_informe(informe: Any) -> bytes:
         )
     )
 
-    # 3. Campos del informe (aplica _texto_seguro internamente, preservando saltos de línea)
+    # 3. Campos del informe: construir_tabla_campos escapa una sola vez y
+    # conserva los saltos de línea de Resultados, Conclusiones y Recomendaciones.
     campos_informe = [
-        ("Resultados", getattr(informe, "resultados", "") or "Sin resultados registrados."),
-        ("Conclusiones", getattr(informe, "conclusiones", "") or "Sin conclusiones registradas."),
-        ("Recomendaciones", getattr(informe, "recomendaciones", "") or "Sin recomendaciones registradas."),
+        ("Resultados", informe.resultados or "Sin resultados registrados."),
+        ("Conclusiones", informe.conclusiones or "Sin conclusiones registradas."),
+        ("Recomendaciones", informe.recomendaciones or "Sin recomendaciones registradas."),
     ]
 
     historia.extend(construir_tabla_campos(campos_informe, estilos=estilos))
 
-    # 4. Compilar documento en memoria (incluye pie de página y numeración)
+    # 4. Compilar documento en memoria (incluye pie de página y numeración).
     return construir_documento_pdf(
         historia,
         pie_texto="SISTRA · Universidad de Pamplona — Informe de Trabajo Social",

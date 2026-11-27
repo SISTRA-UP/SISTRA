@@ -103,6 +103,7 @@ class TestGenerarPDFInforme(TestCase):
         self.assertIn("INF-PDF-001", texto)
         self.assertIn("PDF Test", texto)
         self.assertIn("7777777777", texto)
+        self.assertIn("2026-PDF", texto)
         self.assertIn("Resultados", texto)
         self.assertIn("Conclusiones", texto)
         self.assertIn("Recomendaciones", texto)
