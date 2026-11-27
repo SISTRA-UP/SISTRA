@@ -107,6 +107,8 @@ class TestGenerarPDFInforme(TestCase):
         self.assertIn("Resultados", texto)
         self.assertIn("Conclusiones", texto)
         self.assertIn("Recomendaciones", texto)
+        self.assertIn("Conclusión válida", texto)
+        self.assertIn("Recomendación válida", texto)
 
     def test_pdf_no_rompe_con_html_o_ampersand_en_contenido(self):
         """Un campo de contenido con <b> o & no rompe el PDF y se escapa correctamente."""

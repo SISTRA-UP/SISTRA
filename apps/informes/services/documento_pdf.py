@@ -91,3 +91,4 @@ def generar_pdf_informe(informe: Any) -> bytes:
         historia,
         pie_texto="SISTRA · Universidad de Pamplona — Informe de Trabajo Social",
     )
+    
