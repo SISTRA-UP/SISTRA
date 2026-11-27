@@ -18,6 +18,7 @@ from django.views.decorators.http import require_GET
 from apps.cargue_up.models import CargueUp
 from apps.informes.forms.aprobacion import DecisionInformeForm
 from apps.informes.models import Informe
+from apps.informes.services.documento_pdf import generar_pdf_informe
 from apps.informes.views.aprobacion_semaforo import (
     calcular_semaforo_informe,
 )
@@ -29,13 +30,6 @@ from apps.seguimiento.models import Auditoria
 
 
 logger = logging.getLogger(__name__)
-
-
-def generar_pdf_informe(informe):
-    """Punto de conexión con B1b; ajustar esta importación al publicar su servicio."""
-    from apps.propuestas.services.documentos_pdf import generar_pdf_informe as generar
-
-    return generar(informe)
 
 
 def _informes_del_director(usuario):

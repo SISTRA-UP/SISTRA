@@ -5,7 +5,6 @@ from io import BytesIO
 from unittest.mock import patch
 
 from pypdf import PdfReader
-from reportlab.pdfgen import canvas
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -22,14 +21,6 @@ from apps.usuarios.models import Rol
 
 
 class DocumentoInformeTests(TestCase):
-    @staticmethod
-    def pdf_de_prueba(informe):
-        memoria = BytesIO()
-        pagina = canvas.Canvas(memoria)
-        pagina.drawString(72, 720, informe.resultados)
-        pagina.save()
-        return memoria.getvalue()
-
     @classmethod
     def setUpTestData(cls):
         usuario = get_user_model()
@@ -80,9 +71,7 @@ class DocumentoInformeTests(TestCase):
     def setUp(self):
         self.url = reverse('informes:documento', kwargs={'id_informe': self.informe.pk})
 
-    @patch('apps.informes.views.aprobacion.generar_pdf_informe')
-    def test_director_visualiza_pdf_y_puede_descargarlo(self, generar):
-        generar.side_effect = self.pdf_de_prueba
+    def test_director_visualiza_y_descarga_el_pdf_oficial(self):
         self.client.force_login(self.director)
         pagina = self.client.get(reverse('informes:aprobacion'))
         self.assertContains(pagina, self.url)
@@ -92,11 +81,17 @@ class DocumentoInformeTests(TestCase):
         self.assertEqual(vista.status_code, 200)
         self.assertEqual(vista['Content-Type'], 'application/pdf')
         self.assertIn('inline', vista['Content-Disposition'])
-        self.assertIn('Resultados visibles', PdfReader(BytesIO(vista.content)).pages[0].extract_text())
         self.assertIn('attachment', descarga['Content-Disposition'])
-        self.assertIn('Resultados visibles', PdfReader(BytesIO(descarga.content)).pages[0].extract_text())
-        self.assertEqual(generar.call_count, 2)
-        self.assertEqual(generar.call_args.args[0].pk, self.informe.pk)
+        self.assertIn('informe_INF-B1F.pdf', descarga['Content-Disposition'])
+        for respuesta in (vista, descarga):
+            self.assertTrue(respuesta.content.startswith(b'%PDF-'))
+            texto = ' '.join(
+                pagina.extract_text() or ''
+                for pagina in PdfReader(BytesIO(respuesta.content)).pages
+            )
+            for campo in ('INF-B1F', 'estudiante_pdf', 'Resultados visibles',
+                          'Conclusiones', 'Recomendaciones'):
+                self.assertIn(campo, texto)
         self.assertEqual(Auditoria.objects.filter(
             accion='documento_informe', resultado=RESULTADO_EXITO,
             id_registro_afectado=self.informe.pk,
@@ -130,6 +125,20 @@ class DocumentoInformeTests(TestCase):
             id_registro_afectado=self.informe.pk,
         ).exists())
 
-    def test_generador_aun_no_integrado_muestra_documento_no_disponible(self):
+    @patch('apps.informes.views.aprobacion.generar_pdf_informe', return_value=b'no es un PDF')
+    def test_generador_con_respuesta_invalida_muestra_documento_no_disponible(self, generar):
         self.client.force_login(self.director)
-        self.assertEqual(self.client.get(self.url).status_code, 503)
+        respuesta = self.client.get(self.url)
+        self.assertContains(
+            respuesta, 'El documento del informe no está disponible.', status_code=503,
+        )
+        self.assertTrue(Auditoria.objects.filter(
+            accion='intento_documento_informe', resultado=RESULTADO_FALLO,
+            id_registro_afectado=self.informe.pk,
+        ).exists())
+
+    def test_informe_archivado_no_se_puede_consultar(self):
+        self.informe.archivado = True
+        self.informe.save(update_fields=['archivado'])
+        self.client.force_login(self.director)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
