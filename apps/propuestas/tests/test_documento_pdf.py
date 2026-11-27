@@ -1,128 +1,169 @@
-"""SISTRA-01 · Pruebas unitarias para la generación del documento PDF de la propuesta.
+"""SISTRA-01 · Pruebas de generación del documento PDF de la propuesta.
 
 Verifica:
-1. Generación de PDF con propuesta completa (código, estudiante, carrera, periodo,
-   fechas y los 16 campos del formulario) y cronograma de actividades, extrayendo
-   los textos con pypdf para comprobar su presencia.
+1. Generación de PDF con una Propuesta real en base de pruebas (código, estudiante,
+   carrera, periodo, fechas, los 16 campos del formulario y cronograma de actividades),
+   extrayendo los textos con pypdf para comprobar su presencia.
 2. Manejo seguro de caracteres especiales XML/HTML (<b>, &, <, >, ", '):
    el PDF se genera sin errores y muestra el texto tal cual (literal).
 3. Propuesta sin fechas definidas: se genera correctamente sin lanzar excepciones.
 4. Propuesta sin cronograma: se genera correctamente omitiendo la sección de cronograma.
-5. Funciones modulares y reutilizables (estilos, encabezado, tabla de campos) para
-   su aprovechamiento en informe de Trabajo Social (RG-10).
+5. Funciones modulares y reutilizables (estilos, encabezado, tabla de campos con
+   KeepTogether, construcción del documento con texto de pie configurable) para su
+   aprovechamiento en el informe de Trabajo Social (RG-10).
 """
 
 import io
-from datetime import date
-from unittest.mock import MagicMock
+from datetime import date, timedelta
 
-from django.test import SimpleTestCase
+from django.contrib.auth import get_user_model
+from django.test import SimpleTestCase, TestCase
+from django.utils import timezone
 from pypdf import PdfReader
+from reportlab.platypus import KeepTogether
 
-from apps.propuestas.models import SectorEntidad
+from apps.parametrizacion.models import (
+    Carrera,
+    EstadoPeriodo,
+    Facultad,
+    PeriodoAcademico,
+)
+from apps.personas.models import (
+    EstadoInscripcion,
+    Estudiante,
+    EstudianteCarrera,
+)
+from apps.procesos.models import EstadoAvance, ProcesoTrabajoSocial
+from apps.propuestas.models import ActividadCronograma, Propuesta, SectorEntidad
 from apps.propuestas.services.documento_pdf import (
-    CAMPOS_FORMULARIO_PROPUESTA,
     _formatear_fecha,
     _texto_seguro,
+    construir_documento_pdf,
     construir_encabezado_pdf,
     construir_tabla_campos,
     construir_tabla_cronograma,
     generar_pdf_propuesta,
     obtener_estilos_pdf,
 )
+from apps.usuarios.models import Estado, Rol
+
+Usuario = get_user_model()
 
 
-class GenerarPdfPropuestaTests(SimpleTestCase):
-    """Pruebas para generar_pdf_propuesta y sus componentes auxiliares."""
+class GenerarPdfPropuestaModeloRealTests(TestCase):
+    """Pruebas de integración de generar_pdf_propuesta con Propuesta real en BD."""
 
-    def _crear_propuesta_mock_completa(self):
-        """Crea un objeto mock de propuesta con todos los atributos y relaciones."""
-        propuesta = MagicMock()
-        propuesta.codigo = "PROP-2026-001"
-        propuesta.fecha_inicio = date(2026, 2, 1)
-        propuesta.fecha_fin = date(2026, 6, 30)
+    @classmethod
+    def setUpTestData(cls):
+        hoy = timezone.localdate()
+        cls.rol_estudiante, _ = Rol.objects.get_or_create(nombre="Estudiante")
+        cls.facultad = Facultad.objects.create(
+            nombre="Facultad de Ingenierías y Arquitectura",
+            estado=Estado.ACTIVO,
+        )
+        cls.carrera = Carrera.objects.create(
+            facultad=cls.facultad,
+            nombre="Ingeniería de Sistemas",
+            codigo="SIS-PDF-01",
+            estado=Estado.ACTIVO,
+        )
+        cls.periodo = PeriodoAcademico.objects.create(
+            nombre="2026-1",
+            fecha_inicio=hoy - timedelta(days=30),
+            fecha_fin=hoy + timedelta(days=120),
+            fecha_cierre_propuesta=hoy + timedelta(days=40),
+            fecha_cierre_informe=hoy + timedelta(days=100),
+            estado=EstadoPeriodo.VIGENTE,
+        )
+        cls.usuario = Usuario.objects.create_user(
+            correo_institucional="laura.pdf@unipamplona.edu.co",
+            password="Password123!",
+            nombre="Laura Marcela Pérez Gómez",
+            cedula="1098777001",
+            nombre_usuario="laura.pdf",
+            rol=cls.rol_estudiante,
+            requiere_cambio_contrasena=False,
+        )
+        cls.estudiante = Estudiante.objects.create(usuario=cls.usuario)
+        cls.inscripcion = EstudianteCarrera.objects.create(
+            estudiante=cls.estudiante,
+            carrera=cls.carrera,
+            fecha_registro=hoy - timedelta(days=20),
+            estado=EstadoInscripcion.ACTIVO,
+        )
+        cls.proceso = ProcesoTrabajoSocial.objects.create(
+            estudiante_carrera=cls.inscripcion,
+            fecha_inicio=timezone.now() - timedelta(days=15),
+            estado=EstadoAvance.EN_CURSO,
+        )
 
-        # 16 campos del formulario oficial
-        propuesta.titulo = "Capacitación Digital Comunitaria"
-        propuesta.entidad = "Fundación Esperanza Viva"
-        propuesta.sector_entidad = SectorEntidad.PRIVADO
-        propuesta.poblacion_beneficiada = "120 familias de la zona"
-        propuesta.identificacion_poblacion = "Madres cabeza de hogar y jóvenes"
-        propuesta.resena_historica = "Organización fundada en 2010 dedicada al desarrollo social"
-        propuesta.identificacion_necesidad = "Brecha digital y falta de acceso a herramientas informáticas"
-        propuesta.justificacion = "La formación tecnológica mejora la empleabilidad comunitaria"
-        propuesta.objetivos = "Capacitar a 120 personas en habilidades digitales básicas"
-        propuesta.referente_teorico = "Teoría del empoderamiento comunitario y alfabetización digital"
-        propuesta.propuesta_social = "Talleres prácticos semanales con módulos modulares"
-        propuesta.impacto_social = "Incremento en un 40% en inserción laboral de participantes"
-        propuesta.zona = "Urbana"
-        propuesta.area = "Desarrollo Social y Comunitario"
-        propuesta.sector = "Tecnología Educativa"
-        propuesta.unidad = "Barrio San Martín"
-
-        # Relación con Estudiante, Carrera y Periodo
-        estudiante = MagicMock()
-        estudiante.usuario.nombre = "Laura Marcela Pérez Gómez"
-        carrera = MagicMock()
-        carrera.nombre = "Ingeniería de Sistemas"
-        estudiante_carrera = MagicMock()
-        estudiante_carrera.estudiante = estudiante
-        estudiante_carrera.carrera = carrera
-
-        proceso = MagicMock()
-        proceso.estudiante_carrera = estudiante_carrera
-        propuesta.proceso = proceso
-
-        periodo = MagicMock()
-        periodo.nombre = "2026-1"
-        propuesta.periodo_academico = periodo
-
-        # Cronograma con 2 actividades
-        act1 = MagicMock()
-        act1.orden = 1
-        act1.nombre = "Diagnóstico y convocatoria"
-        act1.descripcion = "Inscripción de beneficiarios y prueba diagnóstica"
-        act1.fecha_inicio = date(2026, 2, 1)
-        act1.fecha_fin = date(2026, 2, 28)
-        act1.responsable = "Laura Pérez"
-
-        act2 = MagicMock()
-        act2.orden = 2
-        act2.nombre = "Ejecución de talleres"
-        act2.descripcion = "Módulos de herramientas ofimáticas"
-        act2.fecha_inicio = date(2026, 3, 1)
-        act2.fecha_fin = date(2026, 5, 31)
-        act2.responsable = "Equipo facilitador"
-
-        propuesta.cronograma.all.return_value.order_by.return_value = [act1, act2]
-
-        return propuesta
+    def _crear_propuesta_completa(self, codigo: str = "PROP-2026-001") -> Propuesta:
+        return Propuesta.objects.create(
+            proceso=self.proceso,
+            periodo_academico=self.periodo,
+            codigo=codigo,
+            fecha_inicio=date(2026, 2, 1),
+            fecha_fin=date(2026, 6, 30),
+            titulo="Capacitación Digital Comunitaria",
+            entidad="Fundación Esperanza Viva",
+            sector_entidad=SectorEntidad.PRIVADO,
+            poblacion_beneficiada="120 familias de la zona",
+            identificacion_poblacion="Madres cabeza de hogar y jóvenes",
+            resena_historica="Organización fundada en 2010 dedicada al desarrollo social",
+            identificacion_necesidad="Brecha digital y falta de acceso a herramientas informáticas",
+            justificacion="La formación tecnológica mejora la empleabilidad comunitaria",
+            objetivos="Capacitar a 120 personas en habilidades digitales básicas",
+            referente_teorico="Teoría del empoderamiento comunitario y alfabetización digital",
+            propuesta_social="Talleres prácticos semanales con módulos modulares",
+            impacto_social="Incremento en un 40% en inserción laboral de participantes",
+            zona="Urbana",
+            area="Desarrollo Social y Comunitario",
+            sector="Tecnología Educativa",
+            unidad="Barrio San Martín",
+        )
 
     def test_generar_pdf_propuesta_completa_con_cronograma(self):
-        """Verifica que se genera el PDF de una propuesta completa y que pypdf extrae sus textos."""
-        propuesta = self._crear_propuesta_mock_completa()
+        """Verifica que se genera el PDF de una Propuesta real completa y pypdf extrae sus textos."""
+        propuesta = self._crear_propuesta_completa()
+        ActividadCronograma.objects.create(
+            propuesta=propuesta,
+            orden=1,
+            nombre="Diagnóstico y convocatoria",
+            descripcion="Inscripción de beneficiarios y prueba diagnóstica",
+            fecha_inicio=date(2026, 2, 1),
+            fecha_fin=date(2026, 2, 28),
+            responsable="Laura Pérez",
+        )
+        ActividadCronograma.objects.create(
+            propuesta=propuesta,
+            orden=2,
+            nombre="Ejecución de talleres",
+            descripcion="Módulos de herramientas ofimáticas",
+            fecha_inicio=date(2026, 3, 1),
+            fecha_fin=date(2026, 5, 31),
+            responsable="Equipo facilitador",
+        )
 
         pdf_bytes = generar_pdf_propuesta(propuesta)
 
-        # 1. Validar que retorna bytes de PDF
         self.assertIsInstance(pdf_bytes, bytes)
         self.assertGreater(len(pdf_bytes), 0)
         self.assertTrue(pdf_bytes.startswith(b"%PDF"))
 
-        # 2. Extraer texto usando pypdf
         reader = PdfReader(io.BytesIO(pdf_bytes))
         self.assertGreater(len(reader.pages), 0)
         texto_completo = "".join(pagina.extract_text() or "" for pagina in reader.pages)
 
-        # 3. Comprobar que los metadatos aparecen en el texto
+        # Metadatos y pie de página
         self.assertIn("PROP-2026-001", texto_completo)
         self.assertIn("Laura Marcela Pérez Gómez", texto_completo)
         self.assertIn("Ingeniería de Sistemas", texto_completo)
         self.assertIn("2026-1", texto_completo)
         self.assertIn("01/02/2026", texto_completo)
         self.assertIn("30/06/2026", texto_completo)
+        self.assertIn("Propuesta de Trabajo Social", texto_completo)
 
-        # 4. Comprobar que los 16 campos aparecen en el texto
+        # 16 campos del formulario
         self.assertIn("Capacitación Digital Comunitaria", texto_completo)
         self.assertIn("Fundación Esperanza Viva", texto_completo)
         self.assertIn("Privado", texto_completo)
@@ -140,7 +181,7 @@ class GenerarPdfPropuestaTests(SimpleTestCase):
         self.assertIn("Tecnología Educativa", texto_completo)
         self.assertIn("Barrio San Martín", texto_completo)
 
-        # 5. Comprobar que las actividades del cronograma aparecen
+        # Cronograma de actividades
         self.assertIn("CRONOGRAMA DE ACTIVIDADES", texto_completo)
         self.assertIn("Diagnóstico y convocatoria", texto_completo)
         self.assertIn("Ejecución de talleres", texto_completo)
@@ -148,15 +189,10 @@ class GenerarPdfPropuestaTests(SimpleTestCase):
 
     def test_generar_pdf_propuesta_caracteres_especiales_html_y_ampersand(self):
         """Verifica que un campo con <b> o & no rompe ReportLab y muestra el texto tal cual."""
-        propuesta = self._crear_propuesta_mock_completa()
-
-        # Insertar etiquetas HTML y caracteres especiales en varios campos
-        texto_con_etiquetas = "Investigación sobre <b>impacto social</b> & desarrollo comunitario"
-        texto_con_ampersand = "Sección de CyT & Innovación: <Prueba de escape>"
-
-        propuesta.titulo = texto_con_etiquetas
-        propuesta.justificacion = texto_con_ampersand
-        propuesta.cronograma = None  # Sin cronograma en este caso
+        propuesta = self._crear_propuesta_completa(codigo="PROP-2026-002")
+        propuesta.titulo = "Investigación sobre <b>impacto social</b> & desarrollo comunitario"
+        propuesta.justificacion = "Sección de CyT & Innovación: <Prueba de escape>"
+        propuesta.save(update_fields=["titulo", "justificacion"])
 
         pdf_bytes = generar_pdf_propuesta(propuesta)
 
@@ -166,16 +202,16 @@ class GenerarPdfPropuestaTests(SimpleTestCase):
         reader = PdfReader(io.BytesIO(pdf_bytes))
         texto_completo = "".join(pagina.extract_text() or "" for pagina in reader.pages)
 
-        # Debe mostrarse el texto literal con las etiquetas y el ampersand
         self.assertIn("<b>impacto social</b>", texto_completo)
         self.assertIn("&", texto_completo)
         self.assertIn("<Prueba de escape>", texto_completo)
 
     def test_generar_pdf_propuesta_sin_fechas_no_falla(self):
         """Una propuesta sin fechas (fechas en None) no debe fallar y debe generar un PDF válido."""
-        propuesta = self._crear_propuesta_mock_completa()
+        propuesta = self._crear_propuesta_completa(codigo="PROP-2026-003")
         propuesta.fecha_inicio = None
         propuesta.fecha_fin = None
+        propuesta.save(update_fields=["fecha_inicio", "fecha_fin"])
 
         pdf_bytes = generar_pdf_propuesta(propuesta)
 
@@ -184,14 +220,11 @@ class GenerarPdfPropuestaTests(SimpleTestCase):
 
         reader = PdfReader(io.BytesIO(pdf_bytes))
         texto_completo = "".join(pagina.extract_text() or "" for pagina in reader.pages)
-
-        # Debe contener el texto alternativo para fechas ausentes
         self.assertIn("No definida", texto_completo)
 
     def test_generar_pdf_propuesta_sin_cronograma(self):
         """Una propuesta sin cronograma se genera correctamente omitiendo la sección."""
-        propuesta = self._crear_propuesta_mock_completa()
-        propuesta.cronograma.all.return_value.order_by.return_value = []
+        propuesta = self._crear_propuesta_completa(codigo="PROP-2026-004")
 
         pdf_bytes = generar_pdf_propuesta(propuesta)
 
@@ -200,9 +233,11 @@ class GenerarPdfPropuestaTests(SimpleTestCase):
 
         reader = PdfReader(io.BytesIO(pdf_bytes))
         texto_completo = "".join(pagina.extract_text() or "" for pagina in reader.pages)
-
-        # No debe aparecer el encabezado de cronograma si no hay actividades
         self.assertNotIn("CRONOGRAMA DE ACTIVIDADES", texto_completo)
+
+
+class ComponentesComunesPdfTests(SimpleTestCase):
+    """Pruebas unitarias para los componentes reutilizables de documento_pdf."""
 
     def test_partes_comunes_reutilizables_para_informe(self):
         """Verifica que las funciones modulares comunes se puedan invocar independientemente."""
@@ -211,13 +246,13 @@ class GenerarPdfPropuestaTests(SimpleTestCase):
         self.assertIn("CampoTitulo", estilos)
         self.assertIn("CampoContenido", estilos)
 
-        encabezado = construir_encabezado_pdf(
+        historia = construir_encabezado_pdf(
             titulo="INFORME DE TRABAJO SOCIAL",
             subtitulo="RG-10 · Informe final",
             metadatos=[("Código", "INF-001"), ("Estudiante", "Carlos Ruiz")],
             estilos=estilos,
         )
-        self.assertGreater(len(encabezado), 0)
+        self.assertGreater(len(historia), 0)
 
         campos_informe = [
             ("Resultados", "Se cumplieron los objetivos al 100%"),
@@ -225,10 +260,22 @@ class GenerarPdfPropuestaTests(SimpleTestCase):
             ("Recomendaciones", "Continuar el programa"),
         ]
         tabla_campos = construir_tabla_campos(campos_informe, estilos=estilos)
-        self.assertGreater(len(tabla_campos), 0)
+        self.assertEqual(len(tabla_campos), 3)
+        self.assertTrue(all(isinstance(item, KeepTogether) for item in tabla_campos))
+        historia.extend(tabla_campos)
 
         crono_vacio = construir_tabla_cronograma([], estilos=estilos)
         self.assertEqual(crono_vacio, [])
+
+        pie_informe = "SISTRA · Universidad de Pamplona — Informe de Trabajo Social"
+        pdf_bytes = construir_documento_pdf(historia, pie_texto=pie_informe)
+        self.assertTrue(pdf_bytes.startswith(b"%PDF"))
+
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        texto_completo = "".join(pagina.extract_text() or "" for pagina in reader.pages)
+        self.assertIn("INFORME DE TRABAJO SOCIAL", texto_completo)
+        self.assertIn("Informe de Trabajo Social", texto_completo)
+        self.assertIn("Página 1 de 1", texto_completo)
 
     def test_texto_seguro_helper(self):
         """Verifica la función interna de escape seguro de textos."""

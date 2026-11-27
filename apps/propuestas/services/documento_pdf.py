@@ -15,12 +15,12 @@ documentos del sistema, tales como el informe de Trabajo Social (RG-10).
 from __future__ import annotations
 
 import io
+from functools import partial
 from typing import Any
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
 from reportlab.platypus import (
     HRFlowable,
@@ -96,105 +96,35 @@ def _formatear_fecha(fecha: Any) -> str:
     return str(fecha)
 
 
-def _es_mock(obj: Any) -> bool:
-    """Determina si un objeto es un Mock para evitar evaluarlo como string '<MagicMock...>'."""
-    return hasattr(obj, "_mock_name") or hasattr(obj, "_mock_wraps")
-
-
 def _obtener_nombre_estudiante(propuesta: Any) -> str:
-    """Obtiene el nombre completo del estudiante de forma tolerante a mocks u ORM."""
-    val = getattr(propuesta, "estudiante_nombre", None)
-    if isinstance(val, str) and val.strip():
-        return val.strip()
-
-    # 1. Buscar a través del proceso (estructura ORM estándar de SISTRA)
+    """Obtiene el nombre completo del estudiante desde la relación con ProcesoTrabajoSocial."""
     proceso = getattr(propuesta, "proceso", None)
-    if proceso is not None:
-        ec = getattr(proceso, "estudiante_carrera", None)
-        if ec is not None:
-            est = getattr(ec, "estudiante", None)
-            if est is not None:
-                u = getattr(est, "usuario", None)
-                if u is not None:
-                    nombre = getattr(u, "nombre", None)
-                    if isinstance(nombre, str) and nombre.strip():
-                        return nombre.strip()
-                nombre_est = getattr(est, "nombre", None)
-                if isinstance(nombre_est, str) and nombre_est.strip():
-                    return nombre_est.strip()
-                if not _es_mock(est):
-                    return str(est)
-
-    # 2. Atributo directo estudiante
-    est = getattr(propuesta, "estudiante", None)
-    if est is not None:
-        u = getattr(est, "usuario", None)
-        if u is not None:
-            nombre = getattr(u, "nombre", None)
-            if isinstance(nombre, str) and nombre.strip():
-                return nombre.strip()
-        nombre_est = getattr(est, "nombre", None)
-        if isinstance(nombre_est, str) and nombre_est.strip():
-            return nombre_est.strip()
-        if not _es_mock(est):
-            return str(est)
-
+    ec = getattr(proceso, "estudiante_carrera", None) if proceso is not None else None
+    est = getattr(ec, "estudiante", None) if ec is not None else None
+    usuario = getattr(est, "usuario", None) if est is not None else None
+    nombre = getattr(usuario, "nombre", None) if usuario is not None else None
+    if isinstance(nombre, str) and nombre.strip():
+        return nombre.strip()
     return "No asignado"
 
 
 def _obtener_nombre_carrera(propuesta: Any) -> str:
-    """Obtiene el nombre de la carrera de forma tolerante a mocks u ORM."""
-    val = getattr(propuesta, "carrera_nombre", None)
-    if isinstance(val, str) and val.strip():
-        return val.strip()
-
-    # 1. A través de proceso.estudiante_carrera.carrera
+    """Obtiene el nombre de la carrera desde la relación con ProcesoTrabajoSocial."""
     proceso = getattr(propuesta, "proceso", None)
-    if proceso is not None:
-        ec = getattr(proceso, "estudiante_carrera", None)
-        if ec is not None:
-            carr = getattr(ec, "carrera", None)
-            if carr is not None:
-                nombre = getattr(carr, "nombre", None)
-                if isinstance(nombre, str) and nombre.strip():
-                    return nombre.strip()
-                if not _es_mock(carr):
-                    return str(carr)
-
-    # 2. Atributo directo carrera
-    carr = getattr(propuesta, "carrera", None)
-    if carr is not None:
-        nombre = getattr(carr, "nombre", None)
-        if isinstance(nombre, str) and nombre.strip():
-            return nombre.strip()
-        if not _es_mock(carr):
-            return str(carr)
-
+    ec = getattr(proceso, "estudiante_carrera", None) if proceso is not None else None
+    carrera = getattr(ec, "carrera", None) if ec is not None else None
+    nombre = getattr(carrera, "nombre", None) if carrera is not None else None
+    if isinstance(nombre, str) and nombre.strip():
+        return nombre.strip()
     return "No asignada"
 
 
 def _obtener_nombre_periodo(propuesta: Any) -> str:
-    """Obtiene el nombre del periodo académico de forma tolerante."""
-    val = getattr(propuesta, "periodo_nombre", None)
-    if isinstance(val, str) and val.strip():
-        return val.strip()
-
+    """Obtiene el nombre del periodo académico asociado a la propuesta."""
     periodo = getattr(propuesta, "periodo_academico", None)
-    if periodo is not None:
-        nombre = getattr(periodo, "nombre", None)
-        if isinstance(nombre, str) and nombre.strip():
-            return nombre.strip()
-        if not _es_mock(periodo):
-            return str(periodo)
-
-    p = getattr(propuesta, "periodo", None)
-    if p is not None:
-        nombre = getattr(p, "nombre", None)
-        if isinstance(nombre, str) and nombre.strip():
-            return nombre.strip()
-        if not _es_mock(p):
-            return str(p)
-
+    nombre = getattr(periodo, "nombre", None) if periodo is not None else None
+    if isinstance(nombre, str) and nombre.strip():
+        return nombre.strip()
     return "No asignado"
 
 
@@ -409,8 +339,7 @@ def construir_tabla_campos(
                 ]
             )
         )
-        elementos.append(tabla_campo)
-        elementos.append(Spacer(1, 5))
+        elementos.append(KeepTogether([tabla_campo, Spacer(1, 5)]))
 
     return elementos
 
@@ -429,7 +358,7 @@ def construir_tabla_cronograma(
     # Verificar si es iterable no vacío
     try:
         lista_actividades = list(actividades)
-    except Exception:
+    except TypeError:
         return []
 
     if not lista_actividades:
@@ -501,8 +430,14 @@ def construir_tabla_cronograma(
 class _CanvasConNumeracion(canvas.Canvas):
     """Canvas de ReportLab que calcula el número total de páginas en dos pasadas."""
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *args: Any,
+        pie_texto: str = "SISTRA · Universidad de Pamplona",
+        **kwargs: Any,
+    ) -> None:
         super().__init__(*args, **kwargs)
+        self._pie_texto = pie_texto
         self._saved_page_states: list[dict[str, Any]] = []
 
     def showPage(self) -> None:
@@ -527,12 +462,45 @@ class _CanvasConNumeracion(canvas.Canvas):
         self.setLineWidth(0.5)
         self.line(36, 32, 576, 32)
 
-        texto_izq = "SISTRA · Universidad de Pamplona — Propuesta de Trabajo Social"
+        texto_izq = self._pie_texto or "SISTRA · Universidad de Pamplona"
         texto_der = f"Página {self._pageNumber} de {total_paginas}"
 
         self.drawString(36, 20, texto_izq)
         self.drawRightString(576, 20, texto_der)
         self.restoreState()
+
+
+def construir_documento_pdf(
+    historia: list[Any],
+    pie_texto: str = "SISTRA · Universidad de Pamplona",
+) -> bytes:
+    """Crea el documento PDF tamaño carta con márgenes estándar y numeración de páginas.
+
+    Función común reutilizable para Propuesta e Informe de Trabajo Social (RG-10).
+
+    Args:
+        historia: Lista de Flowables de ReportLab que componen el cuerpo del documento.
+        pie_texto: Texto institucional que aparece a la izquierda del pie de página.
+
+    Returns:
+        bytes: Contenido binario del documento PDF generado en memoria.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=36,
+        bottomMargin=45,
+    )
+    doc.build(
+        historia,
+        canvasmaker=partial(_CanvasConNumeracion, pie_texto=pie_texto),
+    )
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    return pdf_bytes
 
 
 # ---------------------------------------------------------------------------
@@ -552,21 +520,11 @@ def generar_pdf_propuesta(propuesta: Any) -> bytes:
     de datos (decisión arquitectónica M4).
 
     Args:
-        propuesta: Instancia de Propuesta o equivalente con sus atributos y relaciones.
+        propuesta: Instancia de Propuesta con sus atributos y relaciones.
 
     Returns:
         bytes: Contenido binario del documento PDF generado.
     """
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=letter,
-        leftMargin=36,
-        rightMargin=36,
-        topMargin=36,
-        bottomMargin=45,
-    )
-
     estilos = obtener_estilos_pdf()
     historia: list[Any] = []
 
@@ -606,25 +564,14 @@ def generar_pdf_propuesta(propuesta: Any) -> bytes:
     historia.extend(construir_tabla_campos(campos_extraidos, estilos=estilos))
 
     # 3. Cronograma de actividades si existe
-    actividades = None
-    if hasattr(propuesta, "cronograma"):
-        crono_rel = propuesta.cronograma
-        if hasattr(crono_rel, "all"):
-            try:
-                actividades = crono_rel.all().order_by("orden")
-            except Exception:
-                actividades = crono_rel.all()
-        elif isinstance(crono_rel, (list, tuple)):
-            actividades = crono_rel
-    elif hasattr(propuesta, "actividades"):
-        actividades = propuesta.actividades
-
-    if actividades:
-        historia.extend(construir_tabla_cronograma(actividades, estilos=estilos))
+    crono_rel = getattr(propuesta, "cronograma", None)
+    if crono_rel is not None and hasattr(crono_rel, "all"):
+        actividades = crono_rel.all().order_by("orden")
+        if actividades:
+            historia.extend(construir_tabla_cronograma(actividades, estilos=estilos))
 
     # 4. Compilar documento en memoria
-    doc.build(historia, canvasmaker=_CanvasConNumeracion)
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
-
-    return pdf_bytes
+    return construir_documento_pdf(
+        historia,
+        pie_texto="SISTRA · Universidad de Pamplona — Propuesta de Trabajo Social",
+    )
