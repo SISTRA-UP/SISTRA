@@ -520,6 +520,7 @@ def construir_contexto_director(usuario, filtros):
         'tipo_panel': 'director',
         'periodo_vigente': _periodo_vigente(),
         'asignaciones_director': asignaciones,
+        'umbrales': umbrales,
         'tarjetas': tarjetas,
         'filas_estudiantes': filas_estudiantes,
         'notificaciones': notificaciones,
