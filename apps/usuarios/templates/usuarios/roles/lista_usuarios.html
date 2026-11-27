@@ -98,6 +98,15 @@
                       </button>
                     </form>
                   {% endif %}
+                  {% if perms.usuario.editar and usuario.requiere_cambio_contrasena %}
+                    <form method="post" action="{% url 'usuarios:usuario_reenviar' usuario.pk %}"
+                          onsubmit="return confirm('¿Enviarle una contraseña temporal nueva a {{ usuario.nombre|escapejs }}? La anterior deja de servir.');">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-outline-secondary">
+                        Reenviar credenciales
+                      </button>
+                    </form>
+                  {% endif %}
                   {% if perms.usuario.eliminar and usuario.pk != request.user.pk and not usuario.tiene_perfil %}
                     <form method="post" action="{% url 'usuarios:usuario_eliminar' usuario.pk %}"
                           onsubmit="return confirm('¿Eliminar a {{ usuario.nombre|escapejs }}? Si tiene información registrada, el sistema lo impedirá y podrás inactivarlo.');">

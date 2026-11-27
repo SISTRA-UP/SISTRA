@@ -11,11 +11,19 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.mail import send_mail as send_mail_real
+from django.core.mail.backends.locmem import EmailBackend
+from django.db import DatabaseError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.parametrizacion.models import Carrera, Facultad, Parametro
+from apps.personas.forms.registro_estudiantes import (
+    enviar_credenciales,
+    maximo_de_filas_csv,
+    reenviar_credenciales,
+)
 from apps.personas.models import (
     Director,
     DirectorCarrera,
@@ -388,6 +396,34 @@ class CorreoDeCredenciales(BaseRegistro):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ['laura.pena@unipamplona.edu.co'])
 
+    def test_el_texto_es_neutro_y_conserva_datos_de_acceso_para_todos_los_roles(self):
+        rol_nuevo, _ = Rol.objects.get_or_create(nombre='Coordinador')
+        roles = (self.rol_director, self.rol_administrador, rol_nuevo)
+
+        for numero, rol in enumerate(roles, start=1):
+            correo = f'cuenta.{numero}@unipamplona.edu.co'
+            usuario = self.crear_usuario(
+                correo, f'Usuario {numero}', f'100000006{numero}', rol
+            )
+
+            with self.subTest(rol=rol.nombre):
+                mail.outbox.clear()
+                enviado = enviar_credenciales(usuario, 'ClaveTemporalDePrueba')
+
+                self.assertIs(enviado, True)
+                self.assertEqual(len(mail.outbox), 1)
+                self.assertEqual(mail.outbox[0].to, [correo])
+                cuerpo = mail.outbox[0].body
+                self.assertIn('Ya tienes cuenta en SISTRA.', cuerpo)
+                self.assertNotIn('Trabajo Social', cuerpo)
+                self.assertIn(correo, cuerpo)
+                self.assertIn('ClaveTemporalDePrueba', cuerpo)
+                self.assertIn(
+                    'Por seguridad, el sistema te pedirá cambiarla la primera vez '
+                    'que ingreses.',
+                    cuerpo,
+                )
+
     def test_el_correo_lleva_el_usuario_de_ingreso_y_la_contrasena(self):
         mail.outbox.clear()
         with patch(
@@ -427,6 +463,567 @@ class CorreoDeCredenciales(BaseRegistro):
         ):
             self.registrar()
         self.assertEqual(self.inscripciones_de('laura.pena@unipamplona.edu.co').count(), 1)
+
+
+class UnaSolaConexionPorLote(BaseRegistro):
+    """SIS-71 · E12 · el cargue abre una conexión de correo, no una por fila.
+
+    `enviar_credenciales` llamaba a `send_mail` sin conexión, así que Django le
+    creaba una por llamada: `connection or get_connection(...)`. Y el backend
+    SMTP solo cierra la conexión **si la abrió él** (`if new_conn_created:
+    self.close()`), de modo que sin un `open()` previo cada fila abría y cerraba
+    la suya. Con un servidor real eso es un ida y vuelta por estudiante.
+    """
+
+    def filas_de(self, cuantas):
+        return [
+            [
+                f'Alumno {numero}',
+                f'20000{numero:05d}',
+                f'alumno.{numero}@unipamplona.edu.co',
+                '',
+            ]
+            for numero in range(1, cuantas + 1)
+        ]
+
+    def espiar_conexiones(self):
+        """Cuenta cada conexión que se crea, por cualquier camino.
+
+        Se espía `django.core.mail.get_connection` y no el nombre importado en
+        mi módulo porque `send_mail` resuelve ese mismo global en cada llamada:
+        así se ven tanto las conexiones que abre Django por su cuenta como la
+        del lote.
+        """
+        from django.core import mail as modulo_de_correo
+
+        original = modulo_de_correo.get_connection
+        creadas = []
+
+        def espia(*args, **kwargs):
+            conexion = original(*args, **kwargs)
+            creadas.append(conexion)
+            return conexion
+
+        return patch.object(
+            modulo_de_correo, 'get_connection', side_effect=espia
+        ), creadas
+
+    def auditorias_de_envio(self):
+        return Auditoria.objects.filter(accion='Enviar credenciales')
+
+    # --- C1, C2 y C3 · cien filas, cien correos, una conexión ---
+
+    def test_cien_filas_mandan_cien_correos_con_una_sola_conexion(self):
+        espia, creadas = self.espiar_conexiones()
+        with espia:
+            respuesta = self.subir(self.csv_de(self.filas_de(100)))
+
+        self.assertEqual(respuesta.context['resumen']['registrados'], 100)
+        self.assertEqual(len(mail.outbox), 100)
+        # Antes de E12 esto daba 100: una conexión por fila.
+        self.assertEqual(len(creadas), 1)
+
+    def test_todos_los_envios_reciben_la_misma_conexion(self):
+        recibidas = []
+
+        def espia_send_mail(*args, **kwargs):
+            recibidas.append(kwargs.get('connection'))
+            return send_mail_real(*args, **kwargs)
+
+        with patch(
+            'apps.personas.forms.registro_estudiantes.send_mail',
+            side_effect=espia_send_mail,
+        ):
+            self.subir(self.csv_de(self.filas_de(4)))
+
+        self.assertEqual(len(recibidas), 4)
+        self.assertNotIn(None, recibidas)
+        self.assertEqual(len({id(c) for c in recibidas}), 1)
+
+    # --- C4 · la conexión se abre una vez y se cierra ---
+
+    def test_la_conexion_se_abre_una_vez_y_se_cierra(self):
+        # Sin el `open()` previo, Django cerraría y reabriría en cada `send_mail`,
+        # porque solo cierra la conexión que abrió él.
+        with patch.object(EmailBackend, 'open', autospec=True) as abrir, \
+                patch.object(EmailBackend, 'close', autospec=True) as cerrar:
+            self.subir(self.csv_de(self.filas_de(4)))
+
+        self.assertEqual(abrir.call_count, 1)
+        self.assertEqual(cerrar.call_count, 1)
+
+    def test_la_conexion_se_cierra_aunque_el_cargue_reviente(self):
+        with patch.object(EmailBackend, 'close', autospec=True) as cerrar, \
+                patch(
+                    'apps.personas.views.registro_estudiantes.registrar_estudiante',
+                    side_effect=RuntimeError('algo se rompió'),
+                ):
+            with self.assertRaises(RuntimeError):
+                self.subir(self.csv_de(self.filas_de(2)))
+
+        self.assertEqual(cerrar.call_count, 1)
+
+    # --- C5 · un fallo no arrastra a los demás ---
+
+    def test_si_un_envio_falla_los_demas_salen_y_el_fallo_queda_auditado(self):
+        def falla_solo_el_segundo(*args, **kwargs):
+            if 'alumno.2@unipamplona.edu.co' in kwargs['recipient_list']:
+                raise OSError('ese buzón rechaza el correo')
+            return send_mail_real(*args, **kwargs)
+
+        with patch(
+            'apps.personas.forms.registro_estudiantes.send_mail',
+            side_effect=falla_solo_el_segundo,
+        ):
+            respuesta = self.subir(self.csv_de(self.filas_de(4)))
+
+        resumen = respuesta.context['resumen']
+        self.assertEqual(resumen['registrados'], 4)
+        self.assertEqual(resumen['sin_correo'], 1)
+        self.assertEqual(len(mail.outbox), 3)
+        self.assertEqual(self.auditorias_de_envio().filter(resultado='Éxito').count(), 3)
+        self.assertEqual(self.auditorias_de_envio().filter(resultado='Fallo').count(), 1)
+        fallida = self.auditorias_de_envio().get(resultado='Fallo')
+        self.assertIn('alumno.2@unipamplona.edu.co', fallida.detalle)
+        # Los cuatro quedaron registrados: el correo no condiciona el registro.
+        self.assertEqual(Usuario.objects.filter(rol=self.rol_estudiante).count(), 4)
+
+    # --- C6 · servidor caído: ni un 500, ni un registro perdido ---
+
+    def test_si_el_servidor_de_correo_esta_caido_el_cargue_no_revienta(self):
+        with patch.object(
+            EmailBackend, 'open', autospec=True, side_effect=OSError('servidor caído')
+        ), patch.object(
+            EmailBackend,
+            'send_messages',
+            autospec=True,
+            side_effect=OSError('servidor caído'),
+        ):
+            respuesta = self.subir(self.csv_de(self.filas_de(3)))
+
+        self.assertEqual(respuesta.status_code, 200)
+        resumen = respuesta.context['resumen']
+        self.assertEqual(resumen['registrados'], 3)
+        self.assertEqual(resumen['sin_correo'], 3)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(self.auditorias_de_envio().count(), 3)
+        self.assertEqual(self.auditorias_de_envio().filter(resultado='Fallo').count(), 3)
+        self.assertContains(respuesta, 'no se les pudo enviar el correo')
+
+    # --- C6b · ni siquiera construir la conexión puede tumbar el cargue ---
+
+    def test_si_la_conexion_no_se_puede_ni_construir_el_cargue_sigue(self):
+        # Lo encontró la revisión: con MAILERS, `get_connection()` lanza
+        # `InvalidMailer` si el .env trae `use_ssl` y `use_tls` a la vez. Antes
+        # de E12 eso caía dentro del try de cada fila; si la construcción
+        # quedara fuera de la guarda, serían 500 y cero estudiantes.
+        from django.core import mail as modulo_de_correo
+
+        with patch.object(
+            modulo_de_correo,
+            'get_connection',
+            side_effect=OSError('configuración de correo inválida'),
+        ):
+            respuesta = self.subir(self.csv_de(self.filas_de(3)))
+
+        self.assertEqual(respuesta.status_code, 200)
+        resumen = respuesta.context['resumen']
+        self.assertEqual(resumen['registrados'], 3)
+        self.assertEqual(resumen['sin_correo'], 3)
+        self.assertEqual(self.auditorias_de_envio().filter(resultado='Fallo').count(), 3)
+        self.assertEqual(Usuario.objects.filter(rol=self.rol_estudiante).count(), 3)
+
+    # --- C5b · una conexión caída no arrastra a las filas siguientes ---
+
+    def test_tras_un_envio_fallido_la_conexion_se_renueva(self):
+        # Django no cierra la conexión que no abrió él, y `open()` devuelve
+        # False mientras el atributo siga puesto: una conexión muerta haría
+        # fallar a todas las filas siguientes. Por eso se renueva.
+        def falla_solo_el_segundo(*args, **kwargs):
+            if 'alumno.2@unipamplona.edu.co' in kwargs['recipient_list']:
+                raise OSError('el servidor cortó la conexión')
+            return send_mail_real(*args, **kwargs)
+
+        with patch.object(EmailBackend, 'open', autospec=True) as abrir, \
+                patch.object(EmailBackend, 'close', autospec=True) as cerrar, \
+                patch(
+                    'apps.personas.forms.registro_estudiantes.send_mail',
+                    side_effect=falla_solo_el_segundo,
+                ):
+            respuesta = self.subir(self.csv_de(self.filas_de(4)))
+
+        # La del lote, más la renovación tras el fallo de la segunda fila.
+        self.assertEqual(abrir.call_count, 2)
+        self.assertEqual(cerrar.call_count, 2)
+        # Y las otras tres salieron igual.
+        self.assertEqual(respuesta.context['resumen']['registrados'], 4)
+        self.assertEqual(len(mail.outbox), 3)
+
+    # --- C7 y C8 · el contrato de `enviar_credenciales` no se mueve ---
+
+    def test_enviar_credenciales_sigue_aceptando_dos_argumentos(self):
+        # Es como la llama `crear_usuario` de apps/usuarios desde SIS-69, y el
+        # contrato dice que esa firma no se puede romper.
+        usuario = self.crear_usuario(
+            'tulio.mora@unipamplona.edu.co', 'Tulio Mora', '1000000055', self.rol_estudiante
+        )
+        self.assertIs(enviar_credenciales(usuario, 'ClaveDePrueba123'), True)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('ClaveDePrueba123', mail.outbox[0].body)
+
+    def test_enviar_credenciales_no_lanza_con_una_conexion_rota(self):
+        usuario = self.crear_usuario(
+            'nidia.soto@unipamplona.edu.co', 'Nidia Soto', '1000000056', self.rol_estudiante
+        )
+        rota = EmailBackend()
+        with patch.object(
+            EmailBackend,
+            'send_messages',
+            autospec=True,
+            side_effect=OSError('servidor caído'),
+        ):
+            self.assertIs(enviar_credenciales(usuario, 'ClaveDePrueba123', rota), False)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_el_registro_uno_a_uno_sigue_mandando_su_correo(self):
+        # Sin lote no hay conexión compartida: una por envío, como siempre.
+        espia, creadas = self.espiar_conexiones()
+        with espia:
+            self.registrar()
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(len(creadas), 1)
+
+
+class ReenvioDeCredencialesDelDirector(BaseRegistro):
+    """SIS-72 · R5 · el Director reenvía, pero solo a estudiantes de su carrera.
+
+    La guarda de carrera no es un extra: sin ella, un Director podría mandar el
+    id de un ADMO a esta ruta y restablecerle la contraseña. Es la misma regla
+    RN-10-04 que ya aplica el resto de la pantalla.
+    """
+
+    CLAVE = 'ClaveReenviadaDePrueba'
+
+    def url_reenviar(self, usuario):
+        return reverse('personas:estudiante_reenviar', args=[usuario.pk])
+
+    def estudiante_de(self, carrera, correo, cedula):
+        """Un estudiante inscrito en `carrera`, con contraseña temporal."""
+        usuario = Usuario.objects.create_user(
+            correo_institucional=correo,
+            password='ClaveDePrueba123',
+            nombre='Estudiante de Prueba',
+            cedula=cedula,
+            nombre_usuario=correo.split('@')[0],
+            rol=self.rol_estudiante,
+            requiere_cambio_contrasena=True,
+        )
+        estudiante = Estudiante.objects.create(usuario=usuario)
+        EstudianteCarrera.objects.create(
+            estudiante=estudiante, carrera=carrera, estado=EstadoInscripcion.ACTIVO
+        )
+        return usuario
+
+    def auditorias(self):
+        return Auditoria.objects.filter(accion='Reenviar credenciales')
+
+    # --- C5 · el resumen del cargue dice a quiénes les falló el correo ---
+
+    def test_el_resumen_lista_a_quienes_no_les_salio_el_correo(self):
+        contenido = self.csv_de(
+            [
+                ['Ana Gil', '2000000001', 'ana.gil@unipamplona.edu.co', ''],
+                ['Beto Ruiz', '2000000002', 'beto.ruiz@unipamplona.edu.co', ''],
+            ]
+        )
+        with patch(
+            'apps.personas.forms.registro_estudiantes.send_mail',
+            side_effect=OSError('servidor caído'),
+        ):
+            respuesta = self.subir(contenido)
+
+        resumen = respuesta.context['resumen']
+        self.assertEqual(resumen['registrados'], 2)
+        self.assertEqual(resumen['sin_correo'], 2)
+        # Antes solo había el número: no se sabía a quiénes.
+        self.assertEqual(len(resumen['sin_correo_detalle']), 2)
+        correos = {fila['correo'] for fila in resumen['sin_correo_detalle']}
+        self.assertEqual(
+            correos,
+            {'ana.gil@unipamplona.edu.co', 'beto.ruiz@unipamplona.edu.co'},
+        )
+        # Y cada uno sale en pantalla con su botón.
+        self.assertContains(respuesta, 'Reenviar credenciales')
+        for fila in resumen['sin_correo_detalle']:
+            self.assertContains(
+                respuesta, self.url_reenviar(Usuario.objects.get(pk=fila['pk']))
+            )
+
+    # --- C6 · el reenvío del Director funciona ---
+
+    def test_el_director_reenvia_a_un_estudiante_de_su_carrera(self):
+        estudiante = self.estudiante_de(
+            self.carrera, 'cira.paz@unipamplona.edu.co', '2000000003'
+        )
+        mail.outbox.clear()
+        with patch(
+            'apps.personas.forms.registro_estudiantes.get_random_string',
+            return_value=self.CLAVE,
+        ):
+            respuesta = self.client.post(self.url_reenviar(estudiante), follow=True)
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(self.CLAVE, mail.outbox[0].body)
+        estudiante.refresh_from_db()
+        self.assertTrue(estudiante.check_password(self.CLAVE))
+        registro = self.auditorias().latest('id_auditoria')
+        self.assertEqual(registro.resultado, 'Éxito')
+        self.assertEqual(registro.usuario, self.director)
+
+    # --- C7 · seguridad: solo los suyos ---
+
+    def test_el_director_no_puede_reenviar_a_un_estudiante_de_otra_carrera(self):
+        ajeno = self.estudiante_de(
+            self.otra_carrera, 'dino.vega@unipamplona.edu.co', '2000000004'
+        )
+        mail.outbox.clear()
+        respuesta = self.client.post(self.url_reenviar(ajeno))
+        self.assertEqual(respuesta.status_code, 404)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(self.auditorias().count(), 0)
+
+    def test_el_director_no_puede_reenviar_a_quien_no_es_estudiante(self):
+        # Un ADMO o otro Director: sin esta guarda, el Director le
+        # restablecería la contraseña a cualquiera.
+        otro = Usuario.objects.create_user(
+            correo_institucional='hugo.jefe@unipamplona.edu.co',
+            password='ClaveDePrueba123',
+            nombre='Hugo Jefe',
+            cedula='1000000088',
+            nombre_usuario='hugo.jefe',
+            rol=self.rol_administrador,
+            requiere_cambio_contrasena=True,
+        )
+        mail.outbox.clear()
+        respuesta = self.client.post(self.url_reenviar(otro))
+        self.assertEqual(respuesta.status_code, 404)
+        self.assertEqual(len(mail.outbox), 0)
+        otro.refresh_from_db()
+        self.assertTrue(otro.check_password('ClaveDePrueba123'))
+
+    def test_el_director_no_puede_reenviar_a_quien_ya_cambio_su_contrasena(self):
+        entrado = self.estudiante_de(
+            self.carrera, 'elsa.moro@unipamplona.edu.co', '2000000005'
+        )
+        entrado.requiere_cambio_contrasena = False
+        entrado.save(update_fields=['requiere_cambio_contrasena'])
+        mail.outbox.clear()
+        self.assertEqual(
+            self.client.post(self.url_reenviar(entrado)).status_code, 404
+        )
+        self.assertEqual(len(mail.outbox), 0)
+
+    # --- C4 del lado del Director · si el correo falla ---
+
+    def test_si_el_correo_falla_el_director_lo_ve_y_queda_auditado(self):
+        estudiante = self.estudiante_de(
+            self.carrera, 'gina.ruiz@unipamplona.edu.co', '2000000007'
+        )
+        anterior = estudiante.password
+        mail.outbox.clear()
+        with patch(
+            'apps.personas.forms.registro_estudiantes.send_mail',
+            side_effect=OSError('servidor caído'),
+        ):
+            respuesta = self.client.post(
+                self.url_reenviar(estudiante), follow=True
+            )
+
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertContains(respuesta, 'alert-warning')
+        self.assertContains(respuesta, 'No se pudo enviar el correo')
+        registro = self.auditorias().latest('id_auditoria')
+        self.assertEqual(registro.resultado, 'Fallo')
+        # La contraseña nueva quedó puesta: el botón se puede volver a pulsar.
+        estudiante.refresh_from_db()
+        self.assertNotEqual(estudiante.password, anterior)
+        self.assertTrue(estudiante.requiere_cambio_contrasena)
+
+    # --- un Director sin carrera asignada no revienta ---
+
+    def test_un_director_sin_carrera_no_reenvia_y_no_revienta(self):
+        estudiante = self.estudiante_de(
+            self.carrera, 'hilda.soto@unipamplona.edu.co', '2000000008'
+        )
+        # Se le quita la asignación: pasa lo mismo que en el resto de la
+        # pantalla, que ya trata este caso.
+        DirectorCarrera.objects.filter(director__usuario=self.director).update(
+            activo=False
+        )
+        mail.outbox.clear()
+        respuesta = self.client.post(self.url_reenviar(estudiante))
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIsNone(respuesta.context['carrera'])
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(self.auditorias().count(), 0)
+
+    # --- C3 de la revisión · dos agujeros más de la guarda ---
+
+    def test_el_director_no_puede_reenviar_a_un_ex_estudiante_promovido(self):
+        # Cambiar de rol NO borra la fila `estudiante` ni sus inscripciones, así
+        # que sin filtrar por rol un ex-estudiante ascendido a Administrador
+        # seguiría pareciendo «de la carrera».
+        promovido = self.estudiante_de(
+            self.carrera, 'ivan.jefe@unipamplona.edu.co', '2000000009'
+        )
+        promovido.rol = self.rol_administrador
+        promovido.save(update_fields=['rol'])
+        mail.outbox.clear()
+
+        respuesta = self.client.post(self.url_reenviar(promovido))
+        self.assertEqual(respuesta.status_code, 404)
+        self.assertEqual(len(mail.outbox), 0)
+        promovido.refresh_from_db()
+        self.assertTrue(promovido.check_password('ClaveDePrueba123'))
+
+    def test_el_director_no_puede_reenviar_a_un_retirado_de_su_carrera(self):
+        retirado = self.estudiante_de(
+            self.carrera, 'juli.mesa@unipamplona.edu.co', '2000000010'
+        )
+        EstudianteCarrera.objects.filter(estudiante__usuario=retirado).update(
+            estado=EstadoInscripcion.FINALIZADO
+        )
+        mail.outbox.clear()
+
+        self.assertEqual(
+            self.client.post(self.url_reenviar(retirado)).status_code, 404
+        )
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_sin_el_permiso_de_registrar_responde_403(self):
+        estudiante = self.estudiante_de(
+            self.carrera, 'kiko.vera@unipamplona.edu.co', '2000000011'
+        )
+        rol_pelado = Rol.objects.create(nombre='Sin permisos de registro')
+        colado = Usuario.objects.create_user(
+            correo_institucional='lalo.cuela@unipamplona.edu.co',
+            password='ClaveDePrueba123',
+            nombre='Lalo Cuela',
+            cedula='1000000077',
+            nombre_usuario='lalo.cuela',
+            rol=rol_pelado,
+            requiere_cambio_contrasena=False,
+        )
+        self.client.force_login(colado)
+        mail.outbox.clear()
+
+        self.assertEqual(
+            self.client.post(self.url_reenviar(estudiante)).status_code, 403
+        )
+        self.assertEqual(len(mail.outbox), 0)
+
+    # --- C2 de la revisión · el botón sirve más de una vez ---
+
+    def test_la_pantalla_lista_a_los_que_tienen_contrasena_pendiente(self):
+        propio = self.estudiante_de(
+            self.carrera, 'mara.luna@unipamplona.edu.co', '2000000012'
+        )
+        ajeno = self.estudiante_de(
+            self.otra_carrera, 'nico.paz@unipamplona.edu.co', '2000000013'
+        )
+
+        respuesta = self.client.get(self.url)
+        pendientes = respuesta.context['pendientes']
+        self.assertIn(propio, pendientes)
+        self.assertNotIn(ajeno, pendientes)
+        self.assertContains(respuesta, self.url_reenviar(propio))
+        self.assertNotContains(respuesta, self.url_reenviar(ajeno))
+
+    def test_se_puede_reenviar_a_varios_uno_tras_otro(self):
+        # El resumen del cargue solo vive en la respuesta de su POST: sin la
+        # lista persistente, reenviar al primero perdía a los demás.
+        primero = self.estudiante_de(
+            self.carrera, 'olga.rios@unipamplona.edu.co', '2000000014'
+        )
+        segundo = self.estudiante_de(
+            self.carrera, 'pepe.toro@unipamplona.edu.co', '2000000015'
+        )
+        mail.outbox.clear()
+
+        respuesta = self.client.post(self.url_reenviar(primero), follow=True)
+        # El segundo sigue ofreciéndose en la misma respuesta.
+        self.assertContains(respuesta, self.url_reenviar(segundo))
+        self.client.post(self.url_reenviar(segundo), follow=True)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(self.auditorias().count(), 2)
+
+    def test_quien_ya_cambio_su_contrasena_sale_de_la_lista(self):
+        listo = self.estudiante_de(
+            self.carrera, 'rosa.vela@unipamplona.edu.co', '2000000016'
+        )
+        listo.requiere_cambio_contrasena = False
+        listo.save(update_fields=['requiere_cambio_contrasena'])
+
+        respuesta = self.client.get(self.url)
+        self.assertNotIn(listo, respuesta.context['pendientes'])
+
+    # --- C8 · solo POST ---
+
+    def test_la_ruta_del_director_no_responde_a_get(self):
+        estudiante = self.estudiante_de(
+            self.carrera, 'fito.lara@unipamplona.edu.co', '2000000006'
+        )
+        self.assertEqual(
+            self.client.get(self.url_reenviar(estudiante)).status_code, 405
+        )
+
+    # --- Segunda ronda de la PR #48 · el correo sale después de confirmar ---
+
+    def test_si_la_auditoria_falla_la_contrasena_del_correo_sigue_sirviendo(self):
+        """Lo pidió la revisión de la PR #48, y es el bloqueante de verdad.
+
+        Con el envío dentro de la transacción, un fallo posterior —la
+        auditoría— revertía la contraseña nueva, pero el correo ya había
+        salido: a la persona le llegaba una contraseña que no servía. Un
+        correo no se puede deshacer, así que el orden tiene que ser al revés:
+        confirmar primero, mandar después, como hace `registrar_estudiante`.
+        """
+        estudiante = self.estudiante_de(
+            self.carrera, 'gala.soto@unipamplona.edu.co', '2000000007'
+        )
+        mail.outbox.clear()
+        with (
+            patch(
+                'apps.personas.forms.registro_estudiantes.get_random_string',
+                return_value=self.CLAVE,
+            ),
+            patch(
+                'apps.personas.forms.registro_estudiantes.Auditoria.objects.create',
+                side_effect=DatabaseError('la auditoría se cayó'),
+            ),
+        ):
+            with self.assertRaises(DatabaseError):
+                reenviar_credenciales(estudiante, autor=self.director)
+
+        # El correo salió, y eso no se puede deshacer.
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(self.CLAVE, mail.outbox[0].body)
+        # Lo que importa, y se comprueba entrando de verdad y no comparando el
+        # hash: `check_password` sola ya dejó pasar un defecto en la primera
+        # ronda (la cuenta quedaba bloqueada y la contraseña «coincidía»).
+        estudiante.refresh_from_db()
+        self.assertTrue(estudiante.check_password(self.CLAVE))
+        self.client.logout()
+        self.assertTrue(
+            self.client.login(
+                correo_institucional=estudiante.correo_institucional,
+                password=self.CLAVE,
+            )
+        )
+        # Y no quedó auditoría, porque es justo lo que falló.
+        self.assertFalse(self.auditorias().exists())
 
 
 class CargueCsv(BaseRegistro):
@@ -669,7 +1266,10 @@ class MaximoDeFilasDelCsv(BaseRegistro):
             ]
         )
 
-    def test_si_no_esta_configurado_no_se_limita(self):
+    def test_si_no_esta_configurado_se_aplica_el_maximo_por_defecto(self):
+        # Antes de E11 no había ningún límite mientras el ADMO no guardara uno;
+        # ahora rige el valor por defecto de Parametrización.
+        self.assertEqual(maximo_de_filas_csv(), 100)
         respuesta = self.subir(self.tres_filas())
         self.assertEqual(respuesta.context['resumen']['registrados'], 3)
 
@@ -971,8 +1571,145 @@ class NumeroDeFilaDelLogDeErrores(BaseRegistro):
         self.assertEqual(errores[0]['fila'], 4)
 
 
+class LimitesDelCsvDesdeParametrizacion(BaseRegistro):
+    """SIS-70 · E11 · los dos límites del cargue salen de Parametrización.
+
+    Antes el tamaño estaba fijo en 5 MB —mientras el parámetro decía 2— y el
+    máximo de filas se leía consultando la tabla `parametro` a mano, así que el
+    valor por defecto de 100 no se aplicaba nunca: la tabla está vacía hasta que
+    el ADMO guarda algo, y los valores iniciales viven en `servicios.py`.
+    """
+
+    def configurar(self, clave, valor):
+        return Parametro.objects.create(
+            clave=clave,
+            valor=valor,
+            usuario_actualizacion=self.director,
+        )
+
+    def filas_de(self, cuantas):
+        return [
+            [
+                f'Alumno {numero}',
+                f'20000{numero:05d}',
+                f'alumno.{numero}@unipamplona.edu.co',
+                '',
+            ]
+            for numero in range(1, cuantas + 1)
+        ]
+
+    def archivo_de_megas(self, megas):
+        """Un CSV de una sola fila que pesa algo más de `megas` MB."""
+        relleno = 'x' * (megas * 1024 * 1024)
+        return self.csv_de(
+            [[relleno, '2000000001', 'ana.gil@unipamplona.edu.co', '']]
+        )
+
+    def administrador_de_parametros(self):
+        permiso, _ = Permiso.objects.get_or_create(
+            nombre='sistema.parametrizar',
+            defaults={'descripcion': 'Acceso a parametrización', 'estado': 'Activo'},
+        )
+        RolPermiso.objects.get_or_create(rol=self.rol_administrador, permiso=permiso)
+        return self.crear_usuario(
+            'admin.limites@unipamplona.edu.co',
+            'Admin Límites',
+            '1000000077',
+            self.rol_administrador,
+        )
+
+    # --- C1 · el tamaño sale del parámetro, no de un 5 fijo ---
+
+    def test_un_archivo_de_tres_megas_se_rechaza_con_los_dos_por_defecto(self):
+        # Antes pasaba el control de tamaño: el límite fijo eran 5 MB.
+        respuesta = self.subir(self.archivo_de_megas(3))
+        self.assertIsNone(respuesta.context['resumen'])
+        self.assertContains(respuesta, 'pesa más de 2 MB')
+
+    def test_el_mensaje_del_tamano_muestra_el_valor_vigente(self):
+        self.configurar('registro_estudiantes.max_mb_csv', '1')
+        respuesta = self.subir(self.archivo_de_megas(2))
+        self.assertIsNone(respuesta.context['resumen'])
+        self.assertContains(respuesta, 'pesa más de 1 MB')
+
+    def test_un_tamano_mas_amplio_tambien_se_respeta(self):
+        self.configurar('registro_estudiantes.max_mb_csv', '10')
+        # 3 MB ya no se rechazan por tamaño (la fila de relleno falla por sus
+        # datos, que es otra cosa).
+        respuesta = self.subir(self.archivo_de_megas(3))
+        self.assertNotContains(respuesta, 'pesa más de')
+
+    # --- C2 · el máximo de filas aplica el 100 por defecto ---
+
+    def test_sin_parametro_guardado_el_maximo_de_filas_es_cien(self):
+        self.assertEqual(maximo_de_filas_csv(), 100)
+
+    def test_ciento_una_filas_se_rechazan_con_los_cien_por_defecto(self):
+        # Antes pasaban: sin fila en `parametro` no había ningún límite.
+        respuesta = self.subir(self.csv_de(self.filas_de(101)))
+        self.assertIsNone(respuesta.context['resumen'])
+        self.assertContains(respuesta, 'el máximo por cargue es 100')
+        self.assertFalse(Usuario.objects.filter(cedula='2000000001').exists())
+
+    # --- C4 y C5 · «con los parámetros en 1 MB y 3 filas» (la tarjeta) ---
+
+    def test_lo_que_guarda_el_admo_en_parametrizacion_manda(self):
+        self.client.force_login(self.administrador_de_parametros())
+        guardado = self.client.post(
+            reverse('parametrizacion:documentos'),
+            {'max_mb_docx': '10', 'max_mb_csv': '1', 'maximo_filas_csv': '3'},
+        )
+        self.assertEqual(guardado.status_code, 302)
+        self.client.force_login(self.director)
+
+        por_tamano = self.subir(self.archivo_de_megas(2))
+        self.assertIsNone(por_tamano.context['resumen'])
+        self.assertContains(por_tamano, 'pesa más de 1 MB')
+
+        por_filas = self.subir(self.csv_de(self.filas_de(4)))
+        self.assertIsNone(por_filas.context['resumen'])
+        self.assertContains(por_filas, 'el máximo por cargue es 3')
+        self.assertFalse(Usuario.objects.filter(cedula='2000000001').exists())
+
+    # --- C6 · la pantalla del Director muestra los dos límites ---
+
+    def test_la_pantalla_muestra_los_dos_limites_vigentes(self):
+        pantalla = self.client.get(self.url)
+        self.assertContains(pantalla, 'Máximo 100 filas')
+        self.assertContains(pantalla, '2 MB')
+
+    def test_la_pantalla_sigue_los_parametros_guardados(self):
+        self.configurar('registro_estudiantes.max_mb_csv', '7')
+        self.configurar('registro_estudiantes.maximo_filas_csv', '30')
+        pantalla = self.client.get(self.url)
+        self.assertContains(pantalla, 'Máximo 30 filas')
+        self.assertContains(pantalla, '7 MB')
+
+    # --- C7 · una fila editada a mano en la base no deja el cargue inservible ---
+
+    def test_un_tamano_de_cero_en_la_base_no_rechaza_todos_los_archivos(self):
+        # Con 0 MB no entraría ni un archivo vacío: cae en el valor por defecto.
+        self.configurar('registro_estudiantes.max_mb_csv', '0')
+        respuesta = self.subir(self.csv_de(self.filas_de(2)))
+        self.assertEqual(respuesta.context['resumen']['registrados'], 2)
+        self.assertContains(self.client.get(self.url), '2 MB')
+
+    def test_un_tamano_no_numerico_en_la_base_cae_en_el_valor_por_defecto(self):
+        self.configurar('registro_estudiantes.max_mb_csv', 'grande')
+        respuesta = self.subir(self.csv_de(self.filas_de(2)))
+        self.assertEqual(respuesta.context['resumen']['registrados'], 2)
+        self.assertContains(self.client.get(self.url), '2 MB')
+
+
 class ElMaximoMalConfigurado(BaseRegistro):
-    """Un parámetro mal escrito no puede convertirse en un límite distinto."""
+    """Un parámetro mal escrito no puede dejar el cargue inservible.
+
+    Desde E11 el parseo es de SISTRA-11 (`obtener_entero`) y la pantalla que los
+    guarda exige un entero >= 1, así que estos valores solo llegan editando la
+    fila a mano en la base. Lo que se exige aquí es que ninguno reviente. Los que
+    `obtener_entero` no sabe leer caen en el valor por defecto; `'1_0'` sí lo
+    sabe leer, y queda en 10: esa prueba fija el comportamiento real.
+    """
 
     def configurar(self, valor):
         return Parametro.objects.create(
@@ -989,14 +1726,27 @@ class ElMaximoMalConfigurado(BaseRegistro):
             ]
         )
 
-    def test_un_guion_bajo_no_se_lee_como_numero(self):
-        # `int('1_0')` da 10: el ADMO escribe «1_0» y creería tener un límite.
+    def test_un_guion_bajo_queda_en_diez(self):
+        # `int('1_0')` da 10, así que el límite queda en 10 y no en 1. No se
+        # defiende aquí: la pantalla del ADMO no deja guardar «1_0», y si
+        # `obtener_entero` tiene que ser más estricto se arregla en SISTRA-11,
+        # para todos los módulos que lo usan. Se fija el valor, no solo que no
+        # reviente: si allá lo endurecen, esta prueba se pone roja y se sabe.
         self.configurar('1_0')
+        self.assertEqual(maximo_de_filas_csv(), 10)
         respuesta = self.subir(self.dos_filas())
         self.assertEqual(respuesta.context['resumen']['registrados'], 2)
 
-    def test_un_valor_negativo_no_limita(self):
+    def test_un_valor_negativo_cae_en_el_valor_por_defecto(self):
         self.configurar('-5')
+        self.assertEqual(maximo_de_filas_csv(), 100)
+        respuesta = self.subir(self.dos_filas())
+        self.assertEqual(respuesta.context['resumen']['registrados'], 2)
+
+    def test_un_valor_cero_no_rechaza_todos_los_archivos(self):
+        # Un límite de 0 filas dejaría el cargue inservible.
+        self.configurar('0')
+        self.assertEqual(maximo_de_filas_csv(), 100)
         respuesta = self.subir(self.dos_filas())
         self.assertEqual(respuesta.context['resumen']['registrados'], 2)
 
@@ -1006,10 +1756,11 @@ class ElMaximoMalConfigurado(BaseRegistro):
         self.assertIsNone(respuesta.context['resumen'])
         self.assertContains(respuesta, 'el máximo por cargue es 1')
 
-    def test_la_pantalla_dice_cuando_no_hay_maximo_configurado(self):
-        self.assertContains(
-            self.client.get(self.url), 'no hay un máximo de filas configurado'
-        )
+    def test_la_pantalla_muestra_el_maximo_por_defecto(self):
+        # Ya no existe el «todavía no hay un máximo configurado»: siempre hay.
+        pantalla = self.client.get(self.url)
+        self.assertContains(pantalla, 'Máximo 100 filas')
+        self.assertNotContains(pantalla, 'no hay un máximo de filas configurado')
 
 
 class DominioInstitucionalDelCorreo(BaseRegistro):

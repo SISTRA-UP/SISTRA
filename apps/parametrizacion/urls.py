@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import alertas, documentos, estados, parametrizacion, periodos
+from .views import alertas, documentos, estados, facultades_carreras, parametrizacion, periodos
 
 app_name = 'parametrizacion'
 
@@ -11,6 +11,12 @@ urlpatterns = [
     path('periodos/', periodos.PeriodosView.as_view(), name='periodos'),
     path('periodos/nuevo/', periodos.PeriodoFormView.as_view(), name='periodo_nuevo'),
     path('periodos/<int:pk>/editar/', periodos.PeriodoFormView.as_view(), name='periodo_editar'),
+    # Facultades y carreras
+    path('facultades-carreras/', facultades_carreras.FacultadesCarrerasView.as_view(), name='facultades_carreras'),
+    path('facultades/nueva/', facultades_carreras.FacultadFormView.as_view(), name='facultad_nueva'),
+    path('facultades/<int:pk>/editar/', facultades_carreras.FacultadFormView.as_view(), name='facultad_editar'),
+    path('carreras/nueva/', facultades_carreras.CarreraFormView.as_view(), name='carrera_nueva'),
+    path('carreras/<int:pk>/editar/', facultades_carreras.CarreraFormView.as_view(), name='carrera_editar'),
     # Alertas
     path('alertas/', alertas.AlertasView.as_view(), name='alertas'),
     # Estados del proceso

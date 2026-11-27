@@ -8,14 +8,12 @@ Cubre:
 - Casos desfavorables y de borde: ataques XSS, longitudes límite, duplicados, concurrencia y bloqueos.
 """
 
-import tempfile
 from datetime import timedelta
-from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import connection
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
@@ -2067,115 +2065,53 @@ class TestVistasAprobacion(BaseAprobacionTestCase):
         self.assertEqual(len(datos['cronograma']), 1)
         self.assertEqual(datos['cronograma'][0]['nombre'], 'Taller Comunitario')
 
-    def test_descargar_documento_404_si_no_existe_archivo_ex06(self):
-        """Descarga de documento responde 404 seguro si no hay archivo (EX-06)."""
-        prop = self.crear_propuesta(self.estudiante_1, 'PROP-DOC-404')
+    def test_descargar_documento_entrega_el_pdf_de_la_propuesta_del_estudiante(self):
+        """SIS-51 · B1e: «Ver documento» entrega el PDF armado con los datos de la propuesta
+        (no la plantilla en blanco del ADMO), en línea para la vista previa (EX-06)."""
+        from io import BytesIO
+
+        from pypdf import PdfReader
+
+        prop = self.crear_propuesta(
+            self.estudiante_1, 'PROP-DOC-REAL', titulo='Huerta comunitaria del barrio Central'
+        )
         self.client.force_login(self.user_director)
 
-        url = reverse('propuestas:descargar_documento', args=[prop.pk])
-        response = self.client.get(url)
+        response = self.client.get(reverse('propuestas:descargar_documento', args=[prop.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertEqual(response['Content-Disposition'], 'inline; filename="propuesta_PROP-DOC-REAL.pdf"')
+        texto = ' '.join(
+            pagina.extract_text() for pagina in PdfReader(BytesIO(b''.join(response.streaming_content))).pages
+        )
+        for dato in ('PROP-DOC-REAL', self.estudiante_1.usuario.nombre, 'Huerta comunitaria del barrio Central'):
+            with self.subTest(dato=dato):
+                self.assertIn(dato, texto)
+
+    def test_descargar_documento_director_de_otra_carrera_recibe_404(self):
+        """Un Director solo ve documentos de su carrera: la propuesta ajena responde 404."""
+        user_otro = Usuario.objects.create_user(
+            correo_institucional='director.electronica@unipamplona.edu.co',
+            password='Password123!',
+            nombre='Dra. Ana Electrónica',
+            cedula='1098000002',
+            nombre_usuario='director.electronica',
+            rol=self.rol_director,
+            requiere_cambio_contrasena=False,
+        )
+        DirectorCarrera.objects.create(
+            director=Director.objects.create(usuario=user_otro),
+            carrera=self.otra_carrera,
+            fecha_inicio=timezone.localdate(),
+            activo=True,
+        )
+        prop = self.crear_propuesta(self.estudiante_1, 'PROP-DOC-AJENA')
+        self.client.force_login(user_otro)
+
+        response = self.client.get(reverse('propuestas:descargar_documento', args=[prop.pk]))
+
         self.assertEqual(response.status_code, 404)
-
-    def _media_root_temporal(self) -> Path:
-        """Apunta MEDIA_ROOT a un directorio temporal que se borra al terminar la prueba."""
-        directorio = tempfile.TemporaryDirectory()
-        self.addCleanup(directorio.cleanup)
-        ajuste = override_settings(MEDIA_ROOT=directorio.name)
-        ajuste.enable()
-        self.addCleanup(ajuste.disable)
-        return Path(directorio.name)
-
-    def _propuesta_con_documento(self, codigo: str, ruta_archivo: str, nombre_archivo: str) -> Propuesta:
-        """Crea una propuesta cuya versión de plantilla apunta a la ruta indicada."""
-        from apps.parametrizacion.models import Plantilla, VersionPlantilla
-
-        plantilla = Plantilla.objects.create(nombre=f'Plantilla {codigo}', tipo='propuesta', estado='activo')
-        version = VersionPlantilla.objects.create(
-            plantilla=plantilla,
-            usuario=self.user_director,
-            numero_version=1,
-            nombre_archivo=nombre_archivo,
-            ruta_archivo=ruta_archivo,
-            es_vigente=True,
-        )
-        prop = self.crear_propuesta(self.estudiante_1, codigo)
-        prop.version_plantilla = version
-        prop.save()
-        return prop
-
-    def test_descargar_documento_pdf_content_type_inline(self):
-        """Descarga de documento PDF responde content_type application/pdf e inline para previsualización."""
-        media = self._media_root_temporal()
-        (media / 'propuesta.pdf').write_bytes(b'%PDF-1.4 dummy content')
-        prop = self._propuesta_con_documento(
-            'PROP-DOC-PDF', str(media / 'propuesta.pdf'), 'propuesta_estudiante.pdf'
-        )
-
-        self.client.force_login(self.user_director)
-        response = self.client.get(reverse('propuestas:descargar_documento', args=[prop.pk]))
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], 'application/pdf')
-        self.assertEqual(
-            response['Content-Disposition'], 'inline; filename="propuesta_estudiante.pdf"'
-        )
-        self.assertEqual(b''.join(response.streaming_content), b'%PDF-1.4 dummy content')
-
-    def test_descargar_documento_fuera_de_media_root_responde_404(self):
-        """Una ruta guardada que cae fuera de MEDIA_ROOT (absoluta o con '../') nunca se sirve."""
-        media = self._media_root_temporal()
-        externo = tempfile.TemporaryDirectory()
-        self.addCleanup(externo.cleanup)
-        secreto = Path(externo.name) / 'secreto.pdf'
-        secreto.write_bytes(b'%PDF-1.4 secreto')
-        relativa = Path('..') / secreto.relative_to(media.parent)
-        # Sanidad: ambas rutas apuntan a un archivo que sí existe.
-        self.assertTrue((media / relativa).is_file())
-
-        prop = self._propuesta_con_documento('PROP-DOC-FUERA', str(secreto), 'secreto.pdf')
-        self.client.force_login(self.user_director)
-        for ruta in (str(secreto), str(relativa)):
-            with self.subTest(ruta=ruta):
-                prop.version_plantilla.ruta_archivo = ruta
-                prop.version_plantilla.save()
-                response = self.client.get(reverse('propuestas:descargar_documento', args=[prop.pk]))
-                self.assertEqual(response.status_code, 404)
-
-    def test_descargar_documento_nombre_con_comillas_no_rompe_encabezado(self):
-        """Un nombre de archivo con comillas dobles llega escapado en Content-Disposition."""
-        media = self._media_root_temporal()
-        (media / 'propuesta.pdf').write_bytes(b'%PDF-1.4 dummy content')
-        # Ruta relativa a MEDIA_ROOT: también debe resolverse.
-        prop = self._propuesta_con_documento('PROP-DOC-COMILLAS', 'propuesta.pdf', 'propuesta "final".pdf')
-
-        self.client.force_login(self.user_director)
-        response = self.client.get(reverse('propuestas:descargar_documento', args=[prop.pk]))
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], 'application/pdf')
-        self.assertEqual(
-            response['Content-Disposition'], 'inline; filename="propuesta \\"final\\".pdf"'
-        )
-        # Consumir el contenido cierra el archivo servido.
-        self.assertEqual(b''.join(response.streaming_content), b'%PDF-1.4 dummy content')
-
-    def test_descargar_documento_no_pdf_se_sirve_como_adjunto(self):
-        """Todo lo que no sea PDF (HTML, SVG, PDF comprimido, sin extensión) baja como adjunto, nunca inline."""
-        media = self._media_root_temporal()
-        (media / 'archivo.bin').write_bytes(b'<script>alert(1)</script>')
-        prop = self._propuesta_con_documento('PROP-DOC-ADJ', 'archivo.bin', 'propuesta.html')
-
-        self.client.force_login(self.user_director)
-        for nombre in ('propuesta.html', 'diagrama.svg', 'propuesta.pdf.gz', 'propuesta'):
-            with self.subTest(nombre=nombre):
-                prop.version_plantilla.nombre_archivo = nombre
-                prop.version_plantilla.save()
-                response = self.client.get(reverse('propuestas:descargar_documento', args=[prop.pk]))
-                self.assertEqual(response.status_code, 200)
-                self.assertEqual(response['Content-Disposition'], f'attachment; filename="{nombre}"')
-                self.assertNotEqual(response['Content-Type'], 'application/pdf')
-                # SecurityMiddleware impide que el navegador reinterprete el tipo declarado.
-                self.assertEqual(response['X-Content-Type-Options'], 'nosniff')
-                # Consumir el contenido cierra el archivo servido.
-                self.assertEqual(b''.join(response.streaming_content), b'<script>alert(1)</script>')
 
     def test_descargar_documento_director_sin_carrera_activa_recibe_403(self):
         """Un Director sin asignación de carrera activa no puede descargar documentos (403)."""
