@@ -130,10 +130,11 @@ def inicio(request):
                     for aviso in avisos:
                         messages.warning(request, aviso)
 
+                    completados = sum(1 for v in datos_extraidos.values() if v)
                     _registrar_auditoria(
                         request.user, 'Cargar plantilla', 'Éxito',
                         id_registro=propuesta.pk if propuesta else None,
-                        detalle=f'Se leyeron {len(datos_extraidos)} campos.',
+                        detalle=f'Se leyeron {completados} campos.',
                     )
 
                     initial_data = {}
@@ -144,7 +145,7 @@ def inicio(request):
                     form = PropuestaMontajeForm(initial=initial_data, instance=propuesta)
                     messages.success(
                         request,
-                        f'Se autocompletaron {len(datos_extraidos)} campo(s) desde la plantilla Word. '
+                        f'Se autocompletaron {completados} campo(s) desde la plantilla Word. '
                         'Revisa la información y pulsa «Guardar borrador».',
                     )
                 except PlantillaInvalidaError as err:

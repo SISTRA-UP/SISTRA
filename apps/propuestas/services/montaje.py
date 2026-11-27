@@ -246,7 +246,8 @@ def _extraer_con_xml(archivo_bytes: BytesIO) -> tuple[dict[str, str], list[str]]
                     f'El valor «{datos[c]}» en «{etiquetas_fecha[c]}» no es una fecha válida '
                     f'(usa el formato dd/mm/aaaa). El campo quedó vacío para que lo ingreses.'
                 )
-                del datos[c]
+                # Vacío y no borrado: así también reemplaza una fecha guardada antes.
+                datos[c] = ''
 
     # --- Validar sector_entidad ---
     if 'sector_entidad' in datos:

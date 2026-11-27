@@ -495,6 +495,42 @@ class TestMontajeVistasYFlujos(BaseMontajeTestCase):
         self.assertContains(resp, 'value="2026-12-01"')
         self.assertContains(resp, 'value="2026-12-31"')
 
+    def test_fecha_mala_en_word_vacia_fecha_guardada_previamente(self):
+        """Si la propuesta ya tenía fechas guardadas, un Word con fechas inválidas las deja vacías."""
+        from datetime import date
+
+        Propuesta.objects.create(
+            proceso=self.proceso,
+            periodo_academico=self.periodo,
+            codigo='PROP-FECHAS-2',
+            estado=EstadoTramite.BORRADOR,
+            titulo='Propuesta con fechas',
+            fecha_inicio=date(2026, 2, 1),
+            fecha_fin=date(2026, 6, 30),
+        )
+        etiquetas = {
+            **ETIQUETAS_COMPLETAS,
+            'Fecha estimada de inicio': '31/02/2026',
+            'Fecha estimada de finalización': 'el lunes',
+        }
+        archivo = SimpleUploadedFile(
+            'fechas_malas.docx',
+            _docx_con_etiquetas(etiquetas),
+            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        )
+        self.client.force_login(self.user_estudiante)
+        resp = self.client.post(
+            reverse('propuestas:montaje'),
+            {'accion': 'importar_word', 'archivo': archivo},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Se autocompletaron 16 campo(s)')
+        self.assertNotContains(resp, 'value="2026-02-01"')
+        self.assertNotContains(resp, 'value="2026-06-30"')
+        form = resp.context['form']
+        self.assertEqual(form.initial.get('fecha_inicio'), '')
+        self.assertEqual(form.initial.get('fecha_fin'), '')
+
     def test_carga_word_corrupto_rechaza_sin_error_500_y_audita_fallo(self):
         """Un Word con contenido corrupto se rechaza con MSG-01-03 sin error 500 y se audita Fallo."""
         self.client.force_login(self.user_estudiante)
@@ -699,8 +735,8 @@ class TestServicioPlantillaWord(TestCase):
         }
         contenido = _docx_con_etiquetas(etiquetas)
         datos, avisos = extraer_datos_plantilla(io.BytesIO(contenido))
-        self.assertNotIn('fecha_inicio', datos)
-        self.assertNotIn('fecha_fin', datos)
+        self.assertEqual(datos['fecha_inicio'], '')
+        self.assertEqual(datos['fecha_fin'], '')
         self.assertTrue(any('Fecha estimada de inicio' in av for av in avisos))
         self.assertTrue(any('Fecha estimada de finalización' in av for av in avisos))
 
@@ -711,8 +747,8 @@ class TestServicioPlantillaWord(TestCase):
             'Fecha estimada de finalización': '2026-02-31',
         }
         datos_cal, avisos_cal = extraer_datos_plantilla(io.BytesIO(_docx_con_etiquetas(etiquetas_calendario)))
-        self.assertNotIn('fecha_inicio', datos_cal)
-        self.assertNotIn('fecha_fin', datos_cal)
+        self.assertEqual(datos_cal['fecha_inicio'], '')
+        self.assertEqual(datos_cal['fecha_fin'], '')
         self.assertEqual(len(avisos_cal), 2)
 
     def test_plantilla_oficial_usa_ejemplo_dd_mm_aaaa_y_se_normaliza(self):

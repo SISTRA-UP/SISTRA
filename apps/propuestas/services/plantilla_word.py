@@ -13,7 +13,7 @@ import io
 import zipfile
 from typing import Any
 
-from apps.propuestas.services.montaje import ETIQUETAS_CAMPOS, ETIQUETAS_FECHAS
+from apps.propuestas.services.montaje import ETIQUETAS_CAMPOS
 
 
 def _escapar_xml(texto: Any) -> str:
