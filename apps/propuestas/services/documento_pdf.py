@@ -32,27 +32,13 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from apps.propuestas.services.montaje import ETIQUETAS_CAMPOS
+
 # ---------------------------------------------------------------------------
 # Definición de los 16 campos oficiales del formulario (SISTRA-01)
 # ---------------------------------------------------------------------------
-CAMPOS_FORMULARIO_PROPUESTA: tuple[tuple[str, str], ...] = (
-    ("Título de la propuesta", "titulo"),
-    ("Entidad", "entidad"),
-    ("Sector de la entidad", "sector_entidad"),
-    ("Población beneficiada", "poblacion_beneficiada"),
-    ("Identificación de la población", "identificacion_poblacion"),
-    ("Reseña histórica", "resena_historica"),
-    ("Identificación de la necesidad", "identificacion_necesidad"),
-    ("Justificación", "justificacion"),
-    ("Objetivos", "objetivos"),
-    ("Referente teórico", "referente_teorico"),
-    ("Propuesta social", "propuesta_social"),
-    ("Impacto social", "impacto_social"),
-    ("Zona", "zona"),
-    ("Área", "area"),
-    ("Sector", "sector"),
-    ("Unidad", "unidad"),
-)
+# Las mismas 16 etiquetas que lee la plantilla Word, en el mismo orden.
+CAMPOS_FORMULARIO_PROPUESTA: tuple[tuple[str, str], ...] = tuple(ETIQUETAS_CAMPOS.items())
 
 # Paleta institucional SISTRA / Universidad de Pamplona
 COLOR_PRIMARIO = colors.HexColor("#1B365D")      # Azul marino institucional
@@ -316,30 +302,33 @@ def construir_tabla_campos(
 
     for etiqueta, valor in campos:
         contenido = (str(valor).strip() if valor is not None else "") or "—"
-        par_etiqueta = Paragraph(f"<b>{_texto_seguro(etiqueta)}</b>", estilos["CampoTitulo"])
-        par_contenido = Paragraph(_texto_seguro(contenido), estilos["CampoContenido"])
-
-        # Ancho 540 pt
-        tabla_campo = Table([[par_etiqueta], [par_contenido]], colWidths=[540])
-        tabla_campo.setStyle(
+        encabezado = Table(
+            [[Paragraph(f"<b>{_texto_seguro(etiqueta)}</b>", estilos["CampoTitulo"])]],
+            colWidths=[540],
+        )
+        encabezado.setStyle(
             TableStyle(
                 [
-                    ("BACKGROUND", (0, 0), (0, 0), COLOR_FONDO_CABECERA),
-                    ("BACKGROUND", (0, 1), (0, 1), colors.white),
+                    ("BACKGROUND", (0, 0), (-1, -1), COLOR_FONDO_CABECERA),
                     ("BOX", (0, 0), (-1, -1), 0.5, COLOR_BORDE),
-                    ("LINEBELOW", (0, 0), (0, 0), 0.5, COLOR_BORDE),
-                    ("TOPPADDING", (0, 0), (0, 0), 4),
-                    ("BOTTOMPADDING", (0, 0), (0, 0), 4),
-                    ("LEFTPADDING", (0, 0), (0, 0), 6),
-                    ("RIGHTPADDING", (0, 0), (0, 0), 6),
-                    ("TOPPADDING", (0, 1), (0, 1), 5),
-                    ("BOTTOMPADDING", (0, 1), (0, 1), 6),
-                    ("LEFTPADDING", (0, 1), (0, 1), 6),
-                    ("RIGHTPADDING", (0, 1), (0, 1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
                 ]
             )
         )
-        elementos.append(KeepTogether([tabla_campo, Spacer(1, 5)]))
+        # El contenido va como párrafo suelto, no dentro de la tabla:
+        # así puede seguir en la página siguiente si el texto es largo.
+        cuerpo = Paragraph(_texto_seguro(contenido), estilos["CampoContenido"])
+        bloque = [encabezado, Spacer(1, 4), cuerpo, Spacer(1, 8)]
+        _, alto = cuerpo.wrap(540, 10_000)
+        if alto < 250:
+            # Un campo corto no se parte entre dos páginas.
+            elementos.append(KeepTogether(bloque))
+        else:
+            # Uno largo empieza donde va y sigue en la página siguiente.
+            elementos.extend(bloque)
 
     return elementos
 
@@ -541,8 +530,8 @@ def generar_pdf_propuesta(propuesta: Any) -> bytes:
         ("Estudiante", estudiante),
         ("Carrera", carrera),
         ("Periodo académico", periodo),
-        ("Fecha de inicio", fecha_inicio),
-        ("Fecha de fin", fecha_fin),
+        ("Fecha estimada de inicio", fecha_inicio),
+        ("Fecha estimada de finalización", fecha_fin),
     ]
 
     historia.extend(

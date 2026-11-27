@@ -102,7 +102,7 @@ class GenerarPdfPropuestaModeloRealTests(TestCase):
             proceso=self.proceso,
             periodo_academico=self.periodo,
             codigo=codigo,
-            fecha_inicio=date(2026, 2, 1),
+            fecha_inicio=date(2026, 1, 15),
             fecha_fin=date(2026, 6, 30),
             titulo="Capacitación Digital Comunitaria",
             entidad="Fundación Esperanza Viva",
@@ -153,13 +153,16 @@ class GenerarPdfPropuestaModeloRealTests(TestCase):
         reader = PdfReader(io.BytesIO(pdf_bytes))
         self.assertGreater(len(reader.pages), 0)
         texto_completo = "".join(pagina.extract_text() or "" for pagina in reader.pages)
+        texto_normalizado = " ".join(texto_completo.split())
 
         # Metadatos y pie de página
         self.assertIn("PROP-2026-001", texto_completo)
         self.assertIn("Laura Marcela Pérez Gómez", texto_completo)
         self.assertIn("Ingeniería de Sistemas", texto_completo)
         self.assertIn("2026-1", texto_completo)
-        self.assertIn("01/02/2026", texto_completo)
+        self.assertIn("Fecha estimada de inicio:", texto_normalizado)
+        self.assertIn("Fecha estimada de finalización:", texto_normalizado)
+        self.assertIn("15/01/2026", texto_completo)
         self.assertIn("30/06/2026", texto_completo)
         self.assertIn("Propuesta de Trabajo Social", texto_completo)
 
@@ -234,6 +237,19 @@ class GenerarPdfPropuestaModeloRealTests(TestCase):
         reader = PdfReader(io.BytesIO(pdf_bytes))
         texto_completo = "".join(pagina.extract_text() or "" for pagina in reader.pages)
         self.assertNotIn("CRONOGRAMA DE ACTIVIDADES", texto_completo)
+
+    def test_generar_pdf_propuesta_con_campo_muy_largo(self):
+        """Un campo de varias páginas no rompe el PDF y sale completo."""
+        propuesta = self._crear_propuesta_completa(codigo="PROP-2026-005")
+        propuesta.justificacion = "Justificación larga del proyecto social. " * 600 + "FIN-DE-LA-JUSTIFICACION"
+        propuesta.save(update_fields=["justificacion"])
+
+        pdf_bytes = generar_pdf_propuesta(propuesta)
+
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        texto_completo = "".join(pagina.extract_text() or "" for pagina in reader.pages)
+        self.assertGreater(len(reader.pages), 2)
+        self.assertIn("FIN-DE-LA-JUSTIFICACION", texto_completo)
 
 
 class ComponentesComunesPdfTests(SimpleTestCase):
