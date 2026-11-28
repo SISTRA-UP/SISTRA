@@ -53,7 +53,6 @@ URL_UP = 'https://up.ejemplo.edu.co/'
 RUTA_URL_UP = 'apps.cargue_up.views.aviso_informe._url_up'
 TIPO_RECORDATORIO = 'RECORDATORIO_CARGUE_UP_INFORME'
 URL_PANTALLA = 'cargue_up:cargue_propuesta'
-URL_DESCARGAR = 'cargue_up:aviso_informe_descargar'
 RUTA_PDF = 'apps.cargue_up.views.aviso_informe.generar_pdf_informe'
 
 
@@ -364,21 +363,51 @@ class DescargarTests(AvisoInformeBase):
     def test_no_aprobado_es_bloqueado(self):
         Informe.objects.filter(pk=self.informe.pk).update(estado='En revisión')
         self.entrar(self.user_est)
-        r = self.client.get(reverse(URL_DESCARGAR))
+        with mock.patch(RUTA_PDF, return_value=b'%PDF') as generar:
+            r = self.client.get(reverse(URL_DESCARGAR))
         self.assertRedirects(r, reverse(URL_PANTALLA), fetch_redirect_response=False)
         self.assertEqual(_mensajes(r)[0][0], messages.WARNING)
+        generar.assert_not_called()
         self.assertTrue(Auditoria.objects.filter(
             accion=ACCION_DESCARGAR, resultado='Bloqueado').exists())
 
-    def test_aprobado_audita_fallo_con_msg_08_04(self):
+    def test_aprobado_entrega_pdf_y_audita_exito(self):
         self.entrar(self.user_est)
-        r = self.client.get(reverse(URL_DESCARGAR))
+        with mock.patch(RUTA_PDF, return_value=b'%PDF-1.4 prueba') as generar:
+            r = self.client.get(reverse(URL_DESCARGAR))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r['Content-Type'], 'application/pdf')
+        self.assertIn(f'Informe{self.informe.codigo}.pdf', r['Content-Disposition'])
+        self.assertTrue(r.content.startswith(b'%PDF'))
+        self.assertEqual(generar.call_args.args[0].pk, self.informe.pk)
+        self.assertTrue(Auditoria.objects.filter(
+            usuario=self.user_est, accion=ACCION_DESCARGAR,
+            resultado='Éxito', id_registro_afectado=self.informe.pk).exists())
+
+    def test_si_falla_la_generacion_audita_fallo_con_msg_08_04(self):
+        self.entrar(self.user_est)
+        with mock.patch(RUTA_PDF, side_effect=RuntimeError('boom')):
+            r = self.client.get(reverse(URL_DESCARGAR))
         self.assertRedirects(r, reverse(URL_PANTALLA), fetch_redirect_response=False)
         nivel, texto = _mensajes(r)[0]
         self.assertEqual(nivel, messages.ERROR)
         self.assertIn('No pudimos completar la acción', texto)
         self.assertTrue(Auditoria.objects.filter(
             accion=ACCION_DESCARGAR, resultado='Fallo').exists())
+
+    def test_otro_estudiante_solo_baja_su_propio_informe(self):
+        self.entrar(self.user_otro)
+        with mock.patch(RUTA_PDF, return_value=b'%PDF') as generar:
+            self.client.get(reverse(URL_DESCARGAR))
+        self.assertEqual(generar.call_args.args[0].pk, self.informe_otro.pk)
+        self.assertNotEqual(generar.call_args.args[0].pk, self.informe.pk)
+
+    def test_descarga_real_es_pdf(self):
+        self.entrar(self.user_est)
+        r = self.client.get(reverse(URL_DESCARGAR))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r['Content-Type'], 'application/pdf')
+        self.assertTrue(r.content.startswith(b'%PDF'))
 
     def test_director_recibe_403(self):
         self.entrar(self.user_dir)
@@ -432,41 +461,3 @@ class RecordatorioTests(AvisoInformeBase):
         self._correr()
         self.assertEqual(self._recordatorios(self.informe).count(), 0)
         self.assertEqual(self._recordatorios(self.informe_otro).count(), 0)
-
-class DescargarTests(AvisoInformeBase):
-    def test_descarga_entrega_pdf_con_nombre_y_auditoria_exito(self):
-        self.entrar(self.user_est)
-        with mock.patch(RUTA_PDF, return_value=b'%PDF-1.4 prueba'):
-            r = self.client.get(reverse(URL_DESCARGAR))
-        self.assertEqual(r.status_code, 200)
-        self.assertEqual(r['Content-Type'], 'application/pdf')
-        self.assertIn(f'Informe{self.informe.codigo}.pdf', r['Content-Disposition'])
-        self.assertTrue(r.content.startswith(b'%PDF'))
-        self.assertTrue(Auditoria.objects.filter(
-            usuario=self.user_est, resultado='Éxito').exists())
-
-    def test_si_falla_la_generacion_queda_fallo_y_msg_08_04(self):
-        self.entrar(self.user_est)
-        with mock.patch(RUTA_PDF, side_effect=RuntimeError('boom')):
-            r = self.client.get(reverse(URL_DESCARGAR))
-        self.assertEqual(r.status_code, 302)
-        self.assertEqual(_mensajes(r)[0][0], messages.ERROR)
-        self.assertTrue(Auditoria.objects.filter(
-            usuario=self.user_est, resultado='Fallo').exists())
-
-    def test_sin_informe_aprobado_sigue_bloqueada(self):
-        Informe.objects.filter(pk=self.informe.pk).update(estado='En revisión')
-        self.entrar(self.user_est)
-        with mock.patch(RUTA_PDF, return_value=b'%PDF') as generar:
-            r = self.client.get(reverse(URL_DESCARGAR))
-        self.assertNotEqual(r.get('Content-Type'), 'application/pdf')
-        generar.assert_not_called()
-        self.assertTrue(Auditoria.objects.filter(resultado='Bloqueado').exists())
-
-    def test_otro_estudiante_no_descarga_el_informe_ajeno(self):
-        Informe.objects.filter(pk=self.informe_otro.pk).update(estado='En revisión')
-        self.entrar(self.user_otro)
-        with mock.patch(RUTA_PDF, return_value=b'%PDF') as generar:
-            r = self.client.get(reverse(URL_DESCARGAR))
-        self.assertNotEqual(r.get('Content-Type'), 'application/pdf')
-        generar.assert_not_called()

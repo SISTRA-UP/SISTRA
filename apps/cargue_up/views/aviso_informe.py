@@ -6,11 +6,14 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.shortcuts import redirect
 from django.views.decorators.http import require_POST
+from django.http import HttpResponse
+from django.utils.http import content_disposition_header
 
 from django.http import HttpResponse
 from django.utils.http import content_disposition_header
 
 from apps.parametrizacion.servicios import obtener
+from apps.informes.services.documento_pdf import generar_pdf_informe
 
 from . import aviso_informe_servicio as servicio
 
@@ -77,13 +80,6 @@ def ir_a_up(request):
         return redirect(PANTALLA)
     servicio.auditar(request.user, servicio.ACCION_IR_UP, informe, servicio.RESULTADO_EXITO)
     return redirect(url_up)
-
-
-def generar_pdf_informe(informe):
-    """Punto de conexión con B1b (servicio de PDF de la propuesta/informe)."""
-    from apps.propuestas.services.documentos_pdf import generar_pdf_informe as generar
-
-    return generar(informe)
 
 @login_required
 @permission_required(PERMISO, raise_exception=True)
