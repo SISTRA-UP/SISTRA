@@ -453,16 +453,6 @@
     </div>
 
     {# Banners de mensajes oficiales del sistema #}
-    {% if messages %}
-        <div>
-            {% for message in messages %}
-                <div class="bn {% if message.tags == 'error' %}bn-rojo{% elif message.tags == 'warning' %}bn-amarillo{% else %}bn-verde{% endif %}">
-                    <div>{{ message }}</div>
-                    <button type="button" class="btn-close btn-close-sm" onclick="this.parentElement.remove()" aria-label="Cerrar"></button>
-                </div>
-            {% endfor %}
-        </div>
-    {% endif %}
 
         {# Barra de búsqueda, filtros y botones masivos (Mockup 1:1) #}
         <div class="card-filtros">

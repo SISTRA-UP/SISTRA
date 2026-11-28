@@ -1,0 +1,452 @@
+/* ==========================================================================
+   SISTRA-UP — Guía de diseño institucional (R10)
+   Stack: Bootstrap 5.3 + CSS nativo sin dependencias externas
+   ========================================================================== */
+
+:root {
+  /* Paleta institucional */
+  --sistra-rojo: #AD3333;
+  --sistra-rojo-hover: #8F2828;
+  --sistra-rojo-suave: #FBE3E0;
+  --sistra-azul: #003366;
+
+  /* Superficies, bordes y texto */
+  --sistra-fondo: #F5F6F9;
+  --sistra-superficie: #FFFFFF;
+  --sistra-borde: #E3E6EC;
+  --sistra-borde-campo: #B9BFCC;
+  --sistra-texto: #1F2430;
+  --sistra-texto-suave: #4B5263;
+  --sistra-gris: #E8EAF0;
+  --sistra-gris-texto: #2A3040;
+
+  /* Estados y semáforo */
+  --sistra-verde-bg: #E3F5EA;
+  --sistra-verde-txt: #145A32;
+  --sistra-amarillo-bg: #FEF5D9;
+  --sistra-amarillo-txt: #7A5400;
+  --sistra-naranja-bg: #FDE8D7;
+  --sistra-naranja-txt: #8A3B08;
+
+  /* Geometría y layout */
+  --sistra-sidebar-width: 260px;
+  --sistra-topbar-height: 64px;
+  --sistra-radius-card: 12px;
+  --sistra-radius-btn: 8px;
+  --sistra-radius-field: 6px;
+  --sistra-radius-pill: 999px;
+}
+
+/* Base y prevención de desbordamiento horizontal (móvil 390px) */
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+  background-color: var(--sistra-fondo, #F5F6F9);
+  color: var(--sistra-texto, #1F2430);
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Jerarquía tipográfica */
+.sistra-page-title {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--sistra-texto, #1F2430);
+  margin: 0;
+}
+
+.sistra-section-title {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--sistra-texto, #1F2430);
+}
+
+.sistra-kpi-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--sistra-texto, #1F2430);
+}
+
+.sistra-text-secondary {
+  font-size: 13.5px;
+  color: var(--sistra-texto-suave, #4B5263);
+}
+
+.sistra-label-caps {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--sistra-texto-suave, #4B5263);
+}
+
+/* Franja superior institucional */
+.sistra-topbar {
+  min-height: var(--sistra-topbar-height, 64px);
+  background-color: var(--sistra-rojo, #AD3333);
+  color: #FFFFFF;
+  border-bottom: 1px solid var(--sistra-rojo-hover, #8F2828);
+  z-index: 1030;
+}
+
+.sistra-topbar__toggle {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: var(--sistra-radius-btn, 8px);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background-color: transparent;
+  color: #FFFFFF;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.sistra-topbar__toggle:hover,
+.sistra-topbar__toggle:focus-visible {
+  background-color: var(--sistra-rojo-hover, #8F2828);
+  color: #FFFFFF;
+}
+
+.sistra-topbar__logo {
+  height: 36px;
+  width: auto;
+  object-fit: contain;
+}
+
+.sistra-topbar__title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #FFFFFF;
+  line-height: 1.2;
+}
+
+.sistra-topbar__btn {
+  min-height: 44px;
+  border-radius: var(--sistra-radius-btn, 8px);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sistra-topbar__btn--ghost {
+  background-color: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #FFFFFF;
+}
+
+.sistra-topbar__btn--ghost:hover,
+.sistra-topbar__btn--ghost:focus-visible {
+  background-color: var(--sistra-rojo-hover, #8F2828);
+  color: #FFFFFF;
+}
+
+.sistra-topbar__btn--logout {
+  background-color: #FFFFFF;
+  border: 1px solid #FFFFFF;
+  color: var(--sistra-rojo, #AD3333);
+}
+
+.sistra-topbar__btn--logout:hover,
+.sistra-topbar__btn--logout:focus-visible {
+  background-color: var(--sistra-rojo-suave, #FBE3E0);
+  border-color: var(--sistra-rojo-suave, #FBE3E0);
+  color: var(--sistra-rojo-hover, #8F2828);
+}
+
+/* Panel desplegable de notificaciones (360px en escritorio, adaptable en móvil) */
+.sistra-notif-menu {
+  width: min(360px, calc(100vw - 24px));
+  border-radius: var(--sistra-radius-card, 12px);
+  border: 1px solid var(--sistra-borde, #E3E6EC);
+  box-shadow: 0 10px 24px rgba(31, 36, 48, 0.12);
+  padding: 0;
+  overflow: hidden;
+}
+
+.sistra-notif-menu__header {
+  padding: 14px 16px;
+  background-color: var(--sistra-superficie, #FFFFFF);
+  border-bottom: 1px solid var(--sistra-borde, #E3E6EC);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.sistra-notif-menu__list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* Contenedor principal + Menú lateral R9 */
+.sistra-shell {
+  display: flex;
+  min-height: calc(100vh - var(--sistra-topbar-height, 64px));
+}
+
+.sistra-sidebar {
+  width: var(--sistra-sidebar-width, 260px);
+  max-width: 280px;
+  background-color: var(--sistra-superficie, #FFFFFF);
+  border-right: 1px solid var(--sistra-borde, #E3E6EC);
+  flex-shrink: 0;
+}
+
+@media (min-width: 992px) {
+  .sistra-sidebar.offcanvas-lg {
+    position: sticky;
+    top: var(--sistra-topbar-height, 64px);
+    height: calc(100vh - var(--sistra-topbar-height, 64px));
+    transform: none;
+    visibility: visible !important;
+  }
+
+  body.sistra-sidebar-collapsed .sistra-sidebar.offcanvas-lg {
+    display: none;
+  }
+}
+
+.sistra-sidebar__body {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  padding: 20px 16px;
+  overflow-y: auto;
+  gap: 20px;
+}
+
+/* Enlaces del menú R9 */
+.sistra-sidebar .nav-link,
+.sistra-sidebar a {
+  min-height: 44px;
+  border-radius: var(--sistra-radius-btn, 8px);
+  padding: 10px 12px;
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--sistra-texto, #1F2430);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.sistra-sidebar .nav-link:hover,
+.sistra-sidebar a:hover {
+  background-color: var(--sistra-gris, #E8EAF0);
+  color: var(--sistra-texto, #1F2430);
+}
+
+.sistra-sidebar .nav-link.active,
+.sistra-sidebar a.active {
+  background-color: var(--sistra-rojo-suave, #FBE3E0);
+  color: var(--sistra-rojo, #AD3333);
+  font-weight: 700;
+}
+
+/* Tarjeta de periodo académico vigente al pie del menú */
+.sistra-period-card {
+  background-color: var(--sistra-fondo, #F5F6F9);
+  border: 1px solid var(--sistra-borde, #E3E6EC);
+  border-radius: var(--sistra-radius-card, 12px);
+  padding: 14px 16px;
+}
+
+/* Área de contenido principal */
+.sistra-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 32px;
+}
+
+@media (max-width: 767.98px) {
+  .sistra-main {
+    padding: 16px;
+  }
+}
+
+.sistra-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+/* En una columna flex, una pantalla con margin: 0 auto se encoge a su contenido y
+   empuja las tablas anchas fuera de la vista. Con width: 100% toma el ancho disponible
+   y la tabla se desplaza dentro de su tarjeta. */
+.sistra-stack > * {
+  width: 100%;
+  min-width: 0;
+}
+/* Tarjetas estándar */
+.sistra-card {
+  background-color: var(--sistra-superficie, #FFFFFF);
+  border: 1px solid var(--sistra-borde, #E3E6EC);
+  border-radius: var(--sistra-radius-card, 12px);
+  padding: 24px;
+}
+
+/* Botones institucionales (altura mínima 44px, radio 8px) */
+.btn-sistra-primary,
+.btn-sistra-secondary,
+.btn-sistra-outline {
+  min-height: 44px;
+  border-radius: var(--sistra-radius-btn, 8px);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 10px 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn-sistra-primary {
+  background-color: var(--sistra-rojo, #AD3333);
+  border: 1px solid var(--sistra-rojo, #AD3333);
+  color: #FFFFFF;
+}
+
+.btn-sistra-primary:hover,
+.btn-sistra-primary:focus-visible {
+  background-color: var(--sistra-rojo-hover, #8F2828);
+  border-color: var(--sistra-rojo-hover, #8F2828);
+  color: #FFFFFF;
+}
+
+.btn-sistra-secondary {
+  background-color: var(--sistra-azul, #003366);
+  border: 1px solid var(--sistra-azul, #003366);
+  color: #FFFFFF;
+}
+
+.btn-sistra-secondary:hover,
+.btn-sistra-secondary:focus-visible {
+  background-color: #002447;
+  border-color: #002447;
+  color: #FFFFFF;
+}
+
+.btn-sistra-outline {
+  background-color: var(--sistra-superficie, #FFFFFF);
+  border: 1px solid var(--sistra-borde-campo, #B9BFCC);
+  color: var(--sistra-texto, #1F2430);
+}
+
+.btn-sistra-outline:hover,
+.btn-sistra-outline:focus-visible {
+  background-color: var(--sistra-gris, #E8EAF0);
+  color: var(--sistra-texto, #1F2430);
+}
+
+/* Campos de formulario (radio 6px, altura mínima 44px) */
+.sistra-main .form-control,
+.sistra-main .form-select {
+  min-height: 44px;
+  border-radius: var(--sistra-radius-field, 6px);
+  border: 1px solid var(--sistra-borde-campo, #B9BFCC);
+  font-size: 15px;
+  color: var(--sistra-texto, #1F2430);
+}
+
+.sistra-main .form-control:focus,
+.sistra-main .form-select:focus {
+  border-color: var(--sistra-azul, #003366);
+  box-shadow: 0 0 0 0.2rem rgba(0, 51, 102, 0.15);
+}
+
+/* Pastillas de estado (radio 999px) */
+.sistra-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: var(--sistra-radius-pill, 999px);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.sistra-pill--aprobado {
+  background-color: var(--sistra-verde-bg, #E3F5EA);
+  color: var(--sistra-verde-txt, #145A32);
+}
+
+.sistra-pill--revision {
+  background-color: #E3EEF9;
+  color: var(--sistra-azul, #003366);
+}
+
+.sistra-pill--modificar {
+  background-color: var(--sistra-amarillo-bg, #FEF5D9);
+  color: var(--sistra-amarillo-txt, #7A5400);
+}
+
+.sistra-pill--rechazado {
+  background-color: var(--sistra-rojo-suave, #FBE3E0);
+  color: var(--sistra-rojo-hover, #8F2828);
+}
+
+.sistra-pill--neutro {
+  background-color: var(--sistra-gris, #E8EAF0);
+  color: var(--sistra-gris-texto, #2A3040);
+}
+
+/* Tablas con scroll horizontal interno */
+.sistra-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Alertas centralizadas de sistema */
+.sistra-alert {
+  border-radius: var(--sistra-radius-btn, 8px);
+  border-width: 1px;
+  font-size: 14.5px;
+  padding: 14px 16px;
+}
+
+/* Ajustes de franja superior en dos líneas y utilidades sin estilos inline */
+.sistra-topbar__inner {
+  min-height: var(--sistra-topbar-height, 64px);
+}
+
+.sistra-topbar__institution {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.88);
+  line-height: 1.15;
+}
+
+.sistra-topbar__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #FFFFFF;
+  line-height: 1.2;
+}
+
+.sistra-topbar__user {
+  max-width: 200px;
+}
+
+.sistra-notif-menu__title {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.sistra-period-card__value {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--sistra-azul, #003366);
+}
