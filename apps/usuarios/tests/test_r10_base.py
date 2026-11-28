@@ -140,3 +140,15 @@ class PlantillaBaseR10Tests(TestCase):
                 resp = self.client.get(reverse(f"parametrizacion:{nombre}"))
                 self.assertEqual(resp.status_code, 200)
                 self.assertEqual(resp.content.decode("utf-8").count(mensaje), 1)
+
+    def test_pagina_403_con_sesion_carga_sistra_css_y_un_solo_logout(self):
+        rol_estudiante = Rol.objects.get(nombre="Estudiante")
+        estudiante = self._crear_usuario_para_rol(rol_estudiante, 40)
+        self.client.force_login(estudiante)
+
+        resp = self.client.get(reverse("informes:aprobacion"))
+        self.assertEqual(resp.status_code, 403)
+        html = resp.content.decode("utf-8")
+
+        self.assertIn("css/sistra.css", html)
+        self.assertEqual(html.count(f'action="{self.logout_url}"'), 1)
