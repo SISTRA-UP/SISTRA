@@ -64,7 +64,7 @@ class DocumentoInformeTests(TestCase):
         cls.informe = Informe.objects.create(
             propuesta=propuesta, periodo_academico=periodo,
             codigo='INF-B1F', resultados='Resultados visibles',
-            conclusiones='Conclusiones', recomendaciones='Recomendaciones',
+            conclusiones='Conclusiones B1f', recomendaciones='Recomendaciones B1f',
             estado=EstadoTramite.EN_REVISION, fecha_envio=timezone.now(),
         )
 
@@ -90,12 +90,21 @@ class DocumentoInformeTests(TestCase):
                 for pagina in PdfReader(BytesIO(respuesta.content)).pages
             )
             for campo in ('INF-B1F', 'estudiante_pdf', 'Resultados visibles',
-                          'Conclusiones', 'Recomendaciones'):
+                          'Conclusiones B1f', 'Recomendaciones B1f'):
                 self.assertIn(campo, texto)
         self.assertEqual(Auditoria.objects.filter(
             accion='documento_informe', resultado=RESULTADO_EXITO,
             id_registro_afectado=self.informe.pk,
         ).count(), 2)
+
+    def test_enlace_descarga_abre_otra_pestana(self):
+        self.client.force_login(self.director)
+        pagina = self.client.get(reverse('informes:aprobacion'))
+        self.assertInHTML(
+            f'<a class="btn btn-outline-primary" href="{self.url}?descargar=1" '
+            'target="_blank" rel="noopener noreferrer">Descargar PDF</a>',
+            pagina.content.decode(),
+        )
 
     @patch('apps.informes.views.aprobacion.generar_pdf_informe')
     def test_director_de_otra_carrera_recibe_404_sin_generar_pdf(self, generar):
@@ -112,6 +121,10 @@ class DocumentoInformeTests(TestCase):
         self.assertEqual(self.client.get(self.url).status_code, 302)
         self.client.force_login(self.estudiante)
         self.assertEqual(self.client.get(self.url).status_code, 403)
+        self.assertTrue(Auditoria.objects.filter(
+            usuario=self.estudiante, accion='intento_documento_informe',
+            resultado=RESULTADO_BLOQUEADO, id_registro_afectado=self.informe.pk,
+        ).exists())
 
     @patch('apps.informes.views.aprobacion.generar_pdf_informe', side_effect=RuntimeError('interno'))
     def test_documento_no_disponible_se_informa_y_audita(self, generar):
@@ -120,10 +133,12 @@ class DocumentoInformeTests(TestCase):
         self.assertEqual(respuesta.status_code, 503)
         self.assertContains(respuesta, 'El documento del informe no está disponible.', status_code=503)
         self.assertNotContains(respuesta, 'interno', status_code=503)
-        self.assertTrue(Auditoria.objects.filter(
+        registro = Auditoria.objects.get(
             accion='intento_documento_informe', resultado=RESULTADO_FALLO,
             id_registro_afectado=self.informe.pk,
-        ).exists())
+        )
+        self.assertIn('El documento del informe no está disponible.', registro.detalle)
+        self.assertNotIn('interno', registro.detalle)
 
     @patch('apps.informes.views.aprobacion.generar_pdf_informe', return_value=b'no es un PDF')
     def test_generador_con_respuesta_invalida_muestra_documento_no_disponible(self, generar):
