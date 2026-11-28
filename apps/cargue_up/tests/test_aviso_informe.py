@@ -377,7 +377,7 @@ class DescargarTests(AvisoInformeBase):
             r = self.client.get(reverse(URL_DESCARGAR))
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r['Content-Type'], 'application/pdf')
-        self.assertIn(f'Informe{self.informe.codigo}.pdf', r['Content-Disposition'])
+        self.assertIn(f'Informe_{self.informe.codigo}.pdf', r['Content-Disposition'])
         self.assertTrue(r.content.startswith(b'%PDF'))
         self.assertEqual(generar.call_args.args[0].pk, self.informe.pk)
         self.assertTrue(Auditoria.objects.filter(
@@ -412,6 +412,15 @@ class DescargarTests(AvisoInformeBase):
     def test_director_recibe_403(self):
         self.entrar(self.user_dir)
         self.assertEqual(self.client.get(reverse(URL_DESCARGAR)).status_code, 403)
+
+    def test_si_el_generador_no_devuelve_pdf_audita_fallo(self):
+        self.entrar(self.user_est)
+        with mock.patch(RUTA_PDF, return_value=b'no es un pdf'):
+            r = self.client.get(reverse(URL_DESCARGAR))
+        self.assertRedirects(r, reverse(URL_PANTALLA), fetch_redirect_response=False)
+        self.assertEqual(_mensajes(r)[0][0], messages.ERROR)
+        self.assertTrue(Auditoria.objects.filter(
+            accion=ACCION_DESCARGAR, resultado='Fallo').exists())
 
 class RecordatorioTests(AvisoInformeBase):
     def setUp(self):

@@ -9,9 +9,6 @@ from django.views.decorators.http import require_POST
 from django.http import HttpResponse
 from django.utils.http import content_disposition_header
 
-from django.http import HttpResponse
-from django.utils.http import content_disposition_header
-
 from apps.parametrizacion.servicios import obtener
 from apps.informes.services.documento_pdf import generar_pdf_informe
 
@@ -81,6 +78,7 @@ def ir_a_up(request):
     servicio.auditar(request.user, servicio.ACCION_IR_UP, informe, servicio.RESULTADO_EXITO)
     return redirect(url_up)
 
+
 @login_required
 @permission_required(PERMISO, raise_exception=True)
 def descargar(request):
@@ -89,6 +87,8 @@ def descargar(request):
         return redirect(PANTALLA)
     try:
         pdf = generar_pdf_informe(informe)
+        if not isinstance(pdf, bytes) or not pdf.startswith(b'%PDF-'):
+            raise ValueError('El generador no devolvió un PDF válido.')
     except Exception:
         logger.exception('Falla al generar el PDF del informe %s', informe.codigo)
         servicio.auditar(
@@ -102,7 +102,7 @@ def descargar(request):
         servicio.RESULTADO_EXITO, 'pdf_descargado')
     respuesta = HttpResponse(pdf, content_type='application/pdf')
     respuesta['Content-Disposition'] = content_disposition_header(
-        True, f'Informe{informe.codigo}.pdf')
+        True, f'Informe_{informe.codigo}.pdf')
     return respuesta
 
 
