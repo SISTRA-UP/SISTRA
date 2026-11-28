@@ -196,8 +196,17 @@
         seleccionar();
     });
 
-    modal.addEventListener("shown.bs.modal", () => {
-        // Abrir la ventana no selecciona ni guarda una decisión.
+    modal.addEventListener("shown.bs.modal", evento => {
+        const decisionDeFila = evento.relatedTarget?.dataset.decision;
+        const posicion = estados.indexOf(decisionDeFila);
+
+        if (posicion !== -1) {
+            control.value = String(posicion);
+            seleccionar();
+            return;
+        }
+
+        // Sin decisión de fila, la ventana permanece sin selección.
         campo.value = "";
         control.value = "1";
         control.setAttribute(

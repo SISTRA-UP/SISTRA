@@ -36,7 +36,11 @@ from apps.propuestas.forms.montaje import (
     PropuestaMontajeForm,
 )
 from apps.propuestas.models import EstadoTramite, Propuesta, SectorEntidad
-from apps.propuestas.services.montaje import PlantillaInvalidaError, extraer_datos_plantilla
+from apps.propuestas.services.montaje import (
+    CAMPOS_PLANTILLA_REQUERIDOS,
+    PlantillaInvalidaError,
+    extraer_datos_plantilla,
+)
 from apps.seguimiento.models import Auditoria, HistorialEstado, Notificacion
 from apps.usuarios.models import Estado, Rol
 
@@ -198,6 +202,7 @@ class TestMontajeVistasYFlujos(BaseMontajeTestCase):
         url = reverse('propuestas:montaje')
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 302)
+        self.assertIn('/login', resp['Location'])
 
     def test_director_recibe_403(self):
         """Un Director que abre /propuestas/mi-propuesta/ recibe 403, no 500."""
@@ -205,6 +210,20 @@ class TestMontajeVistasYFlujos(BaseMontajeTestCase):
         url = reverse('propuestas:montaje')
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 403)
+
+    def test_usuario_sin_permiso_montar_recibe_403(self):
+        """Un usuario con perfil Estudiante pero sin permiso propuesta.montar recibe 403."""
+        rol_sin_permiso = Rol.objects.create(nombre='Estudiante Restringido')
+        self.user_estudiante.rol = rol_sin_permiso
+        self.user_estudiante.save(update_fields=['rol'])
+
+        self.client.force_login(self.user_estudiante)
+        resp = self.client.get(reverse('propuestas:montaje'))
+        self.assertEqual(resp.status_code, 403)
+
+    def test_permiso_propuesta_montar_asignado_a_estudiante(self):
+        """La migración siembra propuesta.montar activo y asignado al rol Estudiante."""
+        self.assertTrue(self.user_estudiante.has_perm('propuesta.montar'))
 
     def test_get_muestra_formulario_inicial_vacio(self):
         """Un estudiante sin propuesta ve el formulario de nueva propuesta."""
@@ -390,6 +409,127 @@ class TestMontajeVistasYFlujos(BaseMontajeTestCase):
         propuesta = Propuesta.objects.filter(proceso=self.proceso).first()
         self.assertIsNotNone(propuesta)
         self.assertEqual(propuesta.version_plantilla, version)
+
+    def test_pantalla_montaje_incluye_enlace_descarga_plantilla(self):
+        """Verifica que la pantalla de montaje contiene el botón de descarga con la ruta oficial."""
+        self.client.force_login(self.user_estudiante)
+        url = reverse('propuestas:montaje')
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        url_descarga = reverse('parametrizacion:plantilla_propuesta_estudiante')
+        self.assertContains(resp, url_descarga)
+        self.assertContains(resp, 'Descargar plantilla')
+
+    def test_estudiante_descarga_plantilla_y_autocompleta_16_campos(self):
+        """Como estudiante, descarga la plantilla, la diligencia, la sube con Autocompletar desde Word y ve los 16 campos llenos."""
+        import os
+        import tempfile
+        from django.test import override_settings
+        from apps.parametrizacion.models import Plantilla, VersionPlantilla
+        from apps.propuestas.services.plantilla_word import generar_docx_plantilla_oficial
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            doc_dir = os.path.join(tmp_dir, 'documentos')
+            os.makedirs(doc_dir, exist_ok=True)
+            ruta_rel = os.path.join('documentos', 'plantilla_propuesta_trabajo_social.docx')
+            with open(os.path.join(tmp_dir, ruta_rel), 'wb') as f:
+                f.write(generar_docx_plantilla_oficial())
+
+            plantilla = Plantilla.objects.create(
+                nombre='Plantilla Propuesta',
+                tipo='propuesta',
+                estado='Activo',
+            )
+            VersionPlantilla.objects.create(
+                plantilla=plantilla,
+                usuario=self.user_director,
+                numero_version=1,
+                nombre_archivo='plantilla_propuesta_trabajo_social.docx',
+                ruta_archivo=ruta_rel,
+                es_vigente=True,
+            )
+
+            with override_settings(MEDIA_ROOT=tmp_dir):
+                self.client.force_login(self.user_estudiante)
+                url_descarga = reverse('parametrizacion:plantilla_propuesta_estudiante')
+                resp_descarga = self.client.get(url_descarga)
+                self.assertEqual(resp_descarga.status_code, 200)
+                contenido_descargado = b''.join(resp_descarga.streaming_content)
+                self.assertTrue(len(contenido_descargado) > 0)
+
+        archivo = SimpleUploadedFile(
+            'plantilla_propuesta_trabajo_social.docx',
+            contenido_descargado,
+            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        )
+        url_montaje = reverse('propuestas:montaje')
+        resp_post = self.client.post(
+            url_montaje,
+            {'accion': 'importar_word', 'archivo': archivo},
+            follow=True,
+        )
+        self.assertEqual(resp_post.status_code, 200)
+        self.assertContains(resp_post, 'Se autocompletaron')
+        form = resp_post.context['form']
+        for campo in CAMPOS_PLANTILLA_REQUERIDOS:
+            self.assertTrue(form.initial.get(campo), f'El campo {campo} debe estar lleno')
+        self.assertTrue(form.initial.get('fecha_inicio'))
+        self.assertTrue(form.initial.get('fecha_fin'))
+
+    def test_fechas_guardadas_vuelven_a_salir_al_abrir_propuesta(self):
+        """Las fechas guardadas en la propuesta vuelven a renderizarse en formato ISO al reabrirla."""
+        from datetime import date
+
+        Propuesta.objects.create(
+            proceso=self.proceso,
+            periodo_academico=self.periodo,
+            codigo='PROP-FECHAS-1',
+            estado=EstadoTramite.BORRADOR,
+            titulo='Propuesta con fechas',
+            fecha_inicio=date(2026, 12, 1),
+            fecha_fin=date(2026, 12, 31),
+        )
+        self.client.force_login(self.user_estudiante)
+        resp = self.client.get(reverse('propuestas:montaje'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'value="2026-12-01"')
+        self.assertContains(resp, 'value="2026-12-31"')
+
+    def test_fecha_mala_en_word_vacia_fecha_guardada_previamente(self):
+        """Si la propuesta ya tenía fechas guardadas, un Word con fechas inválidas las deja vacías."""
+        from datetime import date
+
+        Propuesta.objects.create(
+            proceso=self.proceso,
+            periodo_academico=self.periodo,
+            codigo='PROP-FECHAS-2',
+            estado=EstadoTramite.BORRADOR,
+            titulo='Propuesta con fechas',
+            fecha_inicio=date(2026, 2, 1),
+            fecha_fin=date(2026, 6, 30),
+        )
+        etiquetas = {
+            **ETIQUETAS_COMPLETAS,
+            'Fecha estimada de inicio': '31/02/2026',
+            'Fecha estimada de finalización': 'el lunes',
+        }
+        archivo = SimpleUploadedFile(
+            'fechas_malas.docx',
+            _docx_con_etiquetas(etiquetas),
+            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        )
+        self.client.force_login(self.user_estudiante)
+        resp = self.client.post(
+            reverse('propuestas:montaje'),
+            {'accion': 'importar_word', 'archivo': archivo},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Se autocompletaron 16 campo(s)')
+        self.assertNotContains(resp, 'value="2026-02-01"')
+        self.assertNotContains(resp, 'value="2026-06-30"')
+        form = resp.context['form']
+        self.assertEqual(form.initial.get('fecha_inicio'), '')
+        self.assertEqual(form.initial.get('fecha_fin'), '')
 
     def test_carga_word_corrupto_rechaza_sin_error_500_y_audita_fallo(self):
         """Un Word con contenido corrupto se rechaza con MSG-01-03 sin error 500 y se audita Fallo."""
@@ -585,3 +725,44 @@ class TestServicioPlantillaWord(TestCase):
 
         with self.assertRaises(PlantillaInvalidaError):
             extraer_datos_plantilla(buf)
+
+    def test_fecha_mal_escrita_deja_campos_vacios_y_avisa(self):
+        """Un Word con fechas mal escritas deja ambos campos vacíos y genera avisos."""
+        etiquetas = {
+            **ETIQUETAS_COMPLETAS,
+            'Fecha estimada de inicio': '31/02/20x6',
+            'Fecha estimada de finalización': 'el lunes',
+        }
+        contenido = _docx_con_etiquetas(etiquetas)
+        datos, avisos = extraer_datos_plantilla(io.BytesIO(contenido))
+        self.assertEqual(datos['fecha_inicio'], '')
+        self.assertEqual(datos['fecha_fin'], '')
+        self.assertTrue(any('Fecha estimada de inicio' in av for av in avisos))
+        self.assertTrue(any('Fecha estimada de finalización' in av for av in avisos))
+
+        # También rechaza fechas imposibles en calendario como 31/02/2026
+        etiquetas_calendario = {
+            **ETIQUETAS_COMPLETAS,
+            'Fecha estimada de inicio': '31/02/2026',
+            'Fecha estimada de finalización': '2026-02-31',
+        }
+        datos_cal, avisos_cal = extraer_datos_plantilla(io.BytesIO(_docx_con_etiquetas(etiquetas_calendario)))
+        self.assertEqual(datos_cal['fecha_inicio'], '')
+        self.assertEqual(datos_cal['fecha_fin'], '')
+        self.assertEqual(len(avisos_cal), 2)
+
+    def test_plantilla_oficial_usa_ejemplo_dd_mm_aaaa_y_se_normaliza(self):
+        """La plantilla oficial muestra fechas ejemplo en dd/mm/aaaa y se normalizan a ISO."""
+        from apps.propuestas.services.plantilla_word import generar_docx_plantilla_oficial
+
+        docx_bytes = generar_docx_plantilla_oficial()
+        with zipfile.ZipFile(io.BytesIO(docx_bytes)) as z:
+            xml_text = z.read('word/document.xml').decode('utf-8')
+        self.assertIn('01/02/2026', xml_text)
+        self.assertIn('30/06/2026', xml_text)
+        self.assertNotIn('2026-02-01', xml_text)
+
+        datos, avisos = extraer_datos_plantilla(io.BytesIO(docx_bytes))
+        self.assertEqual(datos.get('fecha_inicio'), '2026-02-01')
+        self.assertEqual(datos.get('fecha_fin'), '2026-06-30')
+        self.assertEqual(avisos, [])
