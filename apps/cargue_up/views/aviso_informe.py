@@ -6,8 +6,11 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.shortcuts import redirect
 from django.views.decorators.http import require_POST
+from django.http import HttpResponse
+from django.utils.http import content_disposition_header
 
 from apps.parametrizacion.servicios import obtener
+from apps.informes.services.documento_pdf import generar_pdf_informe
 
 from . import aviso_informe_servicio as servicio
 
@@ -82,12 +85,25 @@ def descargar(request):
     informe = _informe_aprobado_o_bloquear(request, servicio.ACCION_DESCARGAR)
     if informe is None:
         return redirect(PANTALLA)
-    # El PDF del informe aún no se genera: se audita como Fallo (igual que SISTRA-03).
+    try:
+        pdf = generar_pdf_informe(informe)
+        if not isinstance(pdf, bytes) or not pdf.startswith(b'%PDF-'):
+            raise ValueError('El generador no devolvió un PDF válido.')
+    except Exception:
+        logger.exception('Falla al generar el PDF del informe %s', informe.codigo)
+        servicio.auditar(
+            request.user, servicio.ACCION_DESCARGAR, informe,
+            servicio.RESULTADO_FALLO, 'documento_no_disponible')
+        messages.add_message(request, *MENSAJES['falla'])              # MSG-08-04
+        return redirect(PANTALLA)
+
     servicio.auditar(
         request.user, servicio.ACCION_DESCARGAR, informe,
-        servicio.RESULTADO_FALLO, 'documento_no_disponible')
-    messages.add_message(request, *MENSAJES['falla'])                  # MSG-08-04
-    return redirect(PANTALLA)
+        servicio.RESULTADO_EXITO, 'pdf_descargado')
+    respuesta = HttpResponse(pdf, content_type='application/pdf')
+    respuesta['Content-Disposition'] = content_disposition_header(
+        True, f'Informe_{informe.codigo}.pdf')
+    return respuesta
 
 
 @login_required
