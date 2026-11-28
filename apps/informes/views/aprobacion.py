@@ -3,23 +3,33 @@
 Solo el responsable de este requisito edita este archivo.
 """
 
+import logging
+
 from apps.usuarios.permisos import requiere_permiso
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Exists, OuterRef, Q
-from django.shortcuts import render
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
+from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_GET
 
 from apps.cargue_up.models import CargueUp
 from apps.informes.forms.aprobacion import DecisionInformeForm
 from apps.informes.models import Informe
+from apps.informes.services.documento_pdf import generar_pdf_informe
 from apps.informes.views.aprobacion_semaforo import (
     calcular_semaforo_informe,
 )
+from apps.informes.views.aprobacion_auditoria import auditar_intentos
 from apps.personas.models import DirectorCarrera
-from apps.propuestas.forms.aprobacion import obtener_limites_semaforo
+from apps.propuestas.forms.aprobacion import RESULTADO_EXITO, obtener_limites_semaforo
 from apps.propuestas.models import EstadoTramite
+from apps.seguimiento.models import Auditoria
+
+
+logger = logging.getLogger(__name__)
 
 
 def _informes_del_director(usuario):
@@ -191,3 +201,34 @@ def bandeja(request):
             "form_decision": DecisionInformeForm(),
         },
     )
+
+
+@auditar_intentos('documento_informe')
+@requiere_permiso('informe.aprobar')
+@require_GET
+def documento(request, id_informe):
+    """Previsualiza o descarga el PDF al vuelo para el Director de la carrera."""
+    informe = get_object_or_404(_informes_del_director(request.user), pk=id_informe)
+
+    try:
+        pdf = generar_pdf_informe(informe)
+        if hasattr(pdf, 'read'):
+            pdf = pdf.read()
+        if not isinstance(pdf, bytes) or not pdf.startswith(b'%PDF-'):
+            raise ValueError('El generador no devolvió un PDF válido.')
+    except Exception:
+        logger.exception('No se pudo generar el documento del informe %s.', informe.pk)
+        return HttpResponse('El documento del informe no está disponible.', status=503)
+
+    descargar = request.GET.get('descargar') == '1'
+    respuesta = HttpResponse(pdf, content_type='application/pdf')
+    respuesta['Content-Disposition'] = content_disposition_header(
+        as_attachment=descargar, filename=f'informe_{informe.codigo}.pdf',
+    )
+    Auditoria.objects.create(
+        usuario=request.user, accion='documento_informe',
+        tabla_afectada='informe', id_registro_afectado=informe.pk,
+        resultado=RESULTADO_EXITO,
+        detalle=f"{'Descarga' if descargar else 'Consulta'} del PDF del informe {informe.codigo}.",
+    )
+    return respuesta

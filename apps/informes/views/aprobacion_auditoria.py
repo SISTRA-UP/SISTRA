@@ -31,6 +31,7 @@ def _registrar_intento(request, accion, codigo_http, id_informe=None):
         404: "Informe inexistente o fuera del alcance autorizado.",
         409: "Conflicto de versión, estado o condiciones del informe.",
         500: "La operación no pudo completarse por un error interno.",
+        503: "El documento del informe no está disponible.",
     }
 
     detalle = descripciones.get(
