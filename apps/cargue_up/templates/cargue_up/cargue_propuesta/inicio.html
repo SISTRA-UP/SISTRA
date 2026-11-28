@@ -838,20 +838,9 @@
                     <div class="step-actions">
                         <!-- Botón Descargar propuesta (solo con Aprobado) -->
                         {% if puede_cargar %}
-                            {% if pdf_disponible %}
-                                <a href="{% url 'cargue_up:descargar_propuesta' propuesta.pk %}" class="btn btn-up-outline">
-                                    <i class="bi bi-download"></i>Descargar propuesta
-                                </a>
-                            {% else %}
-                                <div>
-                                    <button type="button" class="btn btn-up-outline" disabled title="Descarga no disponible por ahora">
-                                        <i class="bi bi-download"></i>Descargar propuesta
-                                    </button>
-                                    <span class="text-muted small d-block mt-1">
-                                        <i class="bi bi-info-circle me-1"></i>Descarga no disponible por ahora
-                                    </span>
-                                </div>
-                            {% endif %}
+                            <a href="{% url 'cargue_up:descargar_propuesta' propuesta.pk %}" class="btn btn-up-outline">
+                                <i class="bi bi-download"></i>Descargar propuesta
+                            </a>
                         {% else %}
                             <button type="button" class="btn btn-up-outline" disabled title="{% if cargue_existente or estado_actual == EstadoTramite.SUBIDO_EN_UP or estado_actual == EstadoTramite.APROBADO_EN_UP %}Etapa de cargue completada{% else %}{{ msg_no_aprobada }}{% endif %}">
                                 <i class="bi bi-download"></i>Descargar propuesta

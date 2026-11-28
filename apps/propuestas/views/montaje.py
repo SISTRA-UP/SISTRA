@@ -130,10 +130,11 @@ def inicio(request):
                     for aviso in avisos:
                         messages.warning(request, aviso)
 
+                    completados = sum(1 for v in datos_extraidos.values() if v)
                     _registrar_auditoria(
                         request.user, 'Cargar plantilla', 'Éxito',
                         id_registro=propuesta.pk if propuesta else None,
-                        detalle=f'Se leyeron {len(datos_extraidos)} campos.',
+                        detalle=f'Se leyeron {completados} campos.',
                     )
 
                     initial_data = {}
@@ -144,7 +145,7 @@ def inicio(request):
                     form = PropuestaMontajeForm(initial=initial_data, instance=propuesta)
                     messages.success(
                         request,
-                        f'Se autocompletaron {len(datos_extraidos)} campo(s) desde la plantilla Word. '
+                        f'Se autocompletaron {completados} campo(s) desde la plantilla Word. '
                         'Revisa la información y pulsa «Guardar borrador».',
                     )
                 except PlantillaInvalidaError as err:
@@ -197,6 +198,8 @@ def inicio(request):
         if form.is_valid():
             try:
                 with transaction.atomic():
+                    # Bloquea el proceso para que dos envíos no creen dos propuestas
+                    ProcesoTrabajoSocial.objects.select_for_update().get(pk=proceso.pk)
                     instancia = form.save(commit=False)
                     es_nueva = not instancia.pk
 
@@ -251,6 +254,28 @@ def inicio(request):
                             es_vigente=True,
                         ).first()
 
+                    # Lock the proposal row to prevent race conditions (if updating existing)
+                    if not es_nueva:
+                        propuesta_locked = Propuesta.objects.select_for_update().get(pk=instancia.pk)
+                        if propuesta_locked.estado not in ESTADOS_EDITABLES:
+                            _registrar_auditoria(
+                                request.user, 'Editar propuesta', 'Bloqueado',
+                                id_registro=propuesta_locked.pk,
+                                detalle=f'Intento de {accion} en estado {propuesta_locked.estado}.',
+                            )
+                            messages.error(request, 'La propuesta está en revisión y no admite modificaciones.')
+                            return render(
+                                request,
+                                'propuestas/montaje/inicio.html',
+                                {
+                                    'form': form,
+                                    'propuesta': propuesta_locked,
+                                    'word_form': CargaPlantillaWordForm(),
+                                    'progreso': form.calcular_avance(),
+                                    'bloqueado': True,
+                                    'carrera': proceso.estudiante_carrera.carrera,
+                                },
+                            )
                     estado_anterior = instancia.estado
 
                     # Acción: Enviar a revisión

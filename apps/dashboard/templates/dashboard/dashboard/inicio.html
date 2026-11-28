@@ -305,6 +305,7 @@
                 <tr>
                   <th>Nombre</th>
                   <th>Cédula</th>
+                  <th>Carrera</th>
                   <th>Correo institucional</th>
                   <th>Rol</th>
                   <th>Estado</th>
@@ -315,6 +316,7 @@
                   <tr>
                     <td class="fw-semibold">{{ u.nombre }}</td>
                     <td>{{ u.cedula }}</td>
+                    <td>{{ u.carreras|join:", "|default:"—" }}</td>
                     <td class="small">{{ u.correo_institucional }}</td>
                     <td>{{ u.rol.nombre }}</td>
                     <td>
@@ -325,7 +327,7 @@
                   </tr>
                 {% empty %}
                   <tr>
-                    <td colspan="5" class="text-center text-muted py-3">No hay usuarios que coincidan con el filtro aplicado.</td>
+                    <td colspan="6" class="text-center text-muted py-3">No hay usuarios que coincidan con el filtro aplicado.</td>
                   </tr>
                 {% endfor %}
               </tbody>

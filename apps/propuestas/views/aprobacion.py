@@ -12,17 +12,15 @@ Implementa:
 """
 
 from datetime import timedelta
+from io import BytesIO
 import json
 import logging
-import mimetypes
-from pathlib import Path
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.http import FileResponse, Http404, HttpRequest, HttpResponse, JsonResponse
+from django.http import FileResponse, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -61,6 +59,7 @@ from apps.propuestas.forms.aprobacion import (
 )
 from apps.propuestas.forms.aprobacion_masiva import AccionMasivaForm
 from apps.propuestas.models import EstadoTramite, Propuesta
+from apps.propuestas.services.documento_pdf import generar_pdf_propuesta
 from apps.seguimiento.models import HistorialEstado
 from apps.usuarios.models import Estado
 
@@ -336,7 +335,6 @@ def detalle_propuesta(request: HttpRequest, id_propuesta: int) -> JsonResponse:
             }
         )
 
-    tiene_doc = bool(propuesta.version_plantilla and propuesta.version_plantilla.ruta_archivo)
     programa_estudiante = (
         propuesta.proceso.estudiante_carrera.carrera.nombre
         if propuesta.proceso and propuesta.proceso.estudiante_carrera and propuesta.proceso.estudiante_carrera.carrera
@@ -392,7 +390,7 @@ def detalle_propuesta(request: HttpRequest, id_propuesta: int) -> JsonResponse:
             if propuesta.fecha_fin
             else ''
         ),
-        'tiene_documento': tiene_doc,
+        'tiene_documento': True,
         'cronograma': [
             {
                 'orden': a.orden,
@@ -574,36 +572,26 @@ def accion_masiva(request: HttpRequest) -> HttpResponse:
 @permission_required(PERMISO_APROBAR, raise_exception=True)
 @require_GET
 def descargar_documento(request: HttpRequest, id_propuesta: int) -> HttpResponse:
-    """Permite previsualizar o descargar el documento adjunto de la propuesta."""
+    """Vista previa y descarga del PDF de la propuesta del estudiante (EX-06, SIS-51 · B1e).
+
+    El PDF se arma al momento con los datos guardados (B1a); no se lee ningún archivo del disco.
+    """
     asignacion = _carrera_activa_del_director(request.user)
     if not asignacion:
         raise PermissionDenied
 
     propuesta = get_object_or_404(
-        Propuesta,
+        Propuesta.objects.select_related(
+            'proceso__estudiante_carrera__estudiante__usuario',
+            'proceso__estudiante_carrera__carrera',
+            'periodo_academico',
+        ),
         pk=id_propuesta,
         proceso__estudiante_carrera__carrera=asignacion.carrera,
     )
 
-    version = propuesta.version_plantilla
-    if not (version and version.ruta_archivo):
-        raise Http404('La propuesta no cuenta con documento adjunto.')
-
-    # La ruta viene de la base de datos: solo se sirve si queda dentro de MEDIA_ROOT
-    # (quien la escribe debe guardar el archivo bajo MEDIA_ROOT, es decir documentos/).
-    raiz = Path(settings.MEDIA_ROOT).resolve()
-    ruta = (raiz / version.ruta_archivo).resolve()
-    if not (ruta.is_relative_to(raiz) and ruta.is_file()):
-        raise Http404('El archivo solicitado no se encuentra en el servidor.')
-
-    try:
-        archivo = open(ruta, 'rb')
-    except OSError:
-        raise Http404('El archivo solicitado no se encuentra en el servidor.')
-    # FileResponse cierra el archivo, deduce el tipo MIME y escapa el nombre en Content-Disposition.
-    nombre = version.nombre_archivo or ruta.name
-    # Solo el PDF se previsualiza inline; cualquier otro tipo (HTML, SVG, sin extensión...) se fuerza
-    # como descarga para que el navegador no lo ejecute en nuestro origen (XSS almacenado).
-    # Se usa mimetypes.guess_type sobre el mismo nombre con que FileResponse deduce el Content-Type.
-    es_pdf = mimetypes.guess_type(nombre) == ('application/pdf', None)
-    return FileResponse(archivo, filename=nombre, as_attachment=not es_pdf)
+    return FileResponse(
+        BytesIO(generar_pdf_propuesta(propuesta)),
+        filename=f'propuesta_{propuesta.codigo}.pdf',
+        content_type='application/pdf',
+    )

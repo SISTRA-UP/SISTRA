@@ -76,8 +76,11 @@
         <!-- Carga opcional de plantilla Word (.docx) -->
         {% if not bloqueado %}
             <div class="card shadow-sm mb-4 border-secondary-subtle">
-                <div class="card-header bg-light py-2">
+                <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <span class="fw-bold text-secondary">¿Diligenciaste tu propuesta en la plantilla de Word?</span>
+                    <a href="{% url 'parametrizacion:plantilla_propuesta_estudiante' %}" class="btn btn-sm btn-outline-secondary">
+                        Descargar plantilla
+                    </a>
                 </div>
                 <div class="card-body py-3">
                     <form method="post" enctype="multipart/form-data" class="row g-2 align-items-center">
@@ -452,10 +455,11 @@
         });
     }
 
-    // Modal de confirmación de envío: al confirmar, envía el formulario
+    // Modal de confirmación de envío: al confirmar, deshabilita el botón y envía el formulario
     const btnConfirmarEnvio = document.getElementById('btn-confirmar-envio');
     if (btnConfirmarEnvio) {
         btnConfirmarEnvio.addEventListener('click', () => {
+            btnConfirmarEnvio.disabled = true;
             formModificado = false; // Evitar el beforeunload
             // Crear input oculto con la acción y enviar
             const input = document.createElement('input');

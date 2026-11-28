@@ -12,14 +12,17 @@ Verifica los criterios de aceptación y seguridad del requerimiento BR-03 (SISTR
 """
 
 from datetime import timedelta
-from io import StringIO
+from io import BytesIO, StringIO
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from pypdf import PdfReader
 
-from apps.cargue_up.forms.cargue_propuesta import MSG_03_03, MSG_03_05, MSG_03_06
+from apps.cargue_up.forms.cargue_propuesta import MSG_03_03, MSG_03_04, MSG_03_05, MSG_03_06
 from apps.cargue_up.models import CargueUp, EstadoVerificacion
 from apps.parametrizacion.models import Carrera, Facultad, Parametro, PeriodoAcademico
 from apps.personas.models import (
@@ -232,6 +235,9 @@ class CargueUpSecurityAndViewsTestCase(TestCase):
         self.assertContains(res, "Mi proyecto de horas sociales")
         self.assertContains(res, "Mi propuesta")
         self.assertNotContains(res, "Cargar el proyecto en la UP")
+        url_descarga = reverse("cargue_up:descargar_propuesta", args=[self.propuesta_1.pk])
+        self.assertContains(res, f'href="{url_descarga}"')
+        self.assertNotContains(res, "Descarga no disponible por ahora")
 
     def test_ca_02_propuesta_no_aprobada_deshabilita_acciones(self):
         """CA-02: Proyecto en estado no Aprobado tiene acciones deshabilitadas."""
@@ -366,8 +372,66 @@ class CargueUpSecurityAndViewsTestCase(TestCase):
         self.assertContains(res_inicio, MSG_03_06)
 
     # ==========================================================================
-    # 3b. PRUEBAS DE DESCARGA DE PROPUESTA (SOLO CON APROBADO)
+    # 3b. PRUEBAS DE DESCARGA DE PROPUESTA (B1c · PDF AL VUELO Y VALIDACIONES)
     # ==========================================================================
+
+    def test_descargar_propuesta_aprobada_entrega_pdf_con_sus_datos_y_audita_exito(self):
+        """B1c: Con propuesta Aprobada, entrega Propuesta_<código>.pdf con sus datos y audita Éxito."""
+        self.propuesta_1.entidad = "Fundación Semillas del Norte"
+        self.propuesta_1.objetivos = "Brindar formación tecnológica a líderes barriales"
+        self.propuesta_1.save(update_fields=["entidad", "objetivos"])
+
+        self.client.force_login(self.user_estudiante_1)
+        res = self.client.get(reverse("cargue_up:descargar_propuesta", args=[self.propuesta_1.pk]))
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res["Content-Type"], "application/pdf")
+        self.assertEqual(
+            res["Content-Disposition"],
+            f'attachment; filename="Propuesta_{self.propuesta_1.codigo}.pdf"',
+        )
+
+        pdf_bytes = b"".join(res.streaming_content)
+        self.assertTrue(pdf_bytes.startswith(b"%PDF-"))
+
+        lector = PdfReader(BytesIO(pdf_bytes))
+        texto_pdf = "\n".join((p.extract_text() or "") for p in lector.pages)
+        self.assertIn(self.propuesta_1.codigo, texto_pdf)
+        self.assertIn("Juan Perez", texto_pdf)
+        self.assertIn("Ingeniería de Sistemas", texto_pdf)
+        self.assertIn("2026-2", texto_pdf)
+        self.assertIn("Sistema de Gestión Comunitaria", texto_pdf)
+        self.assertIn("Fundación Semillas del Norte", texto_pdf)
+        self.assertIn("Brindar formación tecnológica a líderes barriales", texto_pdf)
+
+        auditoria = Auditoria.objects.filter(
+            accion="Descargar propuesta",
+            id_registro_afectado=self.propuesta_1.pk,
+        ).first()
+        self.assertIsNotNone(auditoria)
+        self.assertEqual(auditoria.usuario, self.user_estudiante_1)
+        self.assertEqual(auditoria.resultado, "Éxito")
+
+    def test_descargar_con_propuesta_en_borrador_queda_bloqueada(self):
+        """B1c: Con la propuesta en Borrador, la descarga sigue bloqueada y auditada como Bloqueado."""
+        self.propuesta_1.estado = EstadoTramite.BORRADOR
+        self.propuesta_1.save(update_fields=["estado"])
+
+        self.client.force_login(self.user_estudiante_1)
+        res = self.client.get(reverse("cargue_up:descargar_propuesta", args=[self.propuesta_1.pk]))
+
+        self.assertEqual(res.status_code, 302)
+        self.assertEqual(res.url, reverse("cargue_up:cargue_propuesta"))
+
+        auditoria = Auditoria.objects.filter(
+            accion="Descargar propuesta",
+            id_registro_afectado=self.propuesta_1.pk,
+        ).first()
+        self.assertIsNotNone(auditoria)
+        self.assertEqual(auditoria.resultado, "Bloqueado")
+
+        res_inicio = self.client.get(res.url)
+        self.assertContains(res_inicio, MSG_03_06)
 
     def test_descargar_con_propuesta_subido_en_up_queda_bloqueado(self):
         """BTN-DESCARGAR: «Solo con Aprobado». En Subido en UP la descarga queda bloqueada y auditada."""
@@ -386,6 +450,32 @@ class CargueUpSecurityAndViewsTestCase(TestCase):
         ).first()
         self.assertIsNotNone(auditoria)
         self.assertEqual(auditoria.resultado, "Bloqueado")
+
+    def test_descargar_propuesta_si_generacion_falla_muestra_msg_03_04_y_audita_fallo(self):
+        """B1c: Si generar_pdf_propuesta falla, muestra MSG-03-04 y registra auditoría con resultado Fallo."""
+        self.client.force_login(self.user_estudiante_1)
+
+        with (
+            patch(
+                "apps.cargue_up.views.cargue_propuesta.generar_pdf_propuesta",
+                side_effect=RuntimeError("Error simulado al construir PDF"),
+            ),
+            self.assertLogs("apps.cargue_up.views.cargue_propuesta", level="ERROR"),
+        ):
+            res = self.client.get(reverse("cargue_up:descargar_propuesta", args=[self.propuesta_1.pk]))
+
+        self.assertEqual(res.status_code, 302)
+        self.assertEqual(res.url, reverse("cargue_up:cargue_propuesta"))
+
+        auditoria = Auditoria.objects.filter(
+            accion="Descargar propuesta",
+            id_registro_afectado=self.propuesta_1.pk,
+        ).first()
+        self.assertIsNotNone(auditoria)
+        self.assertEqual(auditoria.resultado, "Fallo")
+
+        res_inicio = self.client.get(res.url)
+        self.assertContains(res_inicio, MSG_03_04)
 
     # ==========================================================================
     # 4. PRUEBAS DEL COMANDO DE RECORDATORIO SEMANAL (CRITERIOS 4 Y 5)
