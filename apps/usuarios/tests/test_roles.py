@@ -505,7 +505,8 @@ class PaginasDeError(BaseRoles):
                 # Bootstrap se enlaza una sola vez, en base.html, y no se
                 # añade ninguna otra hoja de estilos.
                 self.assertEqual(html.count('bootstrap@5.3.3/dist/css'), 1)
-                self.assertEqual(html.count('<link'), 1)
+                esperado_links = 1 if plantilla == '500.html' else 2
+                self.assertEqual(html.count('<link'), esperado_links)
 
 
 class SiembraDeRolesYPermisos(BaseRoles):

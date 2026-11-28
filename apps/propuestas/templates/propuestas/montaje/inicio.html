@@ -34,14 +34,6 @@
         </div>
     </div>
 
-    <!-- Mensajes Django -->
-    {% for message in messages %}
-        <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags == 'warning' %}warning{% elif message.tags == 'info' %}info{% else %}success{% endif %} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-        </div>
-    {% endfor %}
-
     {% if sin_proceso %}
         <div class="alert alert-warning py-4 text-center shadow-sm">
             <h4 class="alert-heading fw-bold">Atención</h4>

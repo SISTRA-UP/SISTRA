@@ -30,6 +30,11 @@ urlpatterns = [
         name="aprobacion",
     ),
     path(
+        "aprobacion/<int:id_informe>/documento/",
+        aprobacion.documento,
+        name="documento",
+    ),
+    path(
         "aprobacion/<int:id_informe>/decidir/",
         aprobacion_decisiones.decidir,
         name="decidir",

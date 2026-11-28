@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
-{# SISTRA-10 · R8 · Página de error. Solo llena `contenido`, así que toma el
-   diseño de `base.html` cuando R10 lo cambie, sin tocar este archivo.
-   No consulta la base ni usa `request`: la del 500 tiene que poder mostrarse
-   justo cuando lo que falló es la base. #}
+{% block estilos_base %}{% endblock %}
+{% block barra_superior %}{% endblock %}
+{% block menu_lateral %}{% endblock %}
+
 
 {% block titulo %}Error del sistema · SISTRA{% endblock %}
 
 {% block contenido %}
-<main class="container py-5">
+<div class="container py-5">
   <div class="row justify-content-center">
     <div class="col-md-8 col-lg-6">
       <div class="card shadow-sm">
@@ -21,5 +21,5 @@
       </div>
     </div>
   </div>
-</main>
+</div>
 {% endblock %}
